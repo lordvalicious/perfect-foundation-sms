@@ -19,11 +19,11 @@ stay **same-site** and the existing session/CSRF flow works unchanged.
 
 - [ ] Repo pushed to GitHub
 - [ ] A **Neon** account and a project/database created (free, no card)
-- [ ] The Neon connection string pasted into `backend/render.yaml`
+- [ ] The Neon connection string pasted into `render.yaml`
       (`DATABASE_URL`, replacing `REPLACE_ME`)
-- [ ] `backend/render.yaml` `repo:` points at your actual GitHub repo
+- [ ] `render.yaml` `repo:` points at your actual GitHub repo
       (already set to `lordvalicious/perfect-foundation-sms`)
-- [ ] `backend/render.yaml` `DJANGO_CSRF_TRUSTED_ORIGINS` matches your Vercel URL
+- [ ] `render.yaml` `DJANGO_CSRF_TRUSTED_ORIGINS` matches your Vercel URL
 - [ ] After the backend deploys: copy its `https://*.onrender.com` URL into
       `frontend/vercel.json` (see step 3 below)
 
@@ -44,7 +44,7 @@ stay **same-site** and the existing session/CSRF flow works unchanged.
 3. Go to **Connect** and copy the **Connection string** (URI). It looks like:
    `postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require`
    (Neon includes `?sslmode=require`; keep it - the app needs SSL.)
-4. Paste it into `backend/render.yaml` in place of `REPLACE_ME`:
+4. Paste it into `render.yaml` (repo root) in place of `REPLACE_ME`:
    ```yaml
    - key: DATABASE_URL
      value: postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
@@ -54,8 +54,11 @@ stay **same-site** and the existing session/CSRF flow works unchanged.
 
 ## 3. Deploy the backend on Render
 
-1. In the Render dashboard: **New -> Blueprint -> New Blueprint Instance**,
-   connect your repo and pick the blueprint. Render provisions only:
+1. Open the blueprint directly (skips the dashboard menu; `render.yaml`
+   must be at the repo root, which it is):
+   `https://dashboard.render.com/blueprint/new?repo=https://github.com/lordvalicious/perfect-foundation-sms`
+   (or in the dashboard: **New -> Blueprint**, connect your repo).
+   Render provisions only:
 
    - `perfect-foundation-backend` (Docker web service, **free plan**)
 
