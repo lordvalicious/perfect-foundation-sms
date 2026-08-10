@@ -54,4 +54,4 @@ services:
       # your Neon project (must include ?sslmode=require). You can also
       # set/override this later in Render Dashboard -> Environment.
       - key: DATABASE_URL
-        value: postgresql://REPLACE_ME
+        value: postgresql://neondb_owner:npg_3YCciIVXQK2j@ep-shiny-night-azriqmle-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
