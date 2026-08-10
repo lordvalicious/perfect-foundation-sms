@@ -1,0 +1,100 @@
+flowchart TD
+
+    %% External Entities
+    Owner["Owner"]
+    Principal["Principal / Head"]
+    VicePrincipal["Vice Principal"]
+    Management["Management Staff"]
+    Teacher["Teacher"]
+    Student["Student"]
+
+    %% System
+    subgraph SMS["Perfect Foundation School Management System"]
+
+        P1["1.0 Authentication & Access Control"]
+        P2["2.0 User & Staff Management"]
+        P3["3.0 Student Management"]
+        P4["4.0 Academic Management"]
+        P5["5.0 Examination Management"]
+        P6["6.0 Marks & Results Management"]
+        P7["7.0 Reporting"]
+
+        D1[("D1 Users & Roles")]
+        D2[("D2 Staff Records")]
+        D3[("D3 Student Records")]
+        D4[("D4 Academic Records")]
+        D5[("D5 Examination Records")]
+        D6[("D6 Marks & Results")]
+    end
+
+    %% Authentication
+    Owner -->|Login credentials| P1
+    Principal -->|Login credentials| P1
+    VicePrincipal -->|Login credentials| P1
+    Management -->|Login credentials| P1
+    Teacher -->|Login credentials| P1
+    Student -->|Login credentials| P1
+
+    P1 -->|Verify user| D1
+    D1 -->|User role & permissions| P1
+
+    %% User & Staff
+    Owner -->|Manage users & permissions| P2
+    Principal -->|Manage campus staff| P2
+    Management -->|Manage staff records| P2
+
+    P2 -->|Store staff information| D2
+    D2 -->|Staff information| P2
+    P2 -->|Store user information| D1
+
+    %% Students
+    Principal -->|Student information| P3
+    VicePrincipal -->|Student information| P3
+    Management -->|Student information| P3
+
+    P3 -->|Store student records| D3
+    D3 -->|Student records| P3
+
+    %% Academic
+    Principal -->|Classes, sections, subjects| P4
+    Management -->|Academic information| P4
+    Teacher -->|View assigned academics| P4
+
+    P4 -->|Store academic structure| D4
+    D4 -->|Academic information| P4
+
+    %% Exams
+    Principal -->|Create examinations| P5
+    Teacher -->|View examinations| P5
+
+    P5 -->|Store examination information| D5
+    D5 -->|Examination information| P5
+
+    %% Marks
+    Teacher -->|Enter student marks| P6
+    Teacher -->|Enter practical marks| P6
+
+    P6 -->|Read student information| D3
+    P6 -->|Read examination information| D5
+    P6 -->|Store marks & results| D6
+    D6 -->|Results| P6
+
+    %% Student result viewing
+    Student -->|Request result| P6
+    P6 -->|Student result| Student
+
+    %% Reporting
+    Owner -->|Request reports| P7
+    Principal -->|Request reports| P7
+    VicePrincipal -->|Request reports| P7
+    Management -->|Request reports| P7
+
+    P7 -->|Read student data| D3
+    P7 -->|Read academic data| D4
+    P7 -->|Read examination data| D5
+    P7 -->|Read result data| D6
+
+    P7 -->|Reports| Owner
+    P7 -->|Reports| Principal
+    P7 -->|Reports| VicePrincipal
+    P7 -->|Reports| Management

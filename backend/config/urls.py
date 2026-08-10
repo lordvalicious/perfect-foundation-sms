@@ -1,0 +1,74 @@
+from django.contrib import admin  # type: ignore[reportMissingModuleSource]
+from django.http import JsonResponse
+from django.urls import include, path  # type: ignore[reportMissingModuleSource]
+
+
+def health_check(request):
+    return JsonResponse({"status": "ok"})
+
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+
+    path("api/health/", health_check, name="health-check"),
+
+    path(
+        "api/auth/",
+        include("apps.accounts.urls"),
+    ),
+
+    path(
+        "api/dashboard/",
+        include("apps.dashboard.urls"),
+    ),
+
+    path(
+        "api/students/",
+        include("apps.students.urls"),
+    ),
+
+    path(
+        "api/teachers/",
+        include("apps.teachers.urls"),
+    ),
+
+    path(
+        "api/attendance/",
+        include("apps.attendance.urls"),
+    ),
+
+    path(
+        "api/schools/",
+        include("apps.schools.urls"),
+    ),
+
+    path(
+        "api/finance/",
+        include("apps.finance.urls"),
+    ),
+
+    path(
+        "api/exams/",
+        include("apps.exams.urls"),
+    ),
+
+    path(
+        "api/report-cards/",
+        include("apps.reportcards.urls"),
+    ),
+
+    path(
+        "api/timetable/",
+        include("apps.timetable.urls"),
+    ),
+
+    path(
+        "api/events/",
+        include("apps.events.urls"),
+    ),
+
+    path(
+        "api/audit/",
+        include("apps.audit.urls"),
+    ),
+]

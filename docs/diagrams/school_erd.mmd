@@ -1,0 +1,276 @@
+---
+id: b8af3430-4a7d-4126-9d1e-cd7af3b9221e
+---
+erDiagram
+
+    SCHOOL ||--o{ CAMPUS : has
+    SCHOOL ||--o{ USER : employs_or_registers
+
+    USER ||--o| STUDENT : "has profile"
+    USER ||--o| STAFF : "has profile"
+
+    STAFF }o--|| ROLE : has
+
+    CAMPUS ||--o{ ACADEMIC_UNIT : contains
+    ACADEMIC_UNIT ||--o{ CLASS : has
+    CLASS ||--o{ SECTION : contains
+
+    ACADEMIC_YEAR ||--o{ TERM : contains
+    SCHOOL ||--o{ ACADEMIC_YEAR : has
+
+    STUDENT ||--o{ ENROLLMENT : has
+    ACADEMIC_YEAR ||--o{ ENROLLMENT : contains
+    SECTION ||--o{ ENROLLMENT : contains
+
+    SUBJECT ||--o{ SUBJECT_OFFERING : offered_as
+    CLASS ||--o{ SUBJECT_OFFERING : has
+    ACADEMIC_YEAR ||--o{ SUBJECT_OFFERING : during
+
+    TEACHER ||--o{ TEACHER_ASSIGNMENT : receives
+    SUBJECT_OFFERING ||--o{ TEACHER_ASSIGNMENT : assigned
+
+    ENROLLMENT ||--o{ STUDENT_SUBJECT : takes
+    SUBJECT_OFFERING ||--o{ STUDENT_SUBJECT : includes
+
+    ACADEMIC_YEAR ||--o{ EXAMINATION : contains
+    EXAMINATION ||--o{ EXAM_SUBJECT : contains
+    SUBJECT ||--o{ EXAM_SUBJECT : examined
+
+    EXAM_SUBJECT ||--o{ STUDENT_MARK : records
+    STUDENT ||--o{ STUDENT_MARK : receives
+
+    SCHOOL ||--o{ GRADE_SCALE : defines
+    GRADE_SCALE ||--o{ GRADE_RANGE : contains
+
+    STUDENT ||--o{ RESULT : receives
+    ACADEMIC_YEAR ||--o{ RESULT : belongs_to
+    EXAMINATION ||--o{ RESULT : produces
+
+    RESULT ||--o{ RESULT_SUBJECT : contains
+    SUBJECT ||--o{ RESULT_SUBJECT : has
+
+    RESULT_SUBJECT ||--o{ RESULT_MARK : contains
+
+    STUDENT ||--o{ PRACTICAL_MARK : receives
+    SUBJECT ||--o{ PRACTICAL_MARK : for
+    EXAMINATION ||--o{ PRACTICAL_MARK : belongs_to
+
+    SCHOOL {
+        int school_id PK
+        string name
+        string address
+        string city
+        string status
+    }
+
+    CAMPUS {
+        int campus_id PK
+        int school_id FK
+        string name
+        string address
+        string status
+    }
+
+    ACADEMIC_UNIT {
+        int unit_id PK
+        int campus_id FK
+        string name
+        string unit_type
+        string status
+    }
+
+    USER {
+        int user_id PK
+        string username
+        string email
+        string password
+        string first_name
+        string last_name
+        string phone
+        boolean is_active
+    }
+
+    ROLE {
+        int role_id PK
+        string name
+        string description
+    }
+
+    STAFF {
+        int staff_id PK
+        int user_id FK
+        int role_id FK
+        int campus_id FK
+        string employee_number
+        date joining_date
+        string status
+    }
+
+    STUDENT {
+        int student_id PK
+        int user_id FK
+        string admission_number
+        date admission_date
+        date date_of_birth
+        string gender
+        string status
+    }
+
+    ACADEMIC_YEAR {
+        int academic_year_id PK
+        int school_id FK
+        string name
+        date start_date
+        date end_date
+        string status
+    }
+
+    TERM {
+        int term_id PK
+        int academic_year_id FK
+        string name
+        date start_date
+        date end_date
+    }
+
+    CLASS {
+        int class_id PK
+        int unit_id FK
+        string name
+        int level
+        string status
+    }
+
+    SECTION {
+        int section_id PK
+        int class_id FK
+        string name
+        int capacity
+        string status
+    }
+
+    ENROLLMENT {
+        int enrollment_id PK
+        int student_id FK
+        int academic_year_id FK
+        int section_id FK
+        string roll_number
+        string status
+    }
+
+    SUBJECT {
+        int subject_id PK
+        string name
+        string code
+        string subject_type
+        boolean practical_required
+        string status
+    }
+
+    SUBJECT_OFFERING {
+        int offering_id PK
+        int subject_id FK
+        int class_id FK
+        int academic_year_id FK
+    }
+
+    TEACHER {
+        int teacher_id PK
+        int staff_id FK
+    }
+
+    TEACHER_ASSIGNMENT {
+        int assignment_id PK
+        int teacher_id FK
+        int offering_id FK
+        int section_id FK
+    }
+
+    STUDENT_SUBJECT {
+        int student_subject_id PK
+        int enrollment_id FK
+        int offering_id FK
+    }
+
+    EXAMINATION {
+        int examination_id PK
+        int academic_year_id FK
+        int term_id FK
+        string name
+        string exam_type
+        date start_date
+        date end_date
+        string status
+    }
+
+    EXAM_SUBJECT {
+        int exam_subject_id PK
+        int examination_id FK
+        int subject_id FK
+        decimal maximum_marks
+        decimal passing_marks
+    }
+
+    STUDENT_MARK {
+        int mark_id PK
+        int exam_subject_id FK
+        int student_id FK
+        decimal obtained_marks
+        boolean absent
+        string remarks
+    }
+
+    GRADE_SCALE {
+        int grade_scale_id PK
+        int school_id FK
+        string name
+        string status
+    }
+
+    GRADE_RANGE {
+        int grade_range_id PK
+        int grade_scale_id FK
+        decimal minimum_percentage
+        decimal maximum_percentage
+        string grade
+        decimal grade_point
+    }
+
+    RESULT {
+        int result_id PK
+        int student_id FK
+        int academic_year_id FK
+        int examination_id FK
+        decimal total_marks
+        decimal obtained_marks
+        decimal percentage
+        string overall_grade
+        string status
+    }
+
+    RESULT_SUBJECT {
+        int result_subject_id PK
+        int result_id FK
+        int subject_id FK
+        decimal total_marks
+        decimal obtained_marks
+        decimal percentage
+        string grade
+    }
+
+    RESULT_MARK {
+        int result_mark_id PK
+        int result_subject_id FK
+        string assessment_type
+        decimal marks
+    }
+
+    PRACTICAL_MARK {
+        int practical_mark_id PK
+        int student_id FK
+        int subject_id FK
+        int examination_id FK
+        decimal maximum_marks
+        decimal obtained_marks
+        string remarks
+    }

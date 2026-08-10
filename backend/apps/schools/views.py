@@ -1,0 +1,221 @@
+from django.db.models import Count, Q
+from rest_framework import generics
+
+from apps.accounts.permissions import IsAdminOrReadOnly
+from apps.students.models import Enrollment
+from .models import (
+    AcademicUnit,
+    AcademicYear,
+    Campus,
+    Class,
+    School,
+    Section,
+    Subject,
+    SubjectOffering,
+    Term,
+)
+from .serializers import (
+    AcademicUnitSerializer,
+    AcademicYearSerializer,
+    CampusSerializer,
+    ClassSerializer,
+    SchoolSerializer,
+    SectionSerializer,
+    SubjectOfferingSerializer,
+    SubjectSerializer,
+    TermSerializer,
+)
+
+
+class NoPaginationMixin:
+    pagination_class = None
+
+
+def populate_campus_counts(queryset):
+    class_counts = (
+        Class.objects.filter(status="active")
+        .values("unit__campus_id")
+        .annotate(total=Count("id"))
+    )
+    class_map = {
+        item["unit__campus_id"]: item["total"]
+        for item in class_counts
+    }
+
+    section_counts = (
+        Section.objects.filter(status="active")
+        .values("class_obj__unit__campus_id")
+        .annotate(total=Count("id"))
+    )
+    section_map = {
+        item["class_obj__unit__campus_id"]: item["total"]
+        for item in section_counts
+    }
+
+    student_counts = (
+        Enrollment.objects.filter(status="active")
+        .values("campus_id")
+        .annotate(total=Count("student", distinct=True))
+    )
+    student_map = {
+        item["campus_id"]: item["total"]
+        for item in student_counts
+    }
+
+    for campus in queryset:
+        campus.class_count = class_map.get(campus.id, 0)
+        campus.section_count = section_map.get(campus.id, 0)
+        campus.student_count = student_map.get(campus.id, 0)
+
+    return queryset
+
+
+class SchoolListView(NoPaginationMixin, generics.ListAPIView):
+    queryset = School.objects.all().order_by("name")
+    serializer_class = SchoolSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class CampusListView(NoPaginationMixin, generics.ListAPIView):
+    serializer_class = CampusSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = Campus.objects.select_related("school").order_by("name")
+
+        search = self.request.query_params.get("search")
+
+        if search:
+            queryset = queryset.filter(
+                Q(name__icontains=search)
+                | Q(city__icontains=search)
+            )
+
+        status = self.request.query_params.get("status")
+
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return populate_campus_counts(queryset)
+
+
+class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
+    serializer_class = AcademicUnitSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = (
+            AcademicUnit.objects
+            .select_related("campus")
+            .order_by("campus__name", "name")
+        )
+
+        campus = self.request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(campus_id=campus)
+
+        return queryset
+
+
+class ClassListView(NoPaginationMixin, generics.ListAPIView):
+    serializer_class = ClassSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = (
+            Class.objects
+            .select_related("unit", "unit__campus")
+            .order_by("level", "name")
+        )
+
+        campus = self.request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(unit__campus_id=campus)
+
+        status = self.request.query_params.get("status")
+
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
+
+class SectionListView(NoPaginationMixin, generics.ListAPIView):
+    serializer_class = SectionSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = (
+            Section.objects
+            .select_related("class_obj", "class_obj__unit__campus")
+            .order_by("class_obj__name", "name")
+        )
+
+        campus = self.request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(class_obj__unit__campus_id=campus)
+
+        class_obj = self.request.query_params.get("class")
+
+        if class_obj:
+            queryset = queryset.filter(class_obj_id=class_obj)
+
+        return queryset
+
+
+class AcademicYearListView(NoPaginationMixin, generics.ListAPIView):
+    queryset = (
+        AcademicYear.objects
+        .select_related("school")
+        .order_by("-start_date")
+    )
+    serializer_class = AcademicYearSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class TermListView(NoPaginationMixin, generics.ListAPIView):
+    queryset = (
+        Term.objects
+        .select_related("academic_year")
+        .order_by("academic_year", "start_date")
+    )
+    serializer_class = TermSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class SubjectListView(NoPaginationMixin, generics.ListAPIView):
+    queryset = Subject.objects.all().order_by("name")
+    serializer_class = SubjectSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class SubjectOfferingListView(NoPaginationMixin, generics.ListAPIView):
+    serializer_class = SubjectOfferingSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = (
+            SubjectOffering.objects
+            .select_related(
+                "subject",
+                "class_obj",
+                "class_obj__unit__campus",
+                "academic_year",
+            )
+            .order_by("class_obj__name", "subject__name")
+        )
+
+        campus = self.request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(class_obj__unit__campus_id=campus)
+
+        class_obj = self.request.query_params.get("class")
+
+        if class_obj:
+            queryset = queryset.filter(class_obj_id=class_obj)
+
+        return queryset

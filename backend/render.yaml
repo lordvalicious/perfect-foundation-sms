@@ -1,0 +1,55 @@
+# ==========================================================================
+# Render Blueprint for the Perfect Foundation backend.
+#
+# HOW TO USE
+#   1. Ensure this file is committed and pushed to GitHub
+#      (the `repo:` URL below must match your actual repository).
+#   2. Render Dashboard -> New -> Blueprint -> New Blueprint Instance,
+#      connect your GitHub repo, and deploy.
+#      (Alternative: `render blueprint launch` from the CLI.)
+#   3. After the deploy turns green, note the backend URL, e.g.
+#      https://perfect-foundation-backend.onrender.com
+#   4. Put that URL into frontend/vercel.json (the /api rewrite target)
+#      and deploy the frontend on Vercel.
+#   5. Render dashboard -> backend service -> Shell, then run:
+#        python manage.py createsuperuser
+#   6. If login returns a CSRF 403, set DJANGO_CSRF_TRUSTED_ORIGINS to
+#      your exact Vercel origin below.
+# ==========================================================================
+
+services:
+  # Django backend ----------------------------------------------------------
+  - type: web
+    name: perfect-foundation-backend
+    runtime: docker
+    repo: https://github.com/lordvalicious/perfect-foundation-sms
+    plan: free
+    rootDir: backend
+    dockerfilePath: Dockerfile
+    region: singapore
+    healthCheckPath: /api/health/
+    # Runs before each deploy: applies migrations + collects static files.
+    preDeployCommand: sh ./startup.sh
+    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120
+    envVars:
+      - key: DJANGO_SETTINGS_MODULE
+        value: config.settings.production
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      # Tighten this after adding a custom domain:
+      #   e.g. app.yourdomain.com,www.yourdomain.com
+      - key: DJANGO_ALLOWED_HOSTS
+        value: "*"
+      # Origin (scheme + host) of the Vercel frontend. Must match exactly
+      # the URL your users open in the browser.
+      - key: DJANGO_CSRF_TRUSTED_ORIGINS
+        value: https://perfect-foundation-sms.vercel.app
+      - key: DATABASE_URL
+        fromDatabase:
+          name: perfect-foundation-db
+          property: connectionString
+
+# Managed PostgreSQL (free tier expires after 30 days) ----------------------
+databases:
+  - name: perfect-foundation-db
+    plan: free

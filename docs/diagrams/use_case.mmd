@@ -1,0 +1,101 @@
+flowchart LR
+
+    Owner["Owner"]
+    Principal["Principal / Head"]
+    VicePrincipal["Vice Principal"]
+    Management["Management Staff"]
+    Teacher["Teacher"]
+    Student["Student"]
+    WorkStaff["Work Staff"]
+    Guard["Guard"]
+
+    subgraph SMS["Perfect Foundation School Management System"]
+
+        UC1(["Login"])
+        UC2(["Manage Users"])
+        UC3(["Manage Roles & Permissions"])
+
+        UC4(["Manage Campuses"])
+        UC5(["Manage Academic Years"])
+        UC6(["Manage Terms"])
+        UC7(["Manage Classes"])
+        UC8(["Manage Sections"])
+        UC9(["Manage Subjects"])
+
+        UC10(["Manage Staff"])
+        UC11(["Manage Students"])
+        UC12(["Manage Enrollment"])
+        UC13(["Manage Teacher Assignments"])
+
+        UC14(["Create Examinations"])
+        UC15(["Manage Exam Subjects"])
+        UC16(["Enter Marks"])
+        UC17(["Enter Practical Marks"])
+        UC18(["Calculate Results"])
+        UC19(["Manage Grades"])
+        UC20(["Publish Results"])
+
+        UC21(["View Reports"])
+        UC22(["View Student Information"])
+        UC23(["View Class Information"])
+        UC24(["View Examination Information"])
+        UC25(["View Results"])
+
+        UC26(["Manage Announcements"])
+
+    end
+
+    Owner --> UC1
+    Owner --> UC2
+    Owner --> UC3
+    Owner --> UC4
+    Owner --> UC5
+    Owner --> UC6
+    Owner --> UC10
+    Owner --> UC21
+
+    Principal --> UC1
+    Principal --> UC7
+    Principal --> UC8
+    Principal --> UC9
+    Principal --> UC10
+    Principal --> UC11
+    Principal --> UC12
+    Principal --> UC13
+    Principal --> UC14
+    Principal --> UC15
+    Principal --> UC21
+    Principal --> UC26
+
+    VicePrincipal --> UC1
+    VicePrincipal --> UC11
+    VicePrincipal --> UC22
+    VicePrincipal --> UC23
+    VicePrincipal --> UC24
+    VicePrincipal --> UC21
+    VicePrincipal --> UC26
+
+    Management --> UC1
+    Management --> UC11
+    Management --> UC12
+    Management --> UC22
+    Management --> UC23
+    Management --> UC21
+
+    Teacher --> UC1
+    Teacher --> UC22
+    Teacher --> UC23
+    Teacher --> UC24
+    Teacher --> UC16
+    Teacher --> UC17
+    Teacher --> UC25
+
+    Student --> UC1
+    Student --> UC22
+    Student --> UC24
+    Student --> UC25
+
+    WorkStaff --> UC1
+    WorkStaff --> UC22
+
+    Guard --> UC1

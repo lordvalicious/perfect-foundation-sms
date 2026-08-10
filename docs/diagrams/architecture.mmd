@@ -1,0 +1,47 @@
+flowchart TD
+
+    User["Users
+Owner / Principal / Vice Principal
+Management / Teacher / Student / Staff"]
+
+    Browser["Web Browser"]
+
+    subgraph Application["School Management System"]
+        UI["Django Templates
+HTML + Bootstrap"]
+
+        Auth["Authentication
+Roles & Permissions"]
+
+        Core["Django Application"]
+
+        Modules["System Modules
+Student Management
+Staff Management
+Academic Management
+Examinations
+Marks & Results"]
+
+    end
+
+    DB["PostgreSQL Database"]
+
+    Docker["Docker
+Development Environment"]
+
+    Git["Git / GitHub"]
+
+    User --> Browser
+    Browser --> UI
+
+    UI --> Auth
+    UI --> Core
+
+    Auth --> Core
+    Core --> Modules
+    Modules --> DB
+
+    Docker -. runs .-> Core
+    Docker -. runs .-> DB
+
+    Git -. source control .-> Core

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17
+    container_name: perfect_foundation_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: perfect_foundation
+      POSTGRES_USER: school_admin
+      POSTGRES_PASSWORD: school_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
