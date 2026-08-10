@@ -2,18 +2,24 @@
 # Render Blueprint for the Perfect Foundation backend.
 #
 # HOW TO USE
-#   1. Ensure this file is committed and pushed to GitHub
+#   1. Create a free Postgres on Neon (https://neon.tech - no credit card,
+#      no 30-day expiry). Copy its connection string:
+#        postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
+#      and paste it into the DATABASE_URL value below (REPLACE_ME).
+#   2. Ensure this file is committed and pushed to GitHub
 #      (the `repo:` URL below must match your actual repository).
-#   2. Render Dashboard -> New -> Blueprint -> New Blueprint Instance,
+#   3. Render Dashboard -> New -> Blueprint -> New Blueprint Instance,
 #      connect your GitHub repo, and deploy.
 #      (Alternative: `render blueprint launch` from the CLI.)
-#   3. After the deploy turns green, note the backend URL, e.g.
+#      The blueprint provisions ONLY the free web service - no managed
+#      Postgres, so no credit card is needed on Render.
+#   4. After the deploy turns green, note the backend URL, e.g.
 #      https://perfect-foundation-backend.onrender.com
-#   4. Put that URL into frontend/vercel.json (the /api rewrite target)
+#   5. Put that URL into frontend/vercel.json (the /api rewrite target)
 #      and deploy the frontend on Vercel.
-#   5. Render dashboard -> backend service -> Shell, then run:
+#   6. Render dashboard -> backend service -> Shell, then run:
 #        python manage.py createsuperuser
-#   6. If login returns a CSRF 403, set DJANGO_CSRF_TRUSTED_ORIGINS to
+#   7. If login returns a CSRF 403, set DJANGO_CSRF_TRUSTED_ORIGINS to
 #      your exact Vercel origin below.
 # ==========================================================================
 
@@ -44,12 +50,8 @@ services:
       # the URL your users open in the browser.
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
         value: https://perfect-foundation-sms.vercel.app
+      # Neon free Postgres. REPLACE_ME with the connection string from
+      # your Neon project (must include ?sslmode=require). You can also
+      # set/override this later in Render Dashboard -> Environment.
       - key: DATABASE_URL
-        fromDatabase:
-          name: perfect-foundation-db
-          property: connectionString
-
-# Managed PostgreSQL (free tier expires after 30 days) ----------------------
-databases:
-  - name: perfect-foundation-db
-    plan: free
+        value: postgresql://REPLACE_ME

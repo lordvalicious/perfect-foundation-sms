@@ -3,15 +3,24 @@
 The app is split in two:
 
 - **Frontend** (React + Vite, in `frontend/`) -> **Vercel**
-- **Backend** (Django, in `backend/`) -> **Render** (Docker + managed Postgres)
+- **Backend** (Django, in `backend/`) -> **Render** (Docker web service)
+- **Database** -> **Neon** (free Postgres, no credit card, no 30-day expiry)
 
 The frontend calls `/api/*` as a relative URL. On Vercel,
 `frontend/vercel.json` rewrites `/api/*` to the Render backend, so cookies
 stay **same-site** and the existing session/CSRF flow works unchanged.
 
+> Why not Render's managed Postgres? It requires a credit card and the free
+> tier expires after 30 days. Neon's free tier needs no card and does not
+> expire, and `?sslmode=require` in the connection string works with the
+> existing `dj_database_url` setup unchanged.
+
 ## Before you start (checklist)
 
 - [ ] Repo pushed to GitHub
+- [ ] A **Neon** account and a project/database created (free, no card)
+- [ ] The Neon connection string pasted into `backend/render.yaml`
+      (`DATABASE_URL`, replacing `REPLACE_ME`)
 - [ ] `backend/render.yaml` `repo:` points at your actual GitHub repo
       (already set to `lordvalicious/perfect-foundation-sms`)
 - [ ] `backend/render.yaml` `DJANGO_CSRF_TRUSTED_ORIGINS` matches your Vercel URL
@@ -25,20 +34,38 @@ stay **same-site** and the existing session/CSRF flow works unchanged.
 - The repo pushed to GitHub (e.g. `github.com/you/perfect-foundation-sms`)
 - A [Vercel](https://vercel.com) account
 - A [Render](https://render.com) account
+- A [Neon](https://neon.tech) account
 
-## 2. Deploy the backend on Render
+## 2. Set up the database (Neon)
 
-1. Push your changes to GitHub.
-2. In the Render dashboard: **New -> Blueprint -> New Blueprint Instance**,
-   connect your repo and pick the blueprint. Render provisions:
+1. Sign up at https://neon.tech (free, **no credit card required**).
+2. Click **Create a project** (region: any, e.g. `US East`) - a database
+   named `neondb` is created for you.
+3. Go to **Connect** and copy the **Connection string** (URI). It looks like:
+   `postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require`
+   (Neon includes `?sslmode=require`; keep it - the app needs SSL.)
+4. Paste it into `backend/render.yaml` in place of `REPLACE_ME`:
+   ```yaml
+   - key: DATABASE_URL
+     value: postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
+   ```
+   and push to GitHub. (You can also set/override it later in Render
+   Dashboard -> Environment, then Redeploy.)
 
-   - `perfect-foundation-backend` (Docker web service)
-   - `perfect-foundation-db` (managed Postgres)
+## 3. Deploy the backend on Render
 
-   The blueprint runs `sh ./startup.sh` before every deploy, which applies
-   migrations and collects static files.
+1. In the Render dashboard: **New -> Blueprint -> New Blueprint Instance**,
+   connect your repo and pick the blueprint. Render provisions only:
 
-4. After the first successful deploy, the service URL will look like
+   - `perfect-foundation-backend` (Docker web service, **free plan**)
+
+   No managed Postgres, so **no credit card** is required.
+
+   Make sure the plan is `Free` in the creation screen before you click
+   Create. The blueprint runs `sh ./startup.sh` before every deploy, which
+   applies migrations and collects static files.
+
+2. After the first successful deploy, the service URL will look like
    `https://perfect-foundation-backend.onrender.com`. Verify it:
    `curl https://perfect-foundation-backend.onrender.com/api/health/`
 
@@ -52,7 +79,7 @@ The blueprint sets most variables automatically:
 | `DJANGO_SECRET_KEY` | auto-generated (set once) |
 | `DJANGO_ALLOWED_HOSTS` | `*` (tighten after adding a custom domain) |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | your Vercel origin, edit if you change it |
-| `DATABASE_URL` | wired to the Render Postgres |
+| `DATABASE_URL` | your Neon connection string |
 
 ### Create an admin user
 
@@ -76,7 +103,7 @@ cat dump.sql | python manage.py dbshell
 (Simpler: use Render's dashboard DB import, or `pg_restore` from a
 `pg_dump -Fc` archive.)
 
-## 3. Deploy the frontend on Vercel
+## 4. Deploy the frontend on Vercel
 
 1. Vercel -> **Add New -> Project**, import the repo.
 2. Project settings:
@@ -98,7 +125,7 @@ cat dump.sql | python manage.py dbshell
 
 4. Visit your Vercel URL and sign in with the admin you created.
 
-## 4. Custom domain (recommended)
+## 5. Custom domain (recommended)
 
 - Vercel: add your domain to the frontend project.
 - Render: add the same domain to the backend service (Settings -> Custom
@@ -108,8 +135,11 @@ cat dump.sql | python manage.py dbshell
 
 ## Notes / limitations
 
-- **Render free Postgres** expires after 30 days. Use a paid plan or
-  upgrade for production.
+- **Neon free tier**: 0.5 GB storage, no expiry, and the database sleeps
+  after ~5 min of inactivity then wakes automatically on the next connection
+  (the first query after idle is slow). Upgrade if you need more.
+- **Render free web service**: sleeps after ~15 min idle and wakes on the
+  next request (cold start takes ~30-60s).
 - **Media files** are stored on the container's local disk (ephemeral).
   There are currently no file/image uploads in the app, so this is fine;
   add S3 if you introduce uploads later.
