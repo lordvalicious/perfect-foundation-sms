@@ -30,7 +30,7 @@ references:
   - "File: /frontend/src/auth.jsx"
   - "File: /frontend/src/pages/AssignmentsPage.jsx"
   - "File: /frontend/src/pages/ProfilePage.jsx"
-generationTime: 2026-08-11T16:36:07.229Z
+generationTime: 2026-08-11T20:25:15.678Z
 ---
 flowchart TD
     subgraph FE["Frontend"]
@@ -41,6 +41,7 @@ flowchart TD
         E["Render protected pages by role"]
         F["ProfilePage loads account/profile endpoints"]
         G["AssignmentsPage loads ref data and list endpoints"]
+        P["ProfileModal for viewing profiles"]
     end
 
     subgraph BE["Backend"]
@@ -50,7 +51,7 @@ flowchart TD
         K["Views apply role-based filters and query params"]
         L["Dashboard endpoints return scoped stats"]
         M["Serializers validate/persist assignments, enrollments"]
-        N["Models: User/Membership/RoleAssignment/Student/Teacher"]
+        N["Models: User/Membership/RoleAssignment/Student/Teacher/StaffProfile"]
         O["seed_students command loops campuses -> Guardian/Student/Enrollment"]
     end
 
@@ -74,3 +75,5 @@ flowchart TD
     N --> J
     N --> M
     O --> N
+    F --> P
+    G --> P
