@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -32,8 +31,6 @@ import {
   ScrollText,
   Layers,
   UserRound,
-  PanelLeftClose,
-  PanelRightOpen,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -96,9 +93,6 @@ const systemNavigation = [
 
 function Layout({ children }) {
   const { user, logout, hasRole } = useAuth();
-  const location = useLocation();
-
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const visibleNavigation = navigation.filter(
     (item) =>
@@ -109,19 +103,6 @@ function Layout({ children }) {
     (item) =>
       item.roles.length === 0 || hasRole(item.roles)
   );
-
-  const pageTitle = useMemo(() => {
-    const current = [...navigation, ...systemNavigation].find(
-      (item) => item.path === location.pathname
-    );
-    return current?.label || "Dashboard";
-  }, [location.pathname]);
-
-  const handleNavClick = () => {
-    if (window.innerWidth <= 800) {
-      setSidebarCollapsed(true);
-    }
-  };
 
   const displayName =
     user?.first_name || user?.username || "User";
@@ -143,96 +124,13 @@ function Layout({ children }) {
 
   return (
     <div className="app">
-      <aside className={`sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
-        <div className="brand">
-          <div className="brand-logo">PF</div>
+      <header className="topnav">
+        <div className="topnav-top">
+          <div className="topnav-brand">
+            <div className="brand-logo">PF</div>
 
-          <div className="brand-text">
-            <strong>Perfect Foundation</strong>
-            <span>School Management</span>
-          </div>
-        </div>
-
-        <nav>
-          <div className="nav-title">MAIN MENU</div>
-
-          {visibleNavigation.map(
-            ({ label, path, icon: Icon }) => (
-              <NavLink
-                key={label}
-                to={path}
-                end={path === "/"}
-                title={label}
-                onClick={handleNavClick}
-                className={({ isActive }) =>
-                  `nav-item ${isActive ? "active" : ""}`
-                }
-              >
-                <Icon size={19} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          )}
-
-          <div className="nav-title settings-title">SYSTEM</div>
-
-          {visibleSystemNavigation.map(
-            ({ label, path, icon: Icon }) => (
-              <NavLink
-                key={label}
-                to={path}
-                title={label}
-                onClick={handleNavClick}
-                className={({ isActive }) =>
-                  `nav-item ${isActive ? "active" : ""}`
-                }
-              >
-                <Icon size={19} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          )}
-        </nav>
-
-        <div className="sidebar-footer">
-          <div className="sidebar-seal">
-            <GraduationCap size={20} />
-          </div>
-          <div className="sidebar-footer-text">
-            <div className="school-year">Academic Year</div>
-            <strong>2026–2027</strong>
-          </div>
-        </div>
-      </aside>
-
-      {!sidebarCollapsed && (
-        <div
-          className="drawer-backdrop"
-          onClick={() => setSidebarCollapsed(true)}
-        />
-      )}
-
-      <main className="main">
-        <header className="topbar">
-          <div className="topbar-left">
-            <button
-              className="sidebar-toggle"
-              title={
-                sidebarCollapsed
-                  ? "Expand sidebar"
-                  : "Collapse sidebar"
-              }
-              onClick={() => setSidebarCollapsed((value) => !value)}
-            >
-              {sidebarCollapsed ? (
-                <PanelRightOpen size={20} />
-              ) : (
-                <PanelLeftClose size={20} />
-              )}
-            </button>
-
-            <div className="topbar-title">
-              <h2>{pageTitle}</h2>
+            <div className="topnav-brand-text">
+              <strong>Perfect Foundation</strong>
               <span>School Management System</span>
             </div>
           </div>
@@ -242,8 +140,8 @@ function Layout({ children }) {
             <input placeholder="Search students, teachers..." />
           </div>
 
-          <div className="topbar-right">
-            <button className="icon-button">
+          <div className="topnav-actions">
+            <button className="icon-button" title="Notifications">
               <Bell size={20} />
               <span className="notification-dot" />
             </button>
@@ -273,10 +171,47 @@ function Layout({ children }) {
               </button>
             </div>
           </div>
-        </header>
+        </div>
 
-        {children}
-      </main>
+        <nav className="topnav-nav">
+          {visibleNavigation.map(
+            ({ label, path, icon: Icon }) => (
+              <NavLink
+                key={label}
+                to={path}
+                end={path === "/"}
+                title={label}
+                className={({ isActive }) =>
+                  `topnav-link ${isActive ? "active" : ""}`
+                }
+              >
+                <Icon size={16} />
+                <span>{label}</span>
+              </NavLink>
+            )
+          )}
+
+          <span className="topnav-divider" />
+
+          {visibleSystemNavigation.map(
+            ({ label, path, icon: Icon }) => (
+              <NavLink
+                key={label}
+                to={path}
+                title={label}
+                className={({ isActive }) =>
+                  `topnav-link ${isActive ? "active" : ""}`
+                }
+              >
+                <Icon size={16} />
+                <span>{label}</span>
+              </NavLink>
+            )
+          )}
+        </nav>
+      </header>
+
+      <main className="main">{children}</main>
     </div>
   );
 }
