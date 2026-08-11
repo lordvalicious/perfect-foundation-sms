@@ -6,6 +6,16 @@ import {
 import {
   Search,
   Users,
+  UserPlus,
+  Building2,
+  Briefcase,
+  Phone,
+  Mail,
+  ShieldCheck,
+  LayoutGrid,
+  Eye,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 
 import ProfileModal from "./ProfileModal";
@@ -421,6 +431,13 @@ export default function StaffPage() {
     ),
   ];
 
+  const totalStaff = staff.length;
+
+  const activeStaff = staff.filter(
+    (member) =>
+      (member.status || "active").toLowerCase() === "active"
+  ).length;
+
   /* =========================
      HELPERS
   ========================= */
@@ -444,18 +461,78 @@ export default function StaffPage() {
 
   return (
     <section className="content">
-      {/* PAGE HEADER */}
+      {/* IMMERSIVE HERO */}
 
-      <div className="page-header">
-        <div>
-          <div className="breadcrumb">Home / Staff</div>
+      <div className="staff-hero">
+        <div className="staff-hero-glow staff-hero-glow-a" />
+        <div className="staff-hero-glow staff-hero-glow-b" />
 
-          <h2>Staff</h2>
+        <div className="staff-hero-top">
+          <div>
+            <div className="breadcrumb">Home / Staff</div>
 
-          <p className="subtitle">
-            Manage non-teaching staff like janitors, security
-            guards, nurses and support personnel.
-          </p>
+            <h2>Staff Roster</h2>
+
+            <p className="subtitle">
+              Meet the people keeping every campus running —
+              janitors, security guards, nurses and support
+              personnel.
+            </p>
+          </div>
+
+          <button
+            className="primary-button staff-add-button"
+            onClick={openAddStaff}
+          >
+            <UserPlus size={17} />
+            Add Staff Member
+          </button>
+        </div>
+
+        <div className="staff-hero-stats">
+          <div className="staff-hero-stat">
+            <div className="staff-hero-stat-icon">
+              <Users size={20} />
+            </div>
+
+            <div>
+              <strong>{totalStaff}</strong>
+              <span>Total Staff</span>
+            </div>
+          </div>
+
+          <div className="staff-hero-stat">
+            <div className="staff-hero-stat-icon">
+              <ShieldCheck size={20} />
+            </div>
+
+            <div>
+              <strong>{activeStaff}</strong>
+              <span>Active Members</span>
+            </div>
+          </div>
+
+          <div className="staff-hero-stat">
+            <div className="staff-hero-stat-icon">
+              <Briefcase size={20} />
+            </div>
+
+            <div>
+              <strong>{departmentOptions.length}</strong>
+              <span>Departments</span>
+            </div>
+          </div>
+
+          <div className="staff-hero-stat">
+            <div className="staff-hero-stat-icon">
+              <Building2 size={20} />
+            </div>
+
+            <div>
+              <strong>{campusOptions.length}</strong>
+              <span>Campuses</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -596,28 +673,52 @@ export default function StaffPage() {
         </button>
       </div>
 
+      {/* DEPARTMENT CHIPS */}
+
+      <div className="staff-chips">
+        <span className="staff-chips-label">
+          Departments:
+        </span>
+
+        <button
+          className={`staff-chip ${
+            department === "" ? "active" : ""
+          }`}
+          onClick={() => setDepartment("")}
+        >
+          All
+        </button>
+
+        {departmentOptions.map((item) => (
+          <button
+            key={item}
+            className={`staff-chip ${
+              department === item ? "active" : ""
+            }`}
+            onClick={() =>
+              setDepartment(
+                department === item ? "" : item
+              )
+            }
+          >
+            {item}
+          </button>
+        ))}
+      </div>
+
+      {/* RESULTS HEADER */}
+
+      <div className="staff-results">
+        <span>
+          <LayoutGrid size={16} />
+          Showing {filteredStaff.length} of {totalStaff} staff
+          members
+        </span>
+      </div>
+
       {/* STAFF LIST */}
 
       <div className="panel teacher-list-panel">
-        <div className="teacher-list-header">
-          <div>
-            <h3>Staff List</h3>
-
-            <p>
-              {loading
-                ? "Loading staff..."
-                : `${filteredStaff.length} staff members found`}
-            </p>
-          </div>
-
-          <button
-            className="primary-button add-teacher-button"
-            onClick={openAddStaff}
-          >
-            + Add Staff Member
-          </button>
-        </div>
-
         {loading ? (
           <div className="state-card">Loading staff data...</div>
         ) : filteredStaff.length === 0 ? (
@@ -639,115 +740,111 @@ export default function StaffPage() {
             </button>
           </div>
         ) : (
-          <div className="table-wrapper">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>EMPLOYEE NO.</th>
-                  <th>STAFF MEMBER</th>
-                  <th>DESIGNATION</th>
-                  <th>DEPARTMENT</th>
-                  <th>CAMPUS</th>
-                  <th>PHONE</th>
-                  <th>STATUS</th>
-                  <th></th>
-                </tr>
-              </thead>
+          <div className="staff-grid">
+            {filteredStaff.map((member) => {
+              const fullName = getStaffName(member);
+              const statusKey = getStatus(member);
 
-              <tbody>
-                {filteredStaff.map((member) => (
-                  <tr key={member.id}>
-                    <td>
-                      <strong>
-                        {member.employee_number || "—"}
-                      </strong>
-                    </td>
-
-                    <td>
-                      <div className="teacher-name-cell">
-                        {member.photo_url ? (
-                          <img
-                            className="table-photo"
-                            src={member.photo_url}
-                            alt={getStaffName(member)}
-                          />
-                        ) : (
-                          <div className="teacher-avatar">
-                            {getStaffName(member)
-                              .charAt(0)
-                              .toUpperCase()}
-                          </div>
-                        )}
-
-                        <div>
-                          <strong>
-                            {getStaffName(member)}
-                          </strong>
-
-                          <span>
-                            {member.email || "—"}
-                          </span>
-                        </div>
+              return (
+                <article
+                  className="staff-card"
+                  key={member.id}
+                >
+                  <div className="staff-card-head">
+                    {member.photo_url ? (
+                      <img
+                        className="staff-card-photo"
+                        src={member.photo_url}
+                        alt={fullName}
+                      />
+                    ) : (
+                      <div className="staff-card-avatar">
+                        {fullName
+                          .charAt(0)
+                          .toUpperCase()}
                       </div>
-                    </td>
+                    )}
 
-                    <td>
+                    <span
+                      className={`status-badge ${statusKey}`}
+                    >
+                      {getStatusLabel(statusKey)}
+                    </span>
+                  </div>
+
+                  <div className="staff-card-body">
+                    <h3>{fullName}</h3>
+
+                    <p className="staff-card-designation">
                       {member.designation || "—"}
-                    </td>
+                    </p>
 
-                    <td>
-                      {member.department || "—"}
-                    </td>
+                    <span className="staff-card-empno">
+                      {member.employee_number || "—"}
+                    </span>
 
-                    <td>{member.campus || "—"}</td>
-
-                    <td>{member.phone || "—"}</td>
-
-                    <td>
-                      <span
-                        className={`status-badge ${getStatus(
-                          member
-                        )}`}
-                      >
-                        {getStatusLabel(getStatus(member))}
+                    <div className="staff-card-meta">
+                      <span>
+                        <Briefcase size={14} />
+                        {member.department || "—"}
                       </span>
-                    </td>
 
-                    <td>
-                      <button
-                        className="table-action"
-                        onClick={() =>
-                          setProfileView({
-                            type: "staff",
-                            id: member.id,
-                          })
-                        }
-                      >
-                        View Profile
-                      </button>
+                      <span>
+                        <Building2 size={14} />
+                        {member.campus || "—"}
+                      </span>
 
-                      <button
-                        className="table-action"
-                        onClick={() =>
-                          openEditStaff(member)
-                        }
-                      >
-                        Edit
-                      </button>
+                      <span>
+                        <Phone size={14} />
+                        {member.phone || "—"}
+                      </span>
 
-                      <button
-                        className="table-action danger"
-                        onClick={() =>
-                          handleDeleteStaff(member)
-                        }
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                      {member.email && (
+                        <span>
+                          <Mail size={14} />
+                          {member.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="staff-card-actions">
+                    <button
+                      className="staff-card-action"
+                      onClick={() =>
+                        setProfileView({
+                          type: "staff",
+                          id: member.id,
+                        })
+                      }
+                    >
+                      <Eye size={15} />
+                      Profile
+                    </button>
+
+                    <button
+                      className="staff-card-action"
+                      onClick={() =>
+                        openEditStaff(member)
+                      }
+                    >
+                      <Pencil size={15} />
+                      Edit
+                    </button>
+
+                    <button
+                      className="staff-card-action danger"
+                      onClick={() =>
+                        handleDeleteStaff(member)
+                      }
+                    >
+                      <Trash2 size={15} />
+                      Delete
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
           </div>
         )}
       </div>
