@@ -30,7 +30,7 @@ references:
   - "File: /frontend/src/auth.jsx"
   - "File: /frontend/src/pages/AssignmentsPage.jsx"
   - "File: /frontend/src/pages/ProfilePage.jsx"
-generationTime: 2026-08-11T20:25:15.678Z
+generationTime: 2026-08-11T20:36:55.656Z
 ---
 flowchart TD
     subgraph FE["Frontend"]
@@ -42,6 +42,7 @@ flowchart TD
         F["ProfilePage loads account/profile endpoints"]
         G["AssignmentsPage loads ref data and list endpoints"]
         P["ProfileModal for viewing profiles"]
+        Q["StaffPage loads staff data"]
     end
 
     subgraph BE["Backend"]
@@ -53,6 +54,7 @@ flowchart TD
         M["Serializers validate/persist assignments, enrollments"]
         N["Models: User/Membership/RoleAssignment/Student/Teacher/StaffProfile"]
         O["seed_students command loops campuses -> Guardian/Student/Enrollment"]
+        R["StaffProfileCRUDSerializer handles staff data"]
     end
 
     A --> B
@@ -62,8 +64,10 @@ flowchart TD
     D --> H
     E --> F
     E --> G
+    E --> Q
     F --> H
     G --> H
+    Q --> H
     H --> I
     H --> K
     I -->|role check| K
@@ -74,6 +78,7 @@ flowchart TD
     N --> I
     N --> J
     N --> M
+    N --> R
     O --> N
     F --> P
     G --> P

@@ -20,6 +20,11 @@ urlpatterns = [
     ),
 
     path(
+        "api/staff/",
+        include("apps.accounts.staff_urls"),
+    ),
+
+    path(
         "api/dashboard/",
         include("apps.dashboard.urls"),
     ),

@@ -141,6 +141,20 @@ export default function ProfileModal({ type, id, onClose }) {
           if (!cancelled) {
             setProfile({ ...data, kind: "student" });
           }
+        } else if (type === "staff") {
+          const res = await fetch(`/api/staff/${id}/`, {
+            credentials: "include",
+          });
+
+          if (!res.ok) {
+            throw new Error("Could not load staff profile.");
+          }
+
+          const data = await res.json();
+
+          if (!cancelled) {
+            setProfile({ ...data, kind: "staff" });
+          }
         } else {
           const res = await fetch(`/api/auth/users/${id}/`, {
             credentials: "include",
@@ -192,6 +206,12 @@ export default function ProfileModal({ type, id, onClose }) {
     if (profile.admission_number) {
       roleBadges.push(profile.admission_number);
     }
+  } else if (profile?.kind === "staff") {
+    roleBadges.push("Staff");
+
+    if (profile.employee_number) {
+      roleBadges.push(profile.employee_number);
+    }
   } else if (account?.primary_role) {
     roleBadges.push(roleLabel(account.primary_role));
 
@@ -219,6 +239,8 @@ export default function ProfileModal({ type, id, onClose }) {
                 ? "Teacher profile"
                 : profile?.kind === "student"
                 ? "Student profile"
+                : profile?.kind === "staff"
+                ? "Staff profile"
                 : "Staff / User profile"}
             </p>
           </div>
@@ -359,6 +381,40 @@ export default function ProfileModal({ type, id, onClose }) {
                         icon={CalendarDays}
                         label="Admitted"
                         value={formatDate(profile.admission_date)}
+                      />
+
+                      <DetailRow
+                        icon={CheckCircle2}
+                        label="Status"
+                        value={<StatusBadge status={profile.status} />}
+                      />
+                    </>
+                  )}
+
+                  {profile?.kind === "staff" && (
+                    <>
+                      <DetailRow
+                        icon={Building2}
+                        label="Campus"
+                        value={profile.campus}
+                      />
+
+                      <DetailRow
+                        icon={BadgeCheck}
+                        label="Designation"
+                        value={profile.designation}
+                      />
+
+                      <DetailRow
+                        icon={Building2}
+                        label="Department"
+                        value={profile.department}
+                      />
+
+                      <DetailRow
+                        icon={CalendarDays}
+                        label="Joined"
+                        value={formatDate(profile.joining_date)}
                       />
 
                       <DetailRow

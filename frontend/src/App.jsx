@@ -49,6 +49,7 @@ import AuditLogsPage from "./pages/AuditLogsPage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import ProfilePage from "./pages/ProfilePage";
 import ProfileModal from "./pages/ProfileModal";
+import StaffPage from "./pages/StaffPage";
 
 const API_URL = "/api/dashboard/overview/";
 
@@ -79,6 +80,7 @@ const navigation = [
   { label: "My Profile", path: "/profile", icon: UserRound, roles: [] },
   { label: "Students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
@@ -2939,6 +2941,10 @@ function Shell() {
           path="/profile/student/:id"
           element={<ProfilePage key={location.pathname} />}
         />
+        <Route
+          path="/profile/staff/:id"
+          element={<ProfilePage key={location.pathname} />}
+        />
 
         <Route
           path="/students"
@@ -2956,6 +2962,15 @@ function Shell() {
           element={
             <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
               <TeachersPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/staff"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+              <StaffPage />
             </RequireRoles>
           }
         />

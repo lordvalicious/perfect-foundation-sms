@@ -163,15 +163,66 @@ class RoleAssignment(models.Model):
 
 
 class StaffProfile(models.Model):
+    GENDER_CHOICES = [
+        ("male", "Male"),
+        ("female", "Female"),
+        ("other", "Other"),
+    ]
+
+    STATUS_CHOICES = [
+        ("active", "Active"),
+        ("inactive", "Inactive"),
+    ]
+
     user = models.OneToOneField(
         User,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="staff_profile",
     )
 
     employee_number = models.CharField(
         max_length=50,
         unique=True,
+    )
+
+    photo = models.ImageField(
+        upload_to="profiles/staff/",
+        blank=True,
+        null=True,
+    )
+
+    first_name = models.CharField(
+        max_length=100,
+    )
+
+    last_name = models.CharField(
+        max_length=100,
+    )
+
+    gender = models.CharField(
+        max_length=20,
+        choices=GENDER_CHOICES,
+    )
+
+    date_of_birth = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    phone = models.CharField(
+        max_length=30,
+        blank=True,
+    )
+
+    email = models.EmailField(
+        blank=True,
+    )
+
+    campus = models.CharField(
+        max_length=150,
+        blank=True,
     )
 
     designation = models.CharField(
@@ -189,17 +240,6 @@ class StaffProfile(models.Model):
         blank=True,
     )
 
-    photo = models.ImageField(
-        upload_to="profiles/staff/",
-        blank=True,
-        null=True,
-    )
-
-    STATUS_CHOICES = [
-        ("active", "Active"),
-        ("inactive", "Inactive"),
-    ]
-
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
@@ -209,8 +249,15 @@ class StaffProfile(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    class Meta:
+        ordering = ["first_name", "last_name"]
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}".strip()
+
     def __str__(self):
         return (
             f"{self.employee_number} - "
-            f"{self.user.get_full_name() or self.user.username}"
+            f"{self.full_name or self.user.get_full_name() or self.user.username}"
         )

@@ -3,23 +3,27 @@ from django.contrib.auth import logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
+from django.db.models import Q
 from django.http import JsonResponse
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
-from rest_framework import serializers, status
+from rest_framework import generics, serializers, status
+from rest_framework.exceptions import NotFound
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.audit.models import record_audit
+from apps.accounts.permissions import IsAdminOrReadOnly
 
-from .models import Role, User
+from .models import Role, StaffProfile, User
 from .serializers import (
     LoginSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    StaffProfileCRUDSerializer,
     UserProfileSerializer,
     UserSerializer,
 )
@@ -304,3 +308,73 @@ class PasswordResetConfirmView(APIView):
         )
 
         return Response({"detail": "Password has been reset."})
+
+
+class StaffListCreateView(generics.ListCreateAPIView):
+    serializer_class = StaffProfileCRUDSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = StaffProfile.objects.all()
+
+        search = self.request.query_params.get("search")
+
+        if search:
+            queryset = queryset.filter(
+                Q(employee_number__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(phone__icontains=search)
+                | Q(email__icontains=search)
+                | Q(designation__icontains=search)
+                | Q(department__icontains=search)
+            )
+
+        designation = self.request.query_params.get("designation")
+
+        if designation:
+            queryset = queryset.filter(
+                designation__iexact=designation
+            )
+
+        department = self.request.query_params.get("department")
+
+        if department:
+            queryset = queryset.filter(
+                department__iexact=department
+            )
+
+        status_param = self.request.query_params.get("status")
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        campus = self.request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(campus__iexact=campus)
+
+        return queryset
+
+
+class StaffDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StaffProfileCRUDSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    queryset = StaffProfile.objects.all()
+
+
+class StaffMyView(generics.RetrieveAPIView):
+    """The logged-in staff member's own profile."""
+
+    serializer_class = StaffProfileCRUDSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_object(self):
+        profile = getattr(self.request.user, "staff_profile", None)
+
+        if profile is None:
+            raise NotFound(
+                "No staff profile is linked to this account."
+            )
+
+        return profile
