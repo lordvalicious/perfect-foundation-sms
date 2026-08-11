@@ -2,6 +2,13 @@ from django.db.models import Q
 from rest_framework import generics
 
 from apps.accounts.permissions import IsTeacherRole
+from apps.accounts.scopes import (
+    get_student_profile,
+    is_manager,
+    is_student,
+    is_teacher,
+    teacher_student_ids,
+)
 
 from .models import Attendance
 from .serializers import AttendanceSerializer
@@ -23,6 +30,24 @@ class AttendanceListView(generics.ListAPIView):
             )
             .order_by("-date", "student__first_name")
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
 
         search = self.request.query_params.get("search")
 

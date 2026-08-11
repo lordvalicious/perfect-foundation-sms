@@ -5,6 +5,9 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from .views import (
     TeacherListCreateView,
     TeacherDetailView,
+    TeacherMyView,
+    TeacherAssignmentListCreateView,
+    TeacherAssignmentDetailView,
 )
 
 
@@ -19,6 +22,21 @@ urlpatterns = [
         "",
         TeacherListCreateView.as_view(),
         name="teacher-list",
+    ),
+    path(
+        "me/",
+        TeacherMyView.as_view(),
+        name="teacher-my",
+    ),
+    path(
+        "assignments/",
+        TeacherAssignmentListCreateView.as_view(),
+        name="teacher-assignment-list",
+    ),
+    path(
+        "assignments/<int:pk>/",
+        TeacherAssignmentDetailView.as_view(),
+        name="teacher-assignment-detail",
     ),
     path(
         "<int:pk>/",

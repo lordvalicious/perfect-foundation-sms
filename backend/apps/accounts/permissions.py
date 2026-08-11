@@ -12,7 +12,7 @@ class IsAuthenticatedReadOnly(BasePermission):
             return True
 
         return request.user.has_any_role(
-            ["super_admin", "admin", "academic"]
+            ["super_admin", "admin", "principal", "academic"]
         )
 
 
@@ -31,7 +31,7 @@ class HasRole(BasePermission):
 class IsAdminOrReadOnly(BasePermission):
     """Authenticated read access; write requires admin-level role."""
 
-    admin_roles = ["super_admin", "admin", "academic"]
+    admin_roles = ["super_admin", "admin", "principal", "academic"]
 
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
@@ -44,7 +44,7 @@ class IsAdminOrReadOnly(BasePermission):
 
 
 class IsAdminRole(BasePermission):
-    roles = ["super_admin", "admin"]
+    roles = ["super_admin", "admin", "principal"]
 
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
@@ -54,7 +54,7 @@ class IsAdminRole(BasePermission):
 
 
 class IsAccountantRole(BasePermission):
-    roles = ["super_admin", "admin", "accountant"]
+    roles = ["super_admin", "admin", "principal", "accountant"]
 
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
@@ -64,7 +64,7 @@ class IsAccountantRole(BasePermission):
 
 
 class IsTeacherRole(BasePermission):
-    roles = ["super_admin", "admin", "academic", "teacher"]
+    roles = ["super_admin", "admin", "principal", "academic", "teacher"]
 
     def has_permission(self, request, view):
         if not (request.user and request.user.is_authenticated):
@@ -77,6 +77,7 @@ class IsStaffRole(BasePermission):
     roles = [
         "super_admin",
         "admin",
+        "principal",
         "academic",
         "teacher",
         "staff",

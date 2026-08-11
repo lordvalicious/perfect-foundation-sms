@@ -1,3 +1,5 @@
+from django.conf import settings  # type: ignore[reportMissingModuleSource]
+from django.conf.urls.static import static  # type: ignore[reportMissingModuleSource]
 from django.contrib import admin  # type: ignore[reportMissingModuleSource]
 from django.http import JsonResponse
 from django.urls import include, path  # type: ignore[reportMissingModuleSource]
@@ -72,3 +74,8 @@ urlpatterns = [
         include("apps.audit.urls"),
     ),
 ]
+
+urlpatterns += static(
+    settings.MEDIA_URL,
+    document_root=settings.MEDIA_ROOT,
+)

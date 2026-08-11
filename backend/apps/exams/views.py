@@ -2,6 +2,15 @@ from django.db.models import Q
 from rest_framework import generics
 
 from apps.accounts.permissions import IsTeacherRole
+from apps.accounts.scopes import (
+    get_student_profile,
+    is_manager,
+    is_student,
+    is_teacher,
+    student_class_ids,
+    teacher_class_ids,
+    teacher_student_ids,
+)
 
 from .models import Exam, ExamSubject, StudentResult
 from .serializers import (
@@ -22,6 +31,24 @@ class ExamListView(generics.ListAPIView):
             .prefetch_related("exam_subjects", "results")
             .order_by("-start_date")
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
+            elif is_teacher(user):
+                class_ids = teacher_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
 
         search = self.request.query_params.get("search")
 
@@ -82,6 +109,24 @@ class StudentResultListView(generics.ListAPIView):
             )
             .order_by("exam", "student__first_name", "exam_subject__subject__name")
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
 
         search = self.request.query_params.get("search")
 

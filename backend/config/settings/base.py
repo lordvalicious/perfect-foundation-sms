@@ -155,6 +155,13 @@ STATIC_ROOT = os.environ.get(
     str(BASE_DIR / "staticfiles"),
 )
 
+# Media files
+MEDIA_URL = "media/"
+MEDIA_ROOT = os.environ.get(
+    "DJANGO_MEDIA_ROOT",
+    str(BASE_DIR / "media"),
+)
+
 AUTH_USER_MODEL = "accounts.User"
 
 AUTHENTICATION_BACKENDS = [
@@ -180,7 +187,7 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
         "user": "2000/day",
-        "login": "10/hour",
+        "login": "60/hour",
         "password_reset": "10/hour",
     },
 }

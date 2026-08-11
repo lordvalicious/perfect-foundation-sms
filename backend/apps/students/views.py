@@ -1,10 +1,30 @@
 from django.db.models import Q
 from rest_framework import generics
+from rest_framework.exceptions import NotFound
 
 from apps.accounts.permissions import IsAdminOrReadOnly
+from apps.accounts.scopes import (
+    get_student_profile,
+    is_manager,
+    teacher_scope_filter,
+)
 
-from .models import Student
-from .serializers import StudentSerializer
+from .models import Enrollment, Student
+from .serializers import (
+    EnrollmentCreateSerializer,
+    StudentSerializer,
+)
+
+STUDENT_QUERYSET = (
+    Student.objects
+    .select_related("guardian")
+    .prefetch_related(
+        "enrollments__academic_year",
+        "enrollments__campus",
+        "enrollments__class_obj",
+        "enrollments__section",
+    )
+)
 
 
 class StudentListCreateView(generics.ListCreateAPIView):
@@ -12,17 +32,12 @@ class StudentListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
-        queryset = (
-            Student.objects
-            .select_related("guardian")
-            .prefetch_related(
-                "enrollments__academic_year",
-                "enrollments__campus",
-                "enrollments__class_obj",
-                "enrollments__section",
-            )
-            .order_by("first_name", "last_name")
-        )
+        queryset = STUDENT_QUERYSET.order_by("first_name", "last_name")
+
+        user = self.request.user
+
+        if not is_manager(user):
+            queryset = queryset.filter(teacher_scope_filter(user))
 
         search = self.request.query_params.get("search")
 
@@ -45,19 +60,121 @@ class StudentListCreateView(generics.ListCreateAPIView):
         if gender:
             queryset = queryset.filter(gender=gender)
 
+        campus = self.request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(
+                enrollments__campus_id=campus,
+                enrollments__status="active",
+            )
+
+        section = self.request.query_params.get("section")
+
+        if section:
+            queryset = queryset.filter(
+                enrollments__section_id=section,
+                enrollments__status="active",
+            )
+
         return queryset
 
 
 class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrReadOnly]
-    queryset = (
-        Student.objects
-        .select_related("guardian")
-        .prefetch_related(
-            "enrollments__academic_year",
-            "enrollments__campus",
-            "enrollments__class_obj",
-            "enrollments__section",
-        )
-    )
     serializer_class = StudentSerializer
+
+    def get_queryset(self):
+        queryset = STUDENT_QUERYSET
+
+        user = self.request.user
+
+        if not is_manager(user):
+            queryset = queryset.filter(teacher_scope_filter(user))
+
+        return queryset
+
+
+class StudentMyView(generics.RetrieveAPIView):
+    """The student's own profile."""
+
+    permission_classes = [IsAdminOrReadOnly]
+    serializer_class = StudentSerializer
+
+    def get_queryset(self):
+        return STUDENT_QUERYSET
+
+    def get_object(self):
+        profile = get_student_profile(self.request.user)
+
+        if profile is None:
+            raise NotFound(
+                "No student profile is linked to this account."
+            )
+
+        return profile
+
+
+class EnrollmentListCreateView(generics.ListCreateAPIView):
+    """Assign students to a grade (class/section) for a year."""
+
+    serializer_class = EnrollmentCreateSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = (
+            Enrollment.objects
+            .select_related(
+                "student",
+                "academic_year",
+                "campus",
+                "class_obj",
+                "section",
+            )
+            .order_by("-enrollment_date", "student__first_name")
+        )
+
+        student = self.request.query_params.get("student")
+
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        class_obj = self.request.query_params.get("class")
+
+        if class_obj:
+            queryset = queryset.filter(class_obj_id=class_obj)
+
+        section = self.request.query_params.get("section")
+
+        if section:
+            queryset = queryset.filter(section_id=section)
+
+        academic_year = self.request.query_params.get("year")
+
+        if academic_year:
+            queryset = queryset.filter(
+                academic_year_id=academic_year
+            )
+
+        status = self.request.query_params.get("status")
+
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
+
+class EnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdminOrReadOnly]
+    serializer_class = EnrollmentCreateSerializer
+
+    def get_queryset(self):
+        return (
+            Enrollment.objects
+            .select_related(
+                "student",
+                "academic_year",
+                "campus",
+                "class_obj",
+                "section",
+            )
+        )

@@ -46,6 +46,9 @@ class UserSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     primary_institution = serializers.SerializerMethodField()
+    photo_url = serializers.SerializerMethodField()
+    student_profile_id = serializers.SerializerMethodField()
+    teacher_profile_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -53,18 +56,40 @@ class UserSerializer(serializers.ModelSerializer):
             "id",
             "username",
             "email",
+            "phone",
             "first_name",
             "last_name",
+            "photo",
+            "photo_url",
             "is_staff",
             "is_superuser",
             "primary_role",
             "primary_institution",
+            "student_profile_id",
+            "teacher_profile_id",
             "memberships",
         ]
 
     def get_primary_institution(self, obj):
         institution = obj.primary_institution
         return institution.name if institution else None
+
+    def get_photo_url(self, obj):
+        request = self.context.get("request")
+
+        if obj.photo:
+            url = obj.photo.url
+            return request.build_absolute_uri(url) if request else url
+
+        return None
+
+    def get_student_profile_id(self, obj):
+        profile = getattr(obj, "student_profile", None)
+        return profile.id if profile else None
+
+    def get_teacher_profile_id(self, obj):
+        profile = getattr(obj, "teacher_profile", None)
+        return profile.id if profile else None
 
 
 class LoginSerializer(serializers.Serializer):

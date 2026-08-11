@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BrowserRouter,
   Routes,
   Route,
   NavLink,
   Navigate,
+  useLocation,
+  useNavigate,
 } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -23,6 +25,8 @@ import {
   LogOut,
   CalendarClock,
   ScrollText,
+  Layers,
+  UserRound,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -36,26 +40,50 @@ import CampusesPage from "./pages/CampusesPage";
 import SettingsPage from "./pages/SettingsPage";
 import EventsPage from "./pages/EventsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
+import AssignmentsPage from "./pages/AssignmentsPage";
+import ProfilePage from "./pages/ProfilePage";
 
 const API_URL = "/api/dashboard/overview/";
 
 const STUDENTS_API_URL = "/api/students/";
 
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+
+  if (parts.length === 2) {
+    return parts.pop().split(";").shift();
+  }
+
+  return null;
+}
+
+function authHeaders(extra = {}) {
+  const csrfToken = getCookie("csrftoken");
+
+  return {
+    ...extra,
+    ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+  };
+}
+
 const navigation = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, roles: [] },
-  { label: "Students", path: "/students", icon: Users, roles: ["super_admin", "admin", "academic", "accountant", "teacher"] },
-  { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "academic"] },
-  { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "academic", "teacher"] },
-  { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "academic", "accountant"] },
-  { label: "Exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "academic", "teacher"] },
-  { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "academic", "teacher"] },
-  { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "academic", "teacher", "staff"] },
-  { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "academic"] },
+  { label: "My Profile", path: "/profile", icon: UserRound, roles: [] },
+  { label: "Students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
+  { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
+  { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
+  { label: "Exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
+  { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
+  { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student"] },
+  { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
 ];
 
 const systemNavigation = [
-  { label: "Settings", path: "/settings", icon: Settings, roles: ["super_admin", "admin", "academic"] },
+  { label: "Settings", path: "/settings", icon: Settings, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Audit Logs", path: "/audit-logs", icon: ScrollText, roles: ["super_admin", "admin"] },
 ];
 
@@ -163,7 +191,15 @@ function Layout({ children }) {
             </button>
 
             <div className="profile">
-              <div className="avatar">{initials}</div>
+              {user?.photo_url ? (
+                <img
+                  className="avatar avatar-photo"
+                  src={user.photo_url}
+                  alt={displayName}
+                />
+              ) : (
+                <div className="avatar">{initials}</div>
+              )}
 
               <div>
                 <strong>{displayName}</strong>
@@ -411,57 +447,76 @@ function Dashboard() {
  *********************************/
 
 function StudentsPage() {
-  const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { hasRole } = useAuth();
+  const navigate = useNavigate();
+  const campusSectionRefs = useRef({});
+
+  const isStudentSelf =
+    hasRole(["student"]) &&
+    !hasRole([
+      "super_admin",
+      "admin",
+      "principal",
+      "academic",
+      "accountant",
+      "teacher",
+      "staff",
+    ]);
+
+  const canManage = hasRole([
+    "super_admin",
+    "admin",
+    "principal",
+    "academic",
+  ]);
+
   const [error, setError] = useState("");
 
   const [search, setSearch] = useState("");
   const [gender, setGender] = useState("");
   const [status, setStatus] = useState("");
 
-  const [page, setPage] = useState(1);
-  const [pagination, setPagination] = useState({
-    count: 0,
-    next: null,
-    previous: null,
-  });
+  const [section, setSection] = useState("");
+  const [campusOptions, setCampusOptions] = useState([]);
+  const [sectionOptions, setSectionOptions] = useState([]);
 
-  const loadStudents = useCallback((params) => {
-    return fetch(`${STUDENTS_API_URL}?${params.toString()}`, {
-      credentials: "include",
-    })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to load students.");
-        }
+  const [campusData, setCampusData] = useState({});
 
-        return response.json();
-      })
-      .then((data) => {
-        setStudents(data.results || []);
+  const [showForm, setShowForm] = useState(false);
+  const [editingStudent, setEditingStudent] = useState(null);
+  const [saving, setSaving] = useState(false);
 
-        setPagination({
-          count: data.count || 0,
-          next: data.next,
-          previous: data.previous,
-        });
+  const emptyForm = {
+    admission_number: "",
+    first_name: "",
+    middle_name: "",
+    last_name: "",
+    gender: "",
+    date_of_birth: "",
+    phone: "",
+    address: "",
+    status: "active",
+    admission_date: "",
+    guardian_name: "",
+    guardian_relationship: "",
+    guardian_phone: "",
+    guardian_alternate_phone: "",
+    guardian_email: "",
+    guardian_address: "",
+  };
 
-        setPage(Number(params.get("page") || 1));
-      })
-      .catch((err) => {
-        setError(err.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
+  const [form, setForm] = useState(emptyForm);
+  const [photoFile, setPhotoFile] = useState(null);
 
-  const fetchStudents = (pageNumber = 1) => {
-    setLoading(true);
-    setError("");
+  const [myProfile, setMyProfile] = useState(null);
+  const [myProfileLoading, setMyProfileLoading] = useState(
+    isStudentSelf
+  );
 
+  const buildStudentParams = (campusId, pageNumber) => {
     const params = new URLSearchParams();
 
+    params.append("campus", campusId);
     params.append("page", pageNumber);
 
     if (search.trim()) {
@@ -476,39 +531,579 @@ function StudentsPage() {
       params.append("status", status);
     }
 
-    return loadStudents(params);
+    if (section) {
+      params.append("section", section);
+    }
+
+    return params;
+  };
+
+  const fetchCampusStudents = (campusId, pageNumber = 1) => {
+    const params = buildStudentParams(campusId, pageNumber);
+
+    setCampusData((prev) => ({
+      ...prev,
+      [campusId]: { ...(prev[campusId] || {}), loading: true },
+    }));
+
+    return fetch(`${STUDENTS_API_URL}?${params.toString()}`, {
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load students.");
+        }
+
+        return response.json();
+      })
+      .then((data) => {
+        setCampusData((prev) => ({
+          ...prev,
+          [campusId]: {
+            students: data.results || [],
+            count: data.count || 0,
+            page: pageNumber,
+            next: data.next,
+            previous: data.previous,
+            loaded: true,
+            loading: false,
+            error: "",
+          },
+        }));
+      })
+      .catch((err) => {
+        setCampusData((prev) => ({
+          ...prev,
+          [campusId]: {
+            ...(prev[campusId] || {}),
+            loaded: true,
+            loading: false,
+            error: err.message,
+          },
+        }));
+      });
+  };
+
+  const fetchAllCampuses = (pageNumber = 1) => {
+    campusOptions.forEach((campus) => {
+      fetchCampusStudents(campus.id, pageNumber);
+    });
   };
 
   useEffect(() => {
-    loadStudents(new URLSearchParams({ page: "1" }));
-  }, [loadStudents]);
+    if (isStudentSelf) {
+      fetch("/api/students/me/", { credentials: "include" })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("No student profile linked.");
+          }
+
+          return response.json();
+        })
+        .then((data) => {
+          setMyProfile(data);
+          setError("");
+        })
+        .catch((err) => {
+          setError(err.message);
+        })
+        .finally(() => {
+          setMyProfileLoading(false);
+        });
+
+      return;
+    }
+
+    const loadCampusStudents = (campus, pageNumber) => {
+      const params = new URLSearchParams();
+
+      params.append("campus", campus.id);
+      params.append("page", pageNumber);
+
+      fetch(`${STUDENTS_API_URL}?${params.toString()}`, {
+        credentials: "include",
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error("Failed to load students.");
+          }
+
+          return response.json();
+        })
+        .then((data) => {
+          setCampusData((prev) => ({
+            ...prev,
+            [campus.id]: {
+              students: data.results || [],
+              count: data.count || 0,
+              page: pageNumber,
+              next: data.next,
+              previous: data.previous,
+              loaded: true,
+              loading: false,
+              error: "",
+            },
+          }));
+        })
+        .catch((err) => {
+          setCampusData((prev) => ({
+            ...prev,
+            [campus.id]: {
+              ...(prev[campus.id] || {}),
+              loaded: true,
+              loading: false,
+              error: err.message,
+            },
+          }));
+        });
+    };
+
+    fetch("/api/schools/campuses/", {
+      credentials: "include",
+    })
+      .then((response) =>
+        response.ok ? response.json() : []
+      )
+      .then((data) => {
+        const campuses = Array.isArray(data) ? data : [];
+
+        setCampusOptions(campuses);
+
+        campuses.forEach((campus) => {
+          loadCampusStudents(campus, 1);
+        });
+      })
+      .catch(() => {});
+
+    fetch("/api/schools/sections/", {
+      credentials: "include",
+    })
+      .then((response) =>
+        response.ok ? response.json() : []
+      )
+      .then((data) =>
+        setSectionOptions(
+          Array.isArray(data) ? data : []
+        )
+      )
+      .catch(() => {});
+  }, [isStudentSelf]);
+
+  const viewCampusStudents = (campusId) => {
+    campusSectionRefs.current[campusId]?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  };
+
+  const handleSectionChange = (value) => {
+    setSection(value);
+
+    setTimeout(() => {
+      fetchAllCampuses(1);
+    }, 0);
+  };
 
   const handleSearch = (event) => {
     event.preventDefault();
-    fetchStudents(1);
+    fetchAllCampuses(1);
   };
 
   const clearFilters = () => {
     setSearch("");
     setGender("");
     setStatus("");
+    setSection("");
 
     setTimeout(() => {
-      fetchStudents(1);
+      fetchAllCampuses(1);
     }, 0);
   };
 
-  const totalPages = Math.ceil(
-    pagination.count / 20
-  );
+  /* --------------------------
+     FORM HANDLING
+  -------------------------- */
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  };
+
+  const handlePhoto = (event) => {
+    setPhotoFile(event.target.files[0] || null);
+  };
+
+  const openAddStudent = () => {
+    setEditingStudent(null);
+    setPhotoFile(null);
+    setForm(emptyForm);
+    setShowForm(true);
+  };
+
+  const openEditStudent = (student) => {
+    setEditingStudent(student);
+    setPhotoFile(null);
+
+    setForm({
+      admission_number: student.admission_number || "",
+      first_name: student.first_name || "",
+      middle_name: student.middle_name || "",
+      last_name: student.last_name || "",
+      gender: student.gender || "",
+      date_of_birth: student.date_of_birth || "",
+      phone: student.phone || "",
+      address: student.address || "",
+      status: student.status || "active",
+      admission_date: student.admission_date || "",
+      guardian_name:
+        student.guardian_details?.name || "",
+      guardian_relationship:
+        student.guardian_details?.relationship || "",
+      guardian_phone:
+        student.guardian_details?.phone || "",
+      guardian_alternate_phone:
+        student.guardian_details?.alternate_phone || "",
+      guardian_email:
+        student.guardian_details?.email || "",
+      guardian_address:
+        student.guardian_details?.address || "",
+    });
+
+    setShowForm(true);
+  };
+
+  const closeForm = () => {
+    if (saving) return;
+
+    setShowForm(false);
+    setEditingStudent(null);
+    setPhotoFile(null);
+    setForm(emptyForm);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const isEditing = Boolean(editingStudent);
+
+      const url = isEditing
+        ? `${STUDENTS_API_URL}${editingStudent.id}/`
+        : STUDENTS_API_URL;
+
+      const body = new FormData();
+
+      for (const [key, value] of Object.entries(form)) {
+        body.append(key, value === "" ? "" : value);
+      }
+
+      if (photoFile) {
+        body.append("photo", photoFile);
+      }
+
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
+        credentials: "include",
+        headers: authHeaders(),
+        body,
+      });
+
+      const responseText = await response.text();
+
+      let data = {};
+
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = {};
+      }
+
+      if (!response.ok) {
+        let message = "Unable to save student.";
+
+        if (data && typeof data === "object") {
+          message = Object.entries(data)
+            .map(([field, value]) => {
+              const text = Array.isArray(value)
+                ? value.join(", ")
+                : String(value);
+
+              return `${field}: ${text}`;
+            })
+            .join(" | ");
+        }
+
+        if (
+          !message ||
+          message === "Unable to save student."
+        ) {
+          message =
+            responseText ||
+            `Request failed (${response.status})`;
+        }
+
+        throw new Error(message);
+      }
+
+      closeForm();
+      await fetchAllCampuses(1);
+
+      if (isStudentSelf) {
+        fetch("/api/students/me/", {
+          credentials: "include",
+        })
+          .then((response) => response.json())
+          .then((profile) => setMyProfile(profile))
+          .catch(() => {});
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (student) => {
+    const confirmed = window.confirm(
+      `Delete student "${student.full_name || student.admission_number}"? ` +
+        "This cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${STUDENTS_API_URL}${student.id}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: authHeaders(),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to delete student.");
+      }
+
+      const campusId = student.current_enrollment?.campus_id;
+
+      if (campusId) {
+        const entry = campusData[campusId] || {};
+        await fetchCampusStudents(campusId, entry.page || 1);
+      } else {
+        await fetchAllCampuses(1);
+      }
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /* --------------------------
+     STUDENT SELF PROFILE
+  -------------------------- */
+
+  if (isStudentSelf) {
+    return (
+      <section className="content">
+        <div className="page-header">
+          <div>
+            <div className="breadcrumb">Home / My Profile</div>
+            <h2>My Profile</h2>
+
+            <p className="subtitle">
+              Your student information at Perfect Foundation
+              School.
+            </p>
+          </div>
+        </div>
+
+        {myProfileLoading && (
+          <div className="state-card">
+            Loading your profile...
+          </div>
+        )}
+
+        {!myProfileLoading && error && (
+          <div className="state-card error">
+            <strong>Unable to load your profile.</strong>
+            <span>{error}</span>
+          </div>
+        )}
+
+        {!myProfileLoading && !error && myProfile && (
+          <div className="profile-grid">
+            <div className="panel profile-card">
+              {myProfile.photo_url ? (
+                <img
+                  className="profile-photo"
+                  src={myProfile.photo_url}
+                  alt={myProfile.full_name}
+                />
+              ) : (
+                <div className="profile-photo placeholder">
+                  {(myProfile.full_name || "S")
+                    .charAt(0)
+                    .toUpperCase()}
+                </div>
+              )}
+
+              <h3>{myProfile.full_name}</h3>
+              <span className="status-badge active">
+                {myProfile.status}
+              </span>
+
+              <p className="muted">
+                {myProfile.admission_number}
+              </p>
+
+              <div className="profile-detail">
+                <strong>Date of Birth</strong>
+                <span>{myProfile.date_of_birth || "—"}</span>
+              </div>
+
+              <div className="profile-detail">
+                <strong>Gender</strong>
+                <span>
+                  {myProfile.gender
+                    ? myProfile.gender.charAt(0).toUpperCase() +
+                      myProfile.gender.slice(1)
+                    : "—"}
+                </span>
+              </div>
+
+              <div className="profile-detail">
+                <strong>Phone</strong>
+                <span>{myProfile.phone || "—"}</span>
+              </div>
+
+              <div className="profile-detail">
+                <strong>Address</strong>
+                <span>{myProfile.address || "—"}</span>
+              </div>
+            </div>
+
+            <div className="profile-grid-main">
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>Guardian</h3>
+                    <p>Contact information of your guardian</p>
+                  </div>
+                </div>
+
+                <div className="overview-list">
+                  <div>
+                    <span>Name</span>
+                    <strong>
+                      {myProfile.guardian_details?.name || "—"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Relationship</span>
+                    <strong>
+                      {myProfile.guardian_details?.relationship ||
+                        "—"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Phone</span>
+                    <strong>
+                      {myProfile.guardian_details?.phone || "—"}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>Email</span>
+                    <strong>
+                      {myProfile.guardian_details?.email || "—"}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3>Enrollments</h3>
+                    <p>Classes you are enrolled in</p>
+                  </div>
+                </div>
+
+                {(myProfile.enrollments || []).length === 0 ? (
+                  <div className="state-card">
+                    No enrollments found.
+                  </div>
+                ) : (
+                  <div className="table-wrapper">
+                    <table className="data-table">
+                      <thead>
+                        <tr>
+                          <th>ACADEMIC YEAR</th>
+                          <th>CLASS</th>
+                          <th>SECTION</th>
+                          <th>STATUS</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {myProfile.enrollments.map(
+                          (enrollment) => (
+                            <tr key={enrollment.id}>
+                              <td>
+                                {enrollment.academic_year_name}
+                              </td>
+                              <td>
+                                <strong>
+                                  {enrollment.class_name}
+                                </strong>
+                              </td>
+                              <td>{enrollment.section_name}</td>
+                              <td>
+                                <span
+                                  className={`status-badge ${
+                                    enrollment.status === "active"
+                                      ? "active"
+                                      : "inactive"
+                                  }`}
+                                >
+                                  {enrollment.status}
+                                </span>
+                              </td>
+                            </tr>
+                          )
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
+
+  /* --------------------------
+     ADMIN / TEACHER LIST VIEW
+  -------------------------- */
 
   return (
     <section className="page">
       <div className="page-header">
         <div>
-          <div className="breadcrumb">
-            Home / Students
-          </div>
+          <div className="breadcrumb">Home / Students</div>
 
           <h2>Students</h2>
 
@@ -516,13 +1111,65 @@ function StudentsPage() {
             Manage students enrolled at Perfect Foundation School.
           </p>
         </div>
+
+        {canManage && (
+          <button
+            className="primary-button"
+            onClick={openAddStudent}
+          >
+            + Add Student
+          </button>
+        )}
       </div>
+
+      {/* Campus overview */}
+      {campusOptions.length > 0 && (
+        <div className="campus-cards">
+          {campusOptions.map((item) => (
+            <div key={item.id} className="campus-card">
+              <div className="campus-card-header">
+                <Building2 size={20} />
+                <strong>{item.name}</strong>
+              </div>
+
+              <p className="campus-card-sub">
+                {[item.city, item.address]
+                  .filter(Boolean)
+                  .join(", ") || "Perfect Foundation School"}
+              </p>
+
+              <div className="campus-card-stats">
+                <div>
+                  <span>{item.student_count || 0}</span>
+                  <small>Students</small>
+                </div>
+
+                <div>
+                  <span>{item.class_count || 0}</span>
+                  <small>Classes</small>
+                </div>
+
+                <div>
+                  <span>{item.section_count || 0}</span>
+                  <small>Sections</small>
+                </div>
+              </div>
+
+              <button
+                className="primary-button campus-card-button"
+                onClick={() => viewCampusStudents(item.id)}
+              >
+                View All Students
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Filters */}
       <div className="panel students-filters">
         <form onSubmit={handleSearch}>
           <div className="filter-row">
-
             <div className="filter-search">
               <Search size={18} />
 
@@ -541,7 +1188,7 @@ function StudentsPage() {
               onChange={(event) => {
                 setGender(event.target.value);
                 setTimeout(() => {
-                  fetchStudents(1);
+                  fetchAllCampuses(1);
                 }, 0);
               }}
             >
@@ -551,11 +1198,26 @@ function StudentsPage() {
             </select>
 
             <select
+              value={section}
+              onChange={(event) =>
+                handleSectionChange(event.target.value)
+              }
+            >
+              <option value="">All sections</option>
+
+              {sectionOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.class_name} - {item.name}
+                </option>
+              ))}
+            </select>
+
+            <select
               value={status}
               onChange={(event) => {
                 setStatus(event.target.value);
                 setTimeout(() => {
-                  fetchStudents(1);
+                  fetchAllCampuses(1);
                 }, 0);
               }}
             >
@@ -575,163 +1237,543 @@ function StudentsPage() {
             >
               Clear
             </button>
-
           </div>
         </form>
       </div>
 
-      {/* Student list */}
-      <div className="panel">
-
-        <div className="panel-header">
-          <div>
-            <h3>Student List</h3>
-
-            <p>
-              {pagination.count.toLocaleString()} students
-              found
-            </p>
-          </div>
-
-          <button className="primary-button">
-            + Add Student
-          </button>
+      {/* Student lists by campus */}
+      {campusOptions.length === 0 ? (
+        <div className="state-card">
+          No campuses found.
         </div>
+      ) : (
+        <div className="campus-student-lists">
+          {campusOptions.map((campus) => {
+            const data =
+              campusData[campus.id] || {
+                students: [],
+                count: 0,
+                page: 1,
+                next: null,
+                previous: null,
+                loading: true,
+                error: "",
+              };
 
-        {loading && (
-          <div className="state-card">
-            Loading students...
-          </div>
-        )}
+            const campusTotalPages = Math.max(
+              1,
+              Math.ceil(data.count / 20)
+            );
 
-        {error && (
-          <div className="state-card error">
-            <strong>Unable to load students.</strong>
+            return (
+              <div
+                key={campus.id}
+                className="panel campus-student-list"
+                ref={(el) => {
+                  campusSectionRefs.current[campus.id] = el;
+                }}
+              >
+                <div className="panel-header">
+                  <div>
+                    <h3>{campus.name}</h3>
 
-            <span>
-              Make sure Django is running at
-              127.0.0.1:8000.
-            </span>
+                    <p>
+                      {data.count.toLocaleString()} students
+                      found
+                    </p>
+                  </div>
+                </div>
 
-            <code>{error}</code>
-          </div>
-        )}
+                {data.loading && (
+                  <div className="state-card">
+                    Loading students...
+                  </div>
+                )}
 
-        {!loading && !error && (
-          <>
-            {students.length === 0 ? (
-              <div className="state-card">
-                No students found.
+                {!data.loading && data.error && (
+                  <div className="state-card error">
+                    <strong>
+                      Unable to load students.
+                    </strong>
+
+                    <span>
+                      Make sure Django is running at
+                      127.0.0.1:8000.
+                    </span>
+
+                    <code>{data.error}</code>
+                  </div>
+                )}
+
+                {!data.loading && !data.error && (
+                  <>
+                    {data.students.length === 0 ? (
+                      <div className="state-card">
+                        No students found.
+                      </div>
+                    ) : (
+                      <div className="students-table-wrapper">
+                        <table className="students-table">
+                          <thead>
+                            <tr>
+                              <th>Student</th>
+                              <th>Admission No.</th>
+                              <th>Class</th>
+                              <th>Section</th>
+                              <th>Date of Birth</th>
+                              <th>Gender</th>
+                              <th>Guardian</th>
+                              <th>Phone</th>
+                              <th>Status</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+
+                          <tbody>
+                            {data.students.map((student) => (
+                              <tr key={student.id}>
+                                <td>
+                                  <div className="student-name-cell">
+                                    {student.photo_url ? (
+                                      <img
+                                        className="table-photo"
+                                        src={student.photo_url}
+                                        alt={student.full_name}
+                                      />
+                                    ) : (
+                                      <div className="table-avatar">
+                                        {(
+                                          student.full_name ||
+                                          "S"
+                                        )
+                                          .charAt(0)
+                                          .toUpperCase()}
+                                      </div>
+                                    )}
+
+                                    <strong>
+                                      {student.full_name ||
+                                        `${student.first_name ||
+                                          ""} ${
+                                          student.middle_name ||
+                                          ""
+                                        } ${
+                                          student.last_name ||
+                                          ""
+                                        }`.trim()}
+                                    </strong>
+                                  </div>
+                                </td>
+
+                                <td>
+                                  <strong>
+                                    {student.admission_number}
+                                  </strong>
+                                </td>
+
+                                <td>
+                                  {student.current_enrollment
+                                    ?.class_name || "—"}
+                                </td>
+
+                                <td>
+                                  {student.current_enrollment
+                                    ?.section_name || "—"}
+                                </td>
+
+                                <td>
+                                  {student.date_of_birth ||
+                                    "—"}
+                                </td>
+
+                                <td>
+                                  {student.gender
+                                    ? student.gender
+                                        .charAt(0)
+                                        .toUpperCase() +
+                                      student.gender.slice(1)
+                                    : "—"}
+                                </td>
+
+                                <td>
+                                  {student.guardian_details
+                                    ?.name || "—"}
+                                </td>
+
+                                <td>{student.phone || "—"}</td>
+
+                                <td>
+                                  <span
+                                    className={`status-badge ${
+                                      student.status ===
+                                      "active"
+                                        ? "active"
+                                        : "inactive"
+                                    }`}
+                                  >
+                                    {student.status || "—"}
+                                  </span>
+                                </td>
+
+                                <td>
+                                  <button
+                                    className="table-action"
+                                    onClick={() =>
+                                      navigate(
+                                        `/profile/student/${student.id}`
+                                      )
+                                    }
+                                  >
+                                    View Profile
+                                  </button>
+
+                                  {canManage && (
+                                    <>
+                                      <button
+                                        className="table-action"
+                                        onClick={() =>
+                                          openEditStudent(
+                                            student
+                                          )
+                                        }
+                                      >
+                                        Edit
+                                      </button>
+
+                                      <button
+                                        className="table-action danger"
+                                        onClick={() =>
+                                          handleDelete(student)
+                                        }
+                                      >
+                                        Delete
+                                      </button>
+                                    </>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {data.count > 0 && (
+                      <div className="pagination">
+                        <button
+                          disabled={!data.previous}
+                          onClick={() =>
+                            fetchCampusStudents(
+                              campus.id,
+                              data.page - 1
+                            )
+                          }
+                        >
+                          Previous
+                        </button>
+
+                        <span>
+                          Page {data.page} of{" "}
+                          {campusTotalPages}
+                        </span>
+
+                        <button
+                          disabled={!data.next}
+                          onClick={() =>
+                            fetchCampusStudents(
+                              campus.id,
+                              data.page + 1
+                            )
+                          }
+                        >
+                          Next
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
-            ) : (
-              <div className="students-table-wrapper">
-                <table className="students-table">
-                  <thead>
-                    <tr>
-                      <th>Admission No.</th>
-                      <th>Student</th>
-                      <th>Date of Birth</th>
-                      <th>Gender</th>
-                      <th>Guardian</th>
-                      <th>Phone</th>
-                      <th>Status</th>
-                    </tr>
-                  </thead>
+            );
+          })}
+        </div>
+      )}
 
-                  <tbody>
-                    {students.map((student) => (
-                      <tr key={student.id}>
+      {/* Add / Edit Student Modal */}
+      {showForm && (
+        <div
+          className="modal-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeForm();
+            }
+          }}
+        >
+          <div className="teacher-modal student-modal">
+            <div className="modal-header">
+              <div>
+                <h3>
+                  {editingStudent
+                    ? "Edit Student"
+                    : "Add Student"}
+                </h3>
 
-                        <td>
-                          <strong>
-                            {student.admission_number}
-                          </strong>
-                        </td>
-
-                        <td>
-                          <div className="student-name">
-                            {student.full_name ||
-                              `${student.first_name || ""} ${
-                                student.middle_name || ""
-                              } ${
-                                student.last_name || ""
-                              }`.trim()}
-                          </div>
-                        </td>
-
-                        <td>
-                          {student.date_of_birth || "—"}
-                        </td>
-
-                        <td>
-                          {student.gender
-                            ? student.gender
-                                .charAt(0)
-                                .toUpperCase() +
-                              student.gender.slice(1)
-                            : "—"}
-                        </td>
-
-                        <td>
-                          {student.guardian_details?.name ||
-                            "—"}
-                        </td>
-
-                        <td>
-                          {student.phone || "—"}
-                        </td>
-
-                        <td>
-                          <span
-                            className={`status-badge ${
-                              student.status === "active"
-                                ? "active"
-                                : "inactive"
-                            }`}
-                          >
-                            {student.status || "—"}
-                          </span>
-                        </td>
-
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <p>
+                  {editingStudent
+                    ? "Update student information."
+                    : "Create a new student profile."}
+                </p>
               </div>
-            )}
 
-            {/* Pagination */}
-            {pagination.count > 0 && (
-              <div className="pagination">
+              <button
+                className="modal-close"
+                onClick={closeForm}
+                disabled={saving}
+              >
+                ×
+              </button>
+            </div>
 
+            <form onSubmit={handleSubmit}>
+              <div className="form-section">
+                <h4>Personal Information</h4>
+
+                <div className="form-grid">
+                  <label>
+                    Admission Number
+                    <input
+                      name="admission_number"
+                      value={form.admission_number}
+                      onChange={handleChange}
+                      placeholder="PF-ST-0001"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    Gender
+                    <select
+                      name="gender"
+                      value={form.gender}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">Select gender</option>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    First Name
+                    <input
+                      name="first_name"
+                      value={form.first_name}
+                      onChange={handleChange}
+                      placeholder="First name"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    Middle Name
+                    <input
+                      name="middle_name"
+                      value={form.middle_name}
+                      onChange={handleChange}
+                      placeholder="Middle name"
+                    />
+                  </label>
+
+                  <label>
+                    Last Name
+                    <input
+                      name="last_name"
+                      value={form.last_name}
+                      onChange={handleChange}
+                      placeholder="Last name"
+                    />
+                  </label>
+
+                  <label>
+                    Date of Birth
+                    <input
+                      type="date"
+                      name="date_of_birth"
+                      value={form.date_of_birth}
+                      onChange={handleChange}
+                    />
+                  </label>
+
+                  <label>
+                    Admission Date
+                    <input
+                      type="date"
+                      name="admission_date"
+                      value={form.admission_date}
+                      onChange={handleChange}
+                    />
+                  </label>
+
+                  <label>
+                    Status
+                    <select
+                      name="status"
+                      value={form.status}
+                      onChange={handleChange}
+                    >
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
+                      <option value="graduated">
+                        Graduated
+                      </option>
+                      <option value="withdrawn">
+                        Withdrawn
+                      </option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhoto}
+                    />
+                  </label>
+
+                  {photoFile && (
+                    <div className="photo-preview">
+                      <img
+                        src={URL.createObjectURL(photoFile)}
+                        alt="preview"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Contact Information</h4>
+
+                <div className="form-grid">
+                  <label>
+                    Phone
+                    <input
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      placeholder="03XX-XXXXXXX"
+                    />
+                  </label>
+
+                  <label>
+                    Address
+                    <input
+                      name="address"
+                      value={form.address}
+                      onChange={handleChange}
+                      placeholder="Home address"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Guardian Information</h4>
+
+                <div className="form-grid">
+                  <label>
+                    Guardian Name
+                    <input
+                      name="guardian_name"
+                      value={form.guardian_name}
+                      onChange={handleChange}
+                      placeholder="Full name"
+                      required={!editingStudent}
+                    />
+                  </label>
+
+                  <label>
+                    Relationship
+                    <input
+                      name="guardian_relationship"
+                      value={form.guardian_relationship}
+                      onChange={handleChange}
+                      placeholder="e.g. Father, Mother"
+                      required={!editingStudent}
+                    />
+                  </label>
+
+                  <label>
+                    Guardian Phone
+                    <input
+                      name="guardian_phone"
+                      value={form.guardian_phone}
+                      onChange={handleChange}
+                      placeholder="03XX-XXXXXXX"
+                      required={!editingStudent}
+                    />
+                  </label>
+
+                  <label>
+                    Alternate Phone
+                    <input
+                      name="guardian_alternate_phone"
+                      value={form.guardian_alternate_phone}
+                      onChange={handleChange}
+                      placeholder="Alternate phone"
+                    />
+                  </label>
+
+                  <label>
+                    Guardian Email
+                    <input
+                      type="email"
+                      name="guardian_email"
+                      value={form.guardian_email}
+                      onChange={handleChange}
+                      placeholder="guardian@example.com"
+                    />
+                  </label>
+
+                  <label>
+                    Guardian Address
+                    <input
+                      name="guardian_address"
+                      value={form.guardian_address}
+                      onChange={handleChange}
+                      placeholder="Guardian address"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-footer">
                 <button
-                  disabled={!pagination.previous}
-                  onClick={() =>
-                    fetchStudents(page - 1)
-                  }
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeForm}
+                  disabled={saving}
                 >
-                  Previous
+                  Cancel
                 </button>
 
-                <span>
-                  Page {page} of {totalPages}
-                </span>
-
                 <button
-                  disabled={!pagination.next}
-                  onClick={() =>
-                    fetchStudents(page + 1)
-                  }
+                  type="submit"
+                  className="primary-button"
+                  disabled={saving}
                 >
-                  Next
+                  {saving
+                    ? "Saving..."
+                    : editingStudent
+                    ? "Save Changes"
+                    : "Add Student"}
                 </button>
-
               </div>
-            )}
-          </>
-        )}
-
-      </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -742,18 +1784,9 @@ function StudentsPage() {
 
 const TEACHERS_API_URL = "/api/teachers/";
 
-function getCookie(name) {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-
-  if (parts.length === 2) {
-    return parts.pop().split(";").shift();
-  }
-
-  return null;
-}
-
 function TeachersPage() {
+  const navigate = useNavigate();
+
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -779,9 +1812,14 @@ function TeachersPage() {
     joining_date: "",
     designation: "Teacher",
     status: "active",
+    create_account: false,
+    username: "",
+    password: "",
   };
 
   const [form, setForm] = useState(emptyForm);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [accountCreated, setAccountCreated] = useState(null);
 
   /* =========================
      LOAD TEACHERS
@@ -837,14 +1875,20 @@ function TeachersPage() {
     }));
   };
 
+  const handlePhoto = (event) => {
+    setPhotoFile(event.target.files[0] || null);
+  };
+
   const openAddTeacher = () => {
     setEditingTeacher(null);
+    setPhotoFile(null);
     setForm(emptyForm);
     setShowForm(true);
   };
 
   const openEditTeacher = (teacher) => {
     setEditingTeacher(teacher);
+    setPhotoFile(null);
 
     setForm({
       employee_number: teacher.employee_number || "",
@@ -867,6 +1911,9 @@ function TeachersPage() {
       joining_date: teacher.joining_date || "",
       designation: teacher.designation || "Teacher",
       status: teacher.status || "active",
+      create_account: false,
+      username: teacher.linked_username || "",
+      password: "",
     });
 
     setShowForm(true);
@@ -877,6 +1924,7 @@ function TeachersPage() {
 
     setShowForm(false);
     setEditingTeacher(null);
+    setPhotoFile(null);
     setForm(emptyForm);
   };
 
@@ -899,31 +1947,51 @@ function TeachersPage() {
 
     const csrfToken = getCookie("csrftoken");
 
-    const headers = {
-      "Content-Type": "application/json",
-    };
+    const headers = {};
 
     if (csrfToken) {
       headers["X-CSRFToken"] = csrfToken;
+    }
+
+    const body = new FormData();
+
+    body.append("employee_number", form.employee_number);
+    body.append("first_name", form.first_name);
+    body.append("last_name", form.last_name);
+    body.append("gender", form.gender);
+    body.append(
+      "date_of_birth",
+      form.date_of_birth || ""
+    );
+    body.append("phone", form.phone || "");
+    body.append("email", form.email || "");
+    body.append("campus", form.campus || "");
+    body.append(
+      "joining_date",
+      form.joining_date || ""
+    );
+    body.append("designation", form.designation || "");
+    body.append("status", form.status);
+
+    body.append(
+      "create_account",
+      String(Boolean(form.create_account))
+    );
+
+    if (form.create_account) {
+      body.append("username", form.username || "");
+      body.append("password", form.password || "");
+    }
+
+    if (photoFile) {
+      body.append("photo", photoFile);
     }
 
     const response = await fetch(url, {
       method: isEditing ? "PUT" : "POST",
       credentials: "include",
       headers,
-      body: JSON.stringify({
-        employee_number: form.employee_number,
-        first_name: form.first_name,
-        last_name: form.last_name,
-        gender: form.gender,
-        date_of_birth: form.date_of_birth || null,
-        phone: form.phone,
-        email: form.email,
-        campus: form.campus || null,
-        joining_date: form.joining_date || null,
-        designation: form.designation,
-        status: form.status,
-      }),
+      body,
     });
 
     // Read response body ONLY ONCE
@@ -969,6 +2037,17 @@ function TeachersPage() {
     closeForm();
     await loadTeachers();
 
+    if (data.linked_username && data.generated_password) {
+      setAccountCreated({
+        username: data.linked_username,
+        password: data.generated_password,
+        name: getTeacherName({
+          first_name: data.first_name,
+          last_name: data.last_name,
+        }),
+      });
+    }
+
   } catch (err) {
     setError(err.message);
 
@@ -976,6 +2055,39 @@ function TeachersPage() {
     setSaving(false);
   }
 };
+
+  const handleDeleteTeacher = async (teacher) => {
+    const confirmed = window.confirm(
+      `Delete teacher "${getTeacherName(teacher)}"? ` +
+        "This cannot be undone."
+    );
+
+    if (!confirmed) return;
+
+    setSaving(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${TEACHERS_API_URL}${teacher.id}/`,
+        {
+          method: "DELETE",
+          credentials: "include",
+          headers: authHeaders(),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Unable to delete teacher.");
+      }
+
+      await loadTeachers();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   /* =========================
      FILTERS
@@ -1101,6 +2213,40 @@ function TeachersPage() {
           </p>
         </div>
       </div>
+
+      {/* SUCCESS (ACCOUNT CREATED) */}
+
+      {accountCreated && (
+        <div className="state-card success">
+          <strong>
+            Login account created for {accountCreated.name}.
+          </strong>
+
+          <span>
+            Username:{" "}
+            <strong>{accountCreated.username}</strong>
+          </span>
+
+          <span>
+            Password:{" "}
+            <strong>{accountCreated.password}</strong>
+          </span>
+
+          <span>
+            Share these credentials with the teacher and
+            remind them to change their password after first
+            login.
+          </span>
+
+          <button
+            className="secondary-button"
+            onClick={() => setAccountCreated(null)}
+            style={{ alignSelf: "flex-start" }}
+          >
+            Got It
+          </button>
+        </div>
+      )}
 
       {/* ERROR */}
 
@@ -1263,11 +2409,19 @@ function TeachersPage() {
 
                     <td>
                       <div className="teacher-name-cell">
-                        <div className="teacher-avatar">
-                          {getTeacherName(teacher)
-                            .charAt(0)
-                            .toUpperCase()}
-                        </div>
+                        {teacher.photo_url ? (
+                          <img
+                            className="table-photo"
+                            src={teacher.photo_url}
+                            alt={getTeacherName(teacher)}
+                          />
+                        ) : (
+                          <div className="teacher-avatar">
+                            {getTeacherName(teacher)
+                              .charAt(0)
+                              .toUpperCase()}
+                          </div>
+                        )}
 
                         <div>
                           <strong>
@@ -1318,10 +2472,30 @@ function TeachersPage() {
                       <button
                         className="table-action"
                         onClick={() =>
+                          navigate(
+                            `/profile/teacher/${teacher.id}`
+                          )
+                        }
+                      >
+                        View Profile
+                      </button>
+
+                      <button
+                        className="table-action"
+                        onClick={() =>
                           openEditTeacher(teacher)
                         }
                       >
                         Edit
+                      </button>
+
+                      <button
+                        className="table-action danger"
+                        onClick={() =>
+                          handleDeleteTeacher(teacher)
+                        }
+                      >
+                        Delete
                       </button>
                     </td>
                   </tr>
@@ -1442,6 +2616,24 @@ function TeachersPage() {
                       onChange={handleChange}
                     />
                   </label>
+
+                  <label>
+                    Photo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handlePhoto}
+                    />
+                  </label>
+
+                  {photoFile && (
+                    <div className="photo-preview">
+                      <img
+                        src={URL.createObjectURL(photoFile)}
+                        alt="preview"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1527,6 +2719,71 @@ function TeachersPage() {
                 </div>
               </div>
 
+              <div className="form-section">
+                <h4>Login Account</h4>
+
+                {editingTeacher &&
+                  editingTeacher.linked_username && (
+                    <p className="field-hint">
+                      This teacher is linked to username{" "}
+                      <strong>
+                        {editingTeacher.linked_username}
+                      </strong>
+                      .
+                    </p>
+                  )}
+
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.create_account)}
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        create_account:
+                          event.target.checked,
+                      }))
+                    }
+                  />
+
+                  <span>
+                    {editingTeacher &&
+                    editingTeacher.linked_username
+                      ? "Reset this teacher's password"
+                      : "Create a login account for this teacher"}
+                  </span>
+                </label>
+
+                {form.create_account && (
+                  <div className="form-grid">
+                    {!(editingTeacher &&
+                      editingTeacher.linked_username) && (
+                      <label>
+                        Username
+                        <input
+                          name="username"
+                          value={form.username}
+                          onChange={handleChange}
+                          placeholder="Leave blank to auto-generate"
+                        />
+                      </label>
+                    )}
+
+                    <label>
+                      Password
+                      <input
+                        type="text"
+                        name="password"
+                        value={form.password}
+                        onChange={handleChange}
+                        placeholder="Leave blank to auto-generate"
+                        autoComplete="new-password"
+                      />
+                    </label>
+                  </div>
+                )}
+              </div>
+
               <div className="modal-footer">
                 <button
                   type="button"
@@ -1563,6 +2820,7 @@ function TeachersPage() {
 
 function Shell() {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -1585,10 +2843,23 @@ function Shell() {
         <Route path="/" element={<Dashboard />} />
 
         <Route
+          path="/profile"
+          element={<ProfilePage key={location.pathname} />}
+        />
+        <Route
+          path="/profile/teacher/:id"
+          element={<ProfilePage key={location.pathname} />}
+        />
+        <Route
+          path="/profile/student/:id"
+          element={<ProfilePage key={location.pathname} />}
+        />
+
+        <Route
           path="/students"
           element={
             <RequireRoles
-              roles={["super_admin", "admin", "academic", "accountant", "teacher"]}
+              roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"]}
             >
               <StudentsPage />
             </RequireRoles>
@@ -1598,8 +2869,17 @@ function Shell() {
         <Route
           path="/teachers"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
               <TeachersPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/assignments"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+              <AssignmentsPage />
             </RequireRoles>
           }
         />
@@ -1607,7 +2887,7 @@ function Shell() {
         <Route
           path="/attendance"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic", "teacher"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
               <AttendancePage />
             </RequireRoles>
           }
@@ -1616,7 +2896,7 @@ function Shell() {
         <Route
           path="/finance"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic", "accountant"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant"]}>
               <FinancePage />
             </RequireRoles>
           }
@@ -1625,7 +2905,7 @@ function Shell() {
         <Route
           path="/exams"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic", "teacher"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
               <ExamsPage />
             </RequireRoles>
           }
@@ -1634,7 +2914,7 @@ function Shell() {
         <Route
           path="/report-cards"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic", "teacher"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
               <ReportCardsPage />
             </RequireRoles>
           }
@@ -1643,7 +2923,7 @@ function Shell() {
         <Route
           path="/timetable"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic", "teacher", "staff"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff", "student"]}>
               <TimetablePage />
             </RequireRoles>
           }
@@ -1652,7 +2932,7 @@ function Shell() {
         <Route
           path="/campuses"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
               <CampusesPage />
             </RequireRoles>
           }
@@ -1663,7 +2943,7 @@ function Shell() {
         <Route
           path="/settings"
           element={
-            <RequireRoles roles={["super_admin", "admin", "academic"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
               <SettingsPage />
             </RequireRoles>
           }

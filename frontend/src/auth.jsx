@@ -20,6 +20,28 @@ function getCookie(name) {
   return null;
 }
 
+async function readJson(response, fallback) {
+  const text = await response.text();
+
+  if (!text) {
+    throw new Error(
+      `${fallback} The server returned an empty response ` +
+        `(HTTP ${response.status}). Check that the Django API is ` +
+        "running and reachable."
+    );
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      `${fallback} The server returned a non-JSON response ` +
+        `(HTTP ${response.status}). Check the browser's Network ` +
+        "tab for details."
+    );
+  }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -34,7 +56,7 @@ export function AuthProvider({ children }) {
           throw new Error("not authenticated");
         }
 
-        return response.json();
+        return readJson(response, "Could not load account.");
       })
       .then((data) => {
         setUser(data);
@@ -71,7 +93,10 @@ export function AuthProvider({ children }) {
         body: JSON.stringify({ username, password }),
       });
 
-      const data = await response.json();
+      const data = await readJson(
+        response,
+        "Unable to sign in."
+      );
 
       if (!response.ok) {
         let message = "Unable to sign in.";

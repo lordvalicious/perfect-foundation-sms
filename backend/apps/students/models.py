@@ -26,6 +26,20 @@ class Student(models.Model):
         unique=True,
     )
 
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="student_profile",
+    )
+
+    photo = models.ImageField(
+        upload_to="profiles/students/",
+        blank=True,
+        null=True,
+    )
+
     first_name = models.CharField(max_length=100)
     middle_name = models.CharField(max_length=100, blank=True)
     last_name = models.CharField(max_length=100, blank=True)

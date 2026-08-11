@@ -3,6 +3,9 @@ from django.urls import path
 from .views import (
     StudentListCreateView,
     StudentDetailView,
+    StudentMyView,
+    EnrollmentListCreateView,
+    EnrollmentDetailView,
 )
 
 
@@ -11,6 +14,24 @@ urlpatterns = [
         "",
         StudentListCreateView.as_view(),
         name="student-list",
+    ),
+
+    path(
+        "me/",
+        StudentMyView.as_view(),
+        name="student-my",
+    ),
+
+    path(
+        "enrollments/",
+        EnrollmentListCreateView.as_view(),
+        name="enrollment-list",
+    ),
+
+    path(
+        "enrollments/<int:pk>/",
+        EnrollmentDetailView.as_view(),
+        name="enrollment-detail",
     ),
 
     path(

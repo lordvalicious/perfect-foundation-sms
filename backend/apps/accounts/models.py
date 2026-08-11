@@ -7,6 +7,7 @@ from apps.schools.models import School
 class Role(models.TextChoices):
     SUPER_ADMIN = "super_admin", "Platform Super Admin"
     ADMIN = "admin", "Institution Admin"
+    PRINCIPAL = "principal", "Principal"
     ACADEMIC = "academic", "Academic Administrator"
     ACCOUNTANT = "accountant", "Accountant"
     TEACHER = "teacher", "Teacher"
@@ -24,6 +25,12 @@ class User(AbstractUser):
 
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True)
+
+    photo = models.ImageField(
+        upload_to="profiles/users/",
+        blank=True,
+        null=True,
+    )
 
     def get_active_memberships(self):
         return self.memberships.filter(status="active").select_related(
@@ -61,6 +68,7 @@ class User(AbstractUser):
         priority = [
             Role.SUPER_ADMIN,
             Role.ADMIN,
+            Role.PRINCIPAL,
             Role.ACADEMIC,
             Role.ACCOUNTANT,
             Role.TEACHER,
@@ -179,6 +187,12 @@ class StaffProfile(models.Model):
     joining_date = models.DateField(
         null=True,
         blank=True,
+    )
+
+    photo = models.ImageField(
+        upload_to="profiles/staff/",
+        blank=True,
+        null=True,
     )
 
     STATUS_CHOICES = [

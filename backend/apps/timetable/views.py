@@ -2,6 +2,13 @@ from django.db.models import Q
 from rest_framework import generics
 
 from apps.accounts.permissions import IsStaffRole
+from apps.accounts.scopes import (
+    is_manager,
+    is_student,
+    is_teacher,
+    student_class_ids,
+    teacher_class_ids,
+)
 
 from .models import Period, TimetableEntry
 from .serializers import (
@@ -44,6 +51,24 @@ class TimetableEntryListView(generics.ListAPIView):
             )
             .order_by("day", "period__number", "class_obj__name")
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
+            elif is_teacher(user):
+                class_ids = teacher_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
 
         day = self.request.query_params.get("day")
 
