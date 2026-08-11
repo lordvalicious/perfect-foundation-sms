@@ -31,6 +31,9 @@ import {
   ScrollText,
   Layers,
   UserRound,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -94,6 +97,29 @@ const systemNavigation = [
 function Layout({ children }) {
   const { user, logout, hasRole } = useAuth();
 
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("sidebar-collapsed") === "1"
+  );
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const toggleSidebar = () => {
+    if (window.matchMedia("(max-width: 960px)").matches) {
+      setMobileOpen((open) => !open);
+    } else {
+      setCollapsed((value) => {
+        const next = !value;
+        localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
+        return next;
+      });
+    }
+  };
+
+  const closeMobileDrawer = () => {
+    if (window.matchMedia("(max-width: 960px)").matches) {
+      setMobileOpen(false);
+    }
+  };
+
   const visibleNavigation = navigation.filter(
     (item) =>
       item.roles.length === 0 || hasRole(item.roles)
@@ -122,25 +148,109 @@ function Layout({ children }) {
         )
     : "";
 
+  const sidebarClass = [
+    "sidebar",
+    collapsed ? "collapsed" : "",
+    mobileOpen ? "mobile-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="app">
-      <header className="topnav">
-        <div className="topnav-top">
-          <div className="topnav-brand">
-            <div className="brand-logo">PF</div>
+      <aside className={sidebarClass}>
+        <div className="sidebar-brand">
+          <div className="brand-logo">PF</div>
 
-            <div className="topnav-brand-text">
-              <strong>Perfect Foundation</strong>
-              <span>School Management System</span>
-            </div>
+          <div className="sidebar-brand-text">
+            <strong>Perfect Foundation</strong>
+            <span>School Management System</span>
           </div>
+        </div>
+
+        <nav className="sidebar-nav">
+          <span className="sidebar-section-label">Main</span>
+
+          {visibleNavigation.map(
+            ({ label, path, icon: Icon }) => (
+              <NavLink
+                key={label}
+                to={path}
+                end={path === "/"}
+                title={label}
+                onClick={closeMobileDrawer}
+                className={({ isActive }) =>
+                  `sidebar-link ${isActive ? "active" : ""}`
+                }
+              >
+                <Icon size={18} />
+                <span>{label}</span>
+              </NavLink>
+            )
+          )}
+
+          <span className="sidebar-section-label">
+            System
+          </span>
+
+          {visibleSystemNavigation.map(
+            ({ label, path, icon: Icon }) => (
+              <NavLink
+                key={label}
+                to={path}
+                title={label}
+                onClick={closeMobileDrawer}
+                className={({ isActive }) =>
+                  `sidebar-link ${isActive ? "active" : ""}`
+                }
+              >
+                <Icon size={18} />
+                <span>{label}</span>
+              </NavLink>
+            )
+          )}
+        </nav>
+
+        <div className="sidebar-footer">
+          <button
+            className="sidebar-collapse"
+            onClick={toggleSidebar}
+            title={
+              collapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={18} />
+            ) : (
+              <PanelLeftClose size={18} />
+            )}
+          </button>
+        </div>
+      </aside>
+
+      {mobileOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={toggleSidebar}
+        />
+      )}
+
+      <div className="app-body">
+        <header className="topbar">
+          <button
+            className="icon-button sidebar-toggle"
+            onClick={toggleSidebar}
+            title="Toggle navigation"
+          >
+            <Menu size={20} />
+          </button>
 
           <div className="search">
             <Search size={18} />
             <input placeholder="Search students, teachers..." />
           </div>
 
-          <div className="topnav-actions">
+          <div className="topbar-actions">
             <button className="icon-button" title="Notifications">
               <Bell size={20} />
               <span className="notification-dot" />
@@ -171,47 +281,10 @@ function Layout({ children }) {
               </button>
             </div>
           </div>
-        </div>
+        </header>
 
-        <nav className="topnav-nav">
-          {visibleNavigation.map(
-            ({ label, path, icon: Icon }) => (
-              <NavLink
-                key={label}
-                to={path}
-                end={path === "/"}
-                title={label}
-                className={({ isActive }) =>
-                  `topnav-link ${isActive ? "active" : ""}`
-                }
-              >
-                <Icon size={16} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          )}
-
-          <span className="topnav-divider" />
-
-          {visibleSystemNavigation.map(
-            ({ label, path, icon: Icon }) => (
-              <NavLink
-                key={label}
-                to={path}
-                title={label}
-                className={({ isActive }) =>
-                  `topnav-link ${isActive ? "active" : ""}`
-                }
-              >
-                <Icon size={16} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          )}
-        </nav>
-      </header>
-
-      <main className="main">{children}</main>
+        <main className="main">{children}</main>
+      </div>
     </div>
   );
 }
