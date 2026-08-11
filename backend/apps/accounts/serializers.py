@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
-from .models import InstitutionMembership, RoleAssignment, User
+from .models import (
+    InstitutionMembership,
+    RoleAssignment,
+    StaffProfile,
+    User,
+)
 
 
 class RoleAssignmentSerializer(serializers.ModelSerializer):
@@ -82,6 +87,94 @@ class UserSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url) if request else url
 
         return None
+
+    def get_student_profile_id(self, obj):
+        profile = getattr(obj, "student_profile", None)
+        return profile.id if profile else None
+
+    def get_teacher_profile_id(self, obj):
+        profile = getattr(obj, "teacher_profile", None)
+        return profile.id if profile else None
+
+
+class StaffProfileSerializer(serializers.ModelSerializer):
+    photo_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffProfile
+        fields = [
+            "id",
+            "employee_number",
+            "designation",
+            "department",
+            "joining_date",
+            "status",
+            "photo_url",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_photo_url(self, obj):
+        request = self.context.get("request")
+
+        if obj.photo:
+            url = obj.photo.url
+            return request.build_absolute_uri(url) if request else url
+
+        return None
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    full_name = serializers.SerializerMethodField()
+    photo_url = serializers.SerializerMethodField()
+    primary_role = serializers.CharField(read_only=True)
+    primary_institution = serializers.SerializerMethodField()
+    staff_profile = StaffProfileSerializer(read_only=True)
+    memberships = InstitutionMembershipSerializer(
+        many=True,
+        read_only=True,
+    )
+    student_profile_id = serializers.SerializerMethodField()
+    teacher_profile_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "username",
+            "full_name",
+            "email",
+            "phone",
+            "photo_url",
+            "primary_role",
+            "primary_institution",
+            "staff_profile",
+            "memberships",
+            "student_profile_id",
+            "teacher_profile_id",
+        ]
+
+    def get_full_name(self, obj):
+        return obj.get_full_name() or obj.username
+
+    def get_photo_url(self, obj):
+        request = self.context.get("request")
+
+        if obj.photo:
+            url = obj.photo.url
+            return request.build_absolute_uri(url) if request else url
+
+        staff = getattr(obj, "staff_profile", None)
+
+        if staff and staff.photo:
+            url = staff.photo.url
+            return request.build_absolute_uri(url) if request else url
+
+        return None
+
+    def get_primary_institution(self, obj):
+        institution = obj.primary_institution
+        return institution.name if institution else None
 
     def get_student_profile_id(self, obj):
         profile = getattr(obj, "student_profile", None)

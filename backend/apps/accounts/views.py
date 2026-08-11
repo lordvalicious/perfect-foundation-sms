@@ -20,6 +20,7 @@ from .serializers import (
     LoginSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    UserProfileSerializer,
     UserSerializer,
 )
 
@@ -105,6 +106,36 @@ class CurrentUserView(APIView):
 
         return Response(
             UserSerializer(
+                user,
+                context={"request": request},
+            ).data
+        )
+
+
+class UserProfileView(APIView):
+    """Public profile of any user (student / teacher / staff / admin)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = (
+            User.objects.prefetch_related(
+                "memberships__institution",
+                "memberships__role_assignments",
+            )
+            .select_related("staff_profile")
+            .filter(pk=pk)
+            .first()
+        )
+
+        if user is None:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            UserProfileSerializer(
                 user,
                 context={"request": request},
             ).data

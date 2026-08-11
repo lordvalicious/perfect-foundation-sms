@@ -11,7 +11,6 @@ import {
   NavLink,
   Navigate,
   useLocation,
-  useNavigate,
 } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -49,6 +48,7 @@ import EventsPage from "./pages/EventsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import ProfilePage from "./pages/ProfilePage";
+import ProfileModal from "./pages/ProfileModal";
 
 const API_URL = "/api/dashboard/overview/";
 
@@ -514,7 +514,6 @@ function Dashboard() {
 
 function StudentsPage() {
   const { hasRole } = useAuth();
-  const navigate = useNavigate();
   const campusSectionRefs = useRef({});
 
   const isStudentSelf =
@@ -551,6 +550,8 @@ function StudentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  const [profileView, setProfileView] = useState(null);
 
   const emptyForm = {
     admission_number: "",
@@ -1485,9 +1486,10 @@ function StudentsPage() {
                                   <button
                                     className="table-action"
                                     onClick={() =>
-                                      navigate(
-                                        `/profile/student/${student.id}`
-                                      )
+                                      setProfileView({
+                                        type: "student",
+                                        id: student.id,
+                                      })
                                     }
                                   >
                                     View Profile
@@ -1840,6 +1842,14 @@ function StudentsPage() {
           </div>
         </div>
       )}
+
+      {profileView && (
+        <ProfileModal
+          type={profileView.type}
+          id={profileView.id}
+          onClose={() => setProfileView(null)}
+        />
+      )}
     </section>
   );
 }
@@ -1851,8 +1861,6 @@ function StudentsPage() {
 const TEACHERS_API_URL = "/api/teachers/";
 
 function TeachersPage() {
-  const navigate = useNavigate();
-
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1865,6 +1873,8 @@ function TeachersPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState(null);
+
+  const [profileView, setProfileView] = useState(null);
 
   const emptyForm = {
     employee_number: "",
@@ -2538,9 +2548,10 @@ function TeachersPage() {
                       <button
                         className="table-action"
                         onClick={() =>
-                          navigate(
-                            `/profile/teacher/${teacher.id}`
-                          )
+                          setProfileView({
+                            type: "teacher",
+                            id: teacher.id,
+                          })
                         }
                       >
                         View Profile
@@ -2875,6 +2886,14 @@ function TeachersPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {profileView && (
+        <ProfileModal
+          type={profileView.type}
+          id={profileView.id}
+          onClose={() => setProfileView(null)}
+        />
       )}
     </section>
   );

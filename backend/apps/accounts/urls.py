@@ -8,6 +8,7 @@ from .views import (
     PasswordResetConfirmView,
     PasswordResetRequestView,
     RoleListView,
+    UserProfileView,
     csrf_token,
 )
 
@@ -21,6 +22,11 @@ urlpatterns = [
     ),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", CurrentUserView.as_view(), name="current-user"),
+    path(
+        "users/<int:pk>/",
+        UserProfileView.as_view(),
+        name="user-profile",
+    ),
     path("roles/", RoleListView.as_view(), name="role-list"),
     path(
         "password-reset/",
