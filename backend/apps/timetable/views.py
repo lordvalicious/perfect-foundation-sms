@@ -3,11 +3,11 @@ from rest_framework import generics
 
 from apps.accounts.permissions import IsStaffRole
 from apps.accounts.scopes import (
+    get_teacher_profile,
     is_manager,
     is_student,
     is_teacher,
     student_class_ids,
-    teacher_class_ids,
 )
 
 from .models import Period, TimetableEntry
@@ -63,12 +63,14 @@ class TimetableEntryListView(generics.ListAPIView):
 
                 queryset = queryset.filter(class_obj_id__in=class_ids)
             elif is_teacher(user):
-                class_ids = teacher_class_ids(user)
+                teacher_profile = get_teacher_profile(user)
 
-                if not class_ids:
+                if teacher_profile is None:
                     return queryset.none()
 
-                queryset = queryset.filter(class_obj_id__in=class_ids)
+                queryset = queryset.filter(
+                    teacher=teacher_profile
+                )
 
         day = self.request.query_params.get("day")
 
@@ -89,6 +91,11 @@ class TimetableEntryListView(generics.ListAPIView):
 
         if section:
             queryset = queryset.filter(section_id=section)
+
+        teacher = self.request.query_params.get("teacher")
+
+        if teacher:
+            queryset = queryset.filter(teacher_id=teacher)
 
         search = self.request.query_params.get("search")
 

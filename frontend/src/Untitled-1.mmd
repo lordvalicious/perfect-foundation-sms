@@ -30,7 +30,7 @@ references:
   - "File: /frontend/src/auth.jsx"
   - "File: /frontend/src/pages/AssignmentsPage.jsx"
   - "File: /frontend/src/pages/ProfilePage.jsx"
-generationTime: 2026-08-11T20:36:55.656Z
+generationTime: 2026-08-11T21:06:32.725Z
 ---
 flowchart TD
     subgraph FE["Frontend"]
@@ -55,6 +55,7 @@ flowchart TD
         N["Models: User/Membership/RoleAssignment/Student/Teacher/StaffProfile"]
         O["seed_students command loops campuses -> Guardian/Student/Enrollment"]
         R["StaffProfileCRUDSerializer handles staff data"]
+        S["get_teacher_profile function retrieves teacher profile"]
     end
 
     A --> B
@@ -82,3 +83,4 @@ flowchart TD
     O --> N
     F --> P
     G --> P
+    S --> K

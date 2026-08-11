@@ -183,12 +183,14 @@ class TimetableEntry(models.Model):
                 )
 
         if self.teacher_id:
-            teacher_campus_ids = self.teacher.campuses.values_list(
-                "id",
-                flat=True,
-            )
+            teacher_campus = self.teacher.campus
 
-            if self.campus_id not in teacher_campus_ids:
+            if (
+                teacher_campus
+                and self.campus_id
+                and teacher_campus.strip().lower()
+                != self.campus.name.strip().lower()
+            ):
                 errors["teacher"] = (
                     "The selected teacher is not assigned "
                     "to the selected campus."

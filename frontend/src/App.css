@@ -1291,6 +1291,18 @@ button {
   border-color: rgba(129, 140, 248, 0.35);
 }
 
+.grade-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--gold-soft);
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+}
+
 .cell-sub {
   display: block;
   font-size: 12px;
