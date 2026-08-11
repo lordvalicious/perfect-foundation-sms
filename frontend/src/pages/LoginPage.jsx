@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, LogIn } from "lucide-react";
+import { LogIn, ShieldCheck } from "lucide-react";
 import { useAuth } from "../auth";
 
 export default function LoginPage() {
@@ -32,7 +32,7 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-card">
         <div className="login-emblem">
-          <ShieldCheck size={30} />
+          <ShieldCheck size={32} />
         </div>
 
         <h1>Perfect Foundation</h1>

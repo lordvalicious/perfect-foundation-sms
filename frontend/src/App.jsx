@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   BrowserRouter,
   Routes,
@@ -21,12 +27,13 @@ import {
   Settings,
   Bell,
   Search,
-  Menu,
   LogOut,
   CalendarClock,
   ScrollText,
   Layers,
   UserRound,
+  PanelLeftClose,
+  PanelRightOpen,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -89,6 +96,9 @@ const systemNavigation = [
 
 function Layout({ children }) {
   const { user, logout, hasRole } = useAuth();
+  const location = useLocation();
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const visibleNavigation = navigation.filter(
     (item) =>
@@ -99,6 +109,19 @@ function Layout({ children }) {
     (item) =>
       item.roles.length === 0 || hasRole(item.roles)
   );
+
+  const pageTitle = useMemo(() => {
+    const current = [...navigation, ...systemNavigation].find(
+      (item) => item.path === location.pathname
+    );
+    return current?.label || "Dashboard";
+  }, [location.pathname]);
+
+  const handleNavClick = () => {
+    if (window.innerWidth <= 800) {
+      setSidebarCollapsed(true);
+    }
+  };
 
   const displayName =
     user?.first_name || user?.username || "User";
@@ -120,11 +143,11 @@ function Layout({ children }) {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <aside className={`sidebar${sidebarCollapsed ? " collapsed" : ""}`}>
         <div className="brand">
           <div className="brand-logo">PF</div>
 
-          <div>
+          <div className="brand-text">
             <strong>Perfect Foundation</strong>
             <span>School Management</span>
           </div>
@@ -139,6 +162,8 @@ function Layout({ children }) {
                 key={label}
                 to={path}
                 end={path === "/"}
+                title={label}
+                onClick={handleNavClick}
                 className={({ isActive }) =>
                   `nav-item ${isActive ? "active" : ""}`
                 }
@@ -156,6 +181,8 @@ function Layout({ children }) {
               <NavLink
                 key={label}
                 to={path}
+                title={label}
+                onClick={handleNavClick}
                 className={({ isActive }) =>
                   `nav-item ${isActive ? "active" : ""}`
                 }
@@ -168,16 +195,47 @@ function Layout({ children }) {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="school-year">Academic Year</div>
-          <strong>2026–2027</strong>
+          <div className="sidebar-seal">
+            <GraduationCap size={20} />
+          </div>
+          <div className="sidebar-footer-text">
+            <div className="school-year">Academic Year</div>
+            <strong>2026–2027</strong>
+          </div>
         </div>
       </aside>
 
+      {!sidebarCollapsed && (
+        <div
+          className="drawer-backdrop"
+          onClick={() => setSidebarCollapsed(true)}
+        />
+      )}
+
       <main className="main">
         <header className="topbar">
-          <button className="mobile-menu">
-            <Menu size={22} />
-          </button>
+          <div className="topbar-left">
+            <button
+              className="sidebar-toggle"
+              title={
+                sidebarCollapsed
+                  ? "Expand sidebar"
+                  : "Collapse sidebar"
+              }
+              onClick={() => setSidebarCollapsed((value) => !value)}
+            >
+              {sidebarCollapsed ? (
+                <PanelRightOpen size={20} />
+              ) : (
+                <PanelLeftClose size={20} />
+              )}
+            </button>
+
+            <div className="topbar-title">
+              <h2>{pageTitle}</h2>
+              <span>School Management System</span>
+            </div>
+          </div>
 
           <div className="search">
             <Search size={18} />
