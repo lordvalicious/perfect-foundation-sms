@@ -1,7 +1,7 @@
 from django.db.models import Count, Q
 from rest_framework import generics
 
-from apps.accounts.permissions import IsAdminOrReadOnly
+from apps.accounts.permissions import HasActiveInstitution, IsAdminOrReadOnly
 from apps.students.models import Enrollment
 from .models import (
     AcademicUnit,
@@ -71,17 +71,23 @@ def populate_campus_counts(queryset):
 
 
 class SchoolListView(NoPaginationMixin, generics.ListAPIView):
-    queryset = School.objects.all().order_by("name")
     serializer_class = SchoolSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return School.objects.filter(
+            pk=self.request.institution.pk
+        ).order_by("name")
 
 
 class CampusListView(NoPaginationMixin, generics.ListAPIView):
     serializer_class = CampusSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
     def get_queryset(self):
-        queryset = Campus.objects.select_related("school").order_by("name")
+        queryset = Campus.objects.filter(
+            school=self.request.institution
+        ).select_related("school").order_by("name")
 
         search = self.request.query_params.get("search")
 
@@ -101,11 +107,11 @@ class CampusListView(NoPaginationMixin, generics.ListAPIView):
 
 class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
     serializer_class = AcademicUnitSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = (
-            AcademicUnit.objects
+            AcademicUnit.objects.filter(campus__school=self.request.institution)
             .select_related("campus")
             .order_by("campus__name", "name")
         )
@@ -120,11 +126,11 @@ class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
 
 class ClassListView(NoPaginationMixin, generics.ListAPIView):
     serializer_class = ClassSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = (
-            Class.objects
+            Class.objects.filter(unit__campus__school=self.request.institution)
             .select_related("unit", "unit__campus")
             .order_by("level", "name")
         )
@@ -144,11 +150,13 @@ class ClassListView(NoPaginationMixin, generics.ListAPIView):
 
 class SectionListView(NoPaginationMixin, generics.ListAPIView):
     serializer_class = SectionSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = (
-            Section.objects
+            Section.objects.filter(
+                class_obj__unit__campus__school=self.request.institution
+            )
             .select_related("class_obj", "class_obj__unit__campus")
             .order_by("class_obj__name", "name")
         )
@@ -167,38 +175,42 @@ class SectionListView(NoPaginationMixin, generics.ListAPIView):
 
 
 class AcademicYearListView(NoPaginationMixin, generics.ListAPIView):
-    queryset = (
-        AcademicYear.objects
-        .select_related("school")
-        .order_by("-start_date")
-    )
     serializer_class = AcademicYearSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return AcademicYear.objects.filter(
+            school=self.request.institution
+        ).select_related("school").order_by("-start_date")
 
 
 class TermListView(NoPaginationMixin, generics.ListAPIView):
-    queryset = (
-        Term.objects
-        .select_related("academic_year")
-        .order_by("academic_year", "start_date")
-    )
     serializer_class = TermSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return Term.objects.filter(
+            academic_year__school=self.request.institution
+        ).select_related("academic_year").order_by(
+            "academic_year", "start_date"
+        )
 
 
 class SubjectListView(NoPaginationMixin, generics.ListAPIView):
     queryset = Subject.objects.all().order_by("name")
     serializer_class = SubjectSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
 
 class SubjectOfferingListView(NoPaginationMixin, generics.ListAPIView):
     serializer_class = SubjectOfferingSerializer
-    permission_classes = [IsAdminOrReadOnly]
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
     def get_queryset(self):
         queryset = (
-            SubjectOffering.objects
+            SubjectOffering.objects.filter(
+                class_obj__unit__campus__school=self.request.institution
+            )
             .select_related(
                 "subject",
                 "class_obj",

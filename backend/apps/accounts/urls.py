@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .views import (
+    ActiveInstitutionView,
     CurrentUserView,
     LoginFailedView,
     LoginView,
@@ -22,6 +23,11 @@ urlpatterns = [
     ),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("me/", CurrentUserView.as_view(), name="current-user"),
+    path(
+        "active-institution/",
+        ActiveInstitutionView.as_view(),
+        name="active-institution",
+    ),
     path(
         "users/<int:pk>/",
         UserProfileView.as_view(),

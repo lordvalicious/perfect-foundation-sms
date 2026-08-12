@@ -19,7 +19,8 @@ class IsAuthenticatedReadOnly(BasePermission):
                 "vice_principal",
                 "campus_admin",
                 "academic",
-            ]
+            ],
+            institution=getattr(request, "institution", None),
         )
 
 
@@ -32,7 +33,23 @@ class HasRole(BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
 
-        return request.user.has_any_role(self.roles)
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
+
+
+class HasActiveInstitution(BasePermission):
+    """Require a verified active membership in the selected institution."""
+
+    message = "Select an active institution before accessing this resource."
+
+    def has_permission(self, request, view):
+        return bool(
+            request.user
+            and request.user.is_authenticated
+            and getattr(request, "institution_membership", None)
+        )
 
 
 class IsAdminOrReadOnly(BasePermission):
@@ -54,7 +71,10 @@ class IsAdminOrReadOnly(BasePermission):
         if request.method in SAFE_METHODS:
             return True
 
-        return request.user.has_any_role(self.admin_roles)
+        return request.user.has_any_role(
+            self.admin_roles,
+            institution=getattr(request, "institution", None),
+        )
 
 
 class IsAdminRole(BasePermission):
@@ -70,7 +90,10 @@ class IsAdminRole(BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
 
-        return request.user.has_any_role(self.roles)
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
 
 
 class IsAccountantRole(BasePermission):
@@ -89,7 +112,10 @@ class IsAccountantRole(BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
 
-        return request.user.has_any_role(self.roles)
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
 
 
 class IsTeacherRole(BasePermission):
@@ -107,7 +133,10 @@ class IsTeacherRole(BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
 
-        return request.user.has_any_role(self.roles)
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
 
 
 class IsStaffRole(BasePermission):
@@ -129,7 +158,10 @@ class IsStaffRole(BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
 
-        return request.user.has_any_role(self.roles)
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
 
 
 class IsAcademicMemberRole(BasePermission):
@@ -159,7 +191,10 @@ class IsAcademicMemberRole(BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
 
-        return request.user.has_any_role(self.roles)
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
 
 
 class IsFinanceReaderRole(BasePermission):
@@ -186,4 +221,7 @@ class IsFinanceReaderRole(BasePermission):
         if not (request.user and request.user.is_authenticated):
             return False
 
-        return request.user.has_any_role(self.roles)
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )

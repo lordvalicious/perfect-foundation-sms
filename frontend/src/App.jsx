@@ -34,6 +34,13 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
+  LibraryBig,
+  Bus,
+  Boxes,
+  Banknote,
+  BarChart3,
+  Megaphone,
+  CheckCheck,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -52,6 +59,12 @@ import ProfilePage from "./pages/ProfilePage";
 import ProfileModal from "./pages/ProfileModal";
 import StaffPage from "./pages/StaffPage";
 import ParentPortalPage from "./pages/ParentPortalPage";
+import LibraryPage from "./pages/LibraryPage";
+import TransportPage from "./pages/TransportPage";
+import InventoryPage from "./pages/InventoryPage";
+import PayrollPage from "./pages/PayrollPage";
+import ReportsPage from "./pages/ReportsPage";
+import AnnouncementsPage from "./pages/AnnouncementsPage";
 
 const API_URL = "/api/dashboard/overview/";
 
@@ -77,6 +90,233 @@ function authHeaders(extra = {}) {
   };
 }
 
+const SEARCH_URL = "/api/search/";
+const NOTIFICATIONS_URL = "/api/communication/notifications/";
+
+function GlobalSearch() {
+  const navigate = useNavigate();
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    const value = query.trim();
+
+    if (value.length < 2) {
+      setResults([]);
+      setOpen(false);
+      return;
+    }
+
+    setLoading(true);
+
+    const timer = setTimeout(() => {
+      fetch(`${SEARCH_URL}?q=${encodeURIComponent(value)}`, {
+        credentials: "include",
+      })
+        .then((response) => (response.ok ? response.json() : { results: [] }))
+        .then((data) => {
+          setResults(data.results || []);
+          setOpen(true);
+          setLoading(false);
+        })
+        .catch(() => {
+          setResults([]);
+          setLoading(false);
+        });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  return (
+    <div className="global-search">
+      <div className="search">
+        <Search size={18} />
+
+        <input
+          type="text"
+          placeholder="Search students, teachers..."
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          onFocus={() => {
+            if (results.length) {
+              setOpen(true);
+            }
+          }}
+          onBlur={() => setTimeout(() => setOpen(false), 150)}
+        />
+      </div>
+
+      {open && (
+        <div className="search-dropdown">
+          {loading && <div className="search-loading">Searching...</div>}
+
+          {!loading && results.length === 0 && (
+            <div className="search-loading">No results found.</div>
+          )}
+
+          {!loading &&
+            results.map((result, index) => (
+              <button
+                key={`${result.type}-${result.id}-${index}`}
+                type="button"
+                className="search-result"
+                onMouseDown={(event) => {
+                  event.preventDefault();
+                  setOpen(false);
+                  setQuery("");
+                  navigate(result.link);
+                }}
+              >
+                <span className="search-result-type">{result.type}</span>
+
+                <span>
+                  <strong>{result.name}</strong>
+                  <small>{result.subtitle || result.class_name || ""}</small>
+                </span>
+              </button>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function NotificationsBell() {
+  const [notifications, setNotifications] = useState(null);
+  const [open, setOpen] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  const unread = notifications
+    ? notifications.filter((item) => !item.is_read).length
+    : 0;
+
+  const load = () => {
+    fetch(NOTIFICATIONS_URL, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => {
+        setNotifications(Array.isArray(data) ? data : data.results || []);
+        setLoaded(true);
+      })
+      .catch(() => {
+        setNotifications([]);
+        setLoaded(true);
+      });
+  };
+
+  useEffect(() => {
+    if (!open || notifications !== null) {
+      return;
+    }
+
+    load();
+  }, [open, notifications]);
+
+  const markAllRead = () => {
+    fetch(`${NOTIFICATIONS_URL}read-all/`, {
+      method: "POST",
+      credentials: "include",
+      headers: authHeaders(),
+    })
+      .then((response) => {
+        if (response.ok) {
+          setNotifications((items) =>
+            (items || []).map((item) => ({ ...item, is_read: true }))
+          );
+        }
+      })
+      .catch(() => {});
+  };
+
+  const markRead = (notification) => {
+    if (!notification.is_read) {
+      fetch(`${NOTIFICATIONS_URL}${notification.id}/read/`, {
+        method: "POST",
+        credentials: "include",
+        headers: authHeaders(),
+      })
+        .then((response) => {
+          if (response.ok) {
+            setNotifications((items) =>
+              (items || []).map((item) =>
+                item.id === notification.id
+                  ? { ...item, is_read: true }
+                  : item
+              )
+            );
+          }
+        })
+        .catch(() => {});
+    }
+  };
+
+  return (
+    <div className="notifications-wrap">
+      <button
+        className="icon-button"
+        title="Notifications"
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Bell size={20} />
+
+        {unread > 0 && <span className="notification-dot">{unread}</span>}
+      </button>
+
+      {open && (
+        <div className="notifications-dropdown">
+          <div className="notifications-header">
+            <strong>Notifications</strong>
+
+            {unread > 0 && (
+              <button
+                type="button"
+                className="text-button"
+                onClick={markAllRead}
+              >
+                <CheckCheck size={14} />
+                Mark all read
+              </button>
+            )}
+          </div>
+
+          <div className="notifications-list">
+            {!loaded && <div className="search-loading">Loading...</div>}
+
+            {loaded && notifications.length === 0 && (
+              <div className="search-loading">No notifications.</div>
+            )}
+
+            {loaded &&
+              notifications.slice(0, 15).map((notification) => (
+                <button
+                  key={notification.id}
+                  type="button"
+                  className={`notification-item ${
+                    notification.is_read ? "read" : ""
+                  }`}
+                  onClick={() => markRead(notification)}
+                >
+                  <strong>{notification.title}</strong>
+
+                  {notification.message && (
+                    <span>{notification.message}</span>
+                  )}
+
+                  <small>
+                    {notification.notification_type_display || "System"}
+                  </small>
+                </button>
+              ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const navigation = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, roles: [] },
   { label: "My Profile", path: "/profile", icon: UserRound, roles: [] },
@@ -91,6 +331,12 @@ const navigation = [
   { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Announcements", path: "/announcements", icon: Megaphone, roles: [] },
+  { label: "Library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Transport", path: "/transport", icon: Bus, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Inventory", path: "/inventory", icon: Boxes, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Payroll", path: "/payroll", icon: Banknote, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Reports", path: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
 ];
 
@@ -250,16 +496,10 @@ function Layout({ children }) {
             <Menu size={20} />
           </button>
 
-          <div className="search">
-            <Search size={18} />
-            <input placeholder="Search students, teachers..." />
-          </div>
+          <GlobalSearch />
 
           <div className="topbar-actions">
-            <button className="icon-button" title="Notifications">
-              <Bell size={20} />
-              <span className="notification-dot" />
-            </button>
+            <NotificationsBell />
 
             <div className="profile">
               {user?.photo_url ? (
@@ -3051,6 +3291,60 @@ function Shell() {
         />
 
         <Route path="/events" element={<EventsPage />} />
+
+        <Route
+          path="/announcements"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff"]}>
+              <AnnouncementsPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/library"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+              <LibraryPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/transport"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+              <TransportPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/inventory"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+              <InventoryPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/payroll"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+              <PayrollPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/reports"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+              <ReportsPage />
+            </RequireRoles>
+          }
+        />
 
         <Route
           path="/settings"

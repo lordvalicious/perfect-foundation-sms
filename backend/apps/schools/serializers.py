@@ -24,6 +24,9 @@ class SchoolSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "institution_type",
+            "timezone",
+            "currency",
             "address",
             "city",
             "status",

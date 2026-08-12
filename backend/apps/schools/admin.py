@@ -15,9 +15,9 @@ from .models import (
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
-    list_display = ("name", "city", "status")
+    list_display = ("name", "institution_type", "city", "status")
     search_fields = ("name", "city")
-    list_filter = ("status",)
+    list_filter = ("institution_type", "status")
 
 
 @admin.register(Campus)

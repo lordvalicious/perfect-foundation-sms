@@ -7,7 +7,7 @@ from apps.accounts.models import (
     Role,
     RoleAssignment,
 )
-from apps.schools.models import School
+from apps.schools.models import Campus, School
 
 
 class AuthBaseTestCase(TestCase):
@@ -134,6 +134,91 @@ class PermissionTests(AuthBaseTestCase):
         response = self.client.get("/api/students/")
 
         self.assertEqual(response.status_code, 200)
+
+
+class InstitutionIsolationTests(AuthBaseTestCase):
+    def setUp(self):
+        super().setUp()
+        self.other_school = School.objects.create(
+            name="Other School",
+            city="Other City",
+        )
+        Campus.objects.create(school=self.school, name="Main Campus")
+        Campus.objects.create(
+            school=self.other_school,
+            name="Other Campus",
+        )
+
+        self.other_user = get_user_model().objects.create_user(
+            username="other-user",
+            email="other-user@test.edu",
+            password="TestPass123!",
+        )
+        membership = InstitutionMembership.objects.create(
+            user=self.other_user,
+            institution=self.other_school,
+        )
+        RoleAssignment.objects.create(
+            membership=membership,
+            role=Role.TEACHER,
+        )
+
+    def test_school_endpoints_only_return_active_institution_data(self):
+        self.login()
+
+        response = self.client.get("/api/schools/campuses/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["name"] for item in response.json()],
+            ["Main Campus"],
+        )
+
+    def test_user_cannot_view_profile_from_another_institution(self):
+        self.login()
+
+        response = self.client.get(
+            f"/api/auth/users/{self.other_user.pk}/"
+        )
+
+        self.assertEqual(response.status_code, 404)
+
+    def test_user_can_switch_only_to_an_active_membership(self):
+        membership = InstitutionMembership.objects.create(
+            user=self.user,
+            institution=self.other_school,
+        )
+        RoleAssignment.objects.create(
+            membership=membership,
+            role=Role.ACCOUNTANT,
+        )
+        self.login()
+
+        response = self.client.post(
+            "/api/auth/active-institution/",
+            {"institution_id": self.other_school.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["institution"]["id"], self.other_school.pk)
+
+        campuses = self.client.get("/api/schools/campuses/")
+        self.assertEqual(
+            [item["name"] for item in campuses.json()],
+            ["Other Campus"],
+        )
+
+    def test_user_cannot_switch_to_an_unassigned_institution(self):
+        self.login()
+
+        response = self.client.post(
+            "/api/auth/active-institution/",
+            {"institution_id": self.other_school.pk},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 403)
 
     def test_teacher_cannot_create_students(self):
         self.login()

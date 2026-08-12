@@ -2,7 +2,22 @@ from django.db import models
 
 
 class School(models.Model):
+    """The institution/tenant model (kept as School for API compatibility)."""
+
+    INSTITUTION_TYPE_CHOICES = [
+        ("school", "School"),
+        ("college", "College"),
+        ("university", "University"),
+    ]
+
     name = models.CharField(max_length=200)
+    institution_type = models.CharField(
+        max_length=20,
+        choices=INSTITUTION_TYPE_CHOICES,
+        default="school",
+    )
+    timezone = models.CharField(max_length=64, default="UTC")
+    currency = models.CharField(max_length=3, default="PKR")
     address = models.TextField(blank=True)
     city = models.CharField(max_length=100, blank=True)
 

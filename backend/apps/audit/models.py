@@ -6,6 +6,7 @@ class AuditLog(models.Model):
     ACTION_CHOICES = [
         ("login", "Login"),
         ("login_failed", "Login Failed"),
+        ("institution_switched", "Institution Switched"),
         ("logout", "Logout"),
         ("create", "Create"),
         ("update", "Update"),

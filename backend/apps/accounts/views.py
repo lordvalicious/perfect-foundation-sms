@@ -24,6 +24,7 @@ from apps.accounts.permissions import (
 )
 
 from .models import (
+    InstitutionMembership,
     Role,
     StaffAttendance,
     StaffLeave,
@@ -66,6 +67,10 @@ class LoginView(APIView):
         user = serializer.validated_data["user"]
 
         django_login(request, user)
+
+        membership = user.get_active_memberships().first()
+        if membership is not None:
+            request.session["active_institution_id"] = membership.institution_id
 
         record_audit(
             request=request,
@@ -130,21 +135,87 @@ class CurrentUserView(APIView):
         )
 
 
+class ActiveInstitutionView(APIView):
+    """Read or switch the institution for the current authenticated session."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        institution = getattr(request, "institution", None)
+        if institution is None:
+            return Response({"institution": None, "roles": []})
+
+        roles = request.institution_membership.role_assignments.values_list(
+            "role", flat=True
+        )
+        return Response(
+            {
+                "institution": {
+                    "id": institution.id,
+                    "name": institution.name,
+                    "institution_type": institution.institution_type,
+                },
+                "roles": list(roles),
+            }
+        )
+
+    def post(self, request):
+        institution_id = request.data.get("institution_id")
+        membership = InstitutionMembership.objects.filter(
+            user=request.user,
+            institution_id=institution_id,
+            status="active",
+        ).select_related("institution").first()
+
+        if membership is None:
+            raise PermissionDenied(
+                "You do not have an active membership in this institution."
+            )
+
+        request.session["active_institution_id"] = membership.institution_id
+        record_audit(
+            request=request,
+            action="institution_switched",
+            details={"institution_id": membership.institution_id},
+        )
+        return Response(
+            {
+                "institution": {
+                    "id": membership.institution_id,
+                    "name": membership.institution.name,
+                    "institution_type": membership.institution.institution_type,
+                },
+                "roles": list(
+                    membership.role_assignments.values_list("role", flat=True)
+                ),
+            }
+        )
+
+
 class UserProfileView(APIView):
     """Public profile of any user (student / teacher / staff / admin)."""
 
     permission_classes = [IsAuthenticated]
 
     def get(self, request, pk):
-        user = (
+        users = (
             User.objects.prefetch_related(
                 "memberships__institution",
                 "memberships__role_assignments",
             )
             .select_related("staff_profile")
-            .filter(pk=pk)
-            .first()
         )
+
+        if pk != request.user.pk and not request.user.is_superuser:
+            institution = getattr(request, "institution", None)
+            if institution is None:
+                raise PermissionDenied("Select an active institution first.")
+            users = users.filter(
+                memberships__institution=institution,
+                memberships__status="active",
+            )
+
+        user = users.filter(pk=pk).distinct().first()
 
         if user is None:
             return Response(
