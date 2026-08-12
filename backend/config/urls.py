@@ -75,8 +75,43 @@ urlpatterns = [
     ),
 
     path(
+        "api/communication/",
+        include("apps.communication.urls"),
+    ),
+
+    path(
         "api/audit/",
         include("apps.audit.urls"),
+    ),
+
+    path(
+        "api/library/",
+        include("apps.library.urls"),
+    ),
+
+    path(
+        "api/transport/",
+        include("apps.transport.urls"),
+    ),
+
+    path(
+        "api/inventory/",
+        include("apps.inventory.urls"),
+    ),
+
+    path(
+        "api/payroll/",
+        include("apps.payroll.urls"),
+    ),
+
+    path(
+        "api/reports/",
+        include("apps.reports.urls"),
+    ),
+
+    path(
+        "api/search/",
+        include("apps.search.urls"),
     ),
 ]
 

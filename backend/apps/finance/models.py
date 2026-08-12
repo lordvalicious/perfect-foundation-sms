@@ -1,4 +1,5 @@
 
+from datetime import date
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
@@ -235,6 +236,36 @@ class Invoice(models.Model):
             Decimal("0.00"),
         )
 
+    def refresh_status(self, save=True):
+        """
+        Recalculate the invoice status from its payments.
+
+        Called automatically whenever a payment on this invoice
+        is created or updated.
+        """
+        total = self.total_amount
+        paid = self.paid_amount
+
+        if total <= 0 or paid >= total:
+            new_status = "paid"
+        elif paid > 0:
+            new_status = "partial"
+        elif self.due_date < date.today():
+            new_status = "overdue"
+        else:
+            new_status = "issued"
+
+        if new_status != self.status:
+            self.status = new_status
+
+            if save:
+                self.save(
+                    update_fields=[
+                        "status",
+                        "updated_at",
+                    ]
+                )
+
     def clean(self):
         errors = {}
 
@@ -376,7 +407,10 @@ class Payment(models.Model):
 
     def save(self, *args, **kwargs):
         self.full_clean()
-        return super().save(*args, **kwargs)
+        super().save(*args, **kwargs)
+
+        if self.status == "completed":
+            self.invoice.refresh_status()
 
     def __str__(self):
         return (

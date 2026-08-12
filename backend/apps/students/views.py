@@ -95,6 +95,14 @@ class StudentListCreateView(generics.ListCreateAPIView):
                 enrollments__status="active",
             )
 
+        class_obj = self.request.query_params.get("class_obj")
+
+        if class_obj:
+            queryset = queryset.filter(
+                enrollments__class_obj_id=class_obj,
+                enrollments__status="active",
+            )
+
         return queryset
 
 

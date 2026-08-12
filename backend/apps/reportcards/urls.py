@@ -5,6 +5,8 @@ from .views import (
     GradeScaleListView,
     ReportCardDetailView,
     ReportCardListView,
+    ReportCardPdfBatchView,
+    ReportCardPdfView,
     ReportCardStatusView,
 )
 
@@ -15,6 +17,11 @@ urlpatterns = [
         "<int:pk>/",
         ReportCardDetailView.as_view(),
         name="report-card-detail",
+    ),
+    path(
+        "<int:pk>/pdf/",
+        ReportCardPdfView.as_view(),
+        name="report-card-pdf",
     ),
     path(
         "<int:pk>/status/",
@@ -30,5 +37,10 @@ urlpatterns = [
         "amendments/",
         GradeAmendmentListCreateView.as_view(),
         name="grade-amendment-list",
+    ),
+    path(
+        "pdf/batch/",
+        ReportCardPdfBatchView.as_view(),
+        name="report-card-pdf-batch",
     ),
 ]

@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.http import HttpResponse
 from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied, ValidationError
@@ -28,6 +29,8 @@ from .serializers import (
     GradeScaleSerializer,
     ReportCardSerializer,
 )
+
+from .pdf import build_report_card_pdf
 
 REVIEW_ROLES = [
     "super_admin",
@@ -297,3 +300,137 @@ class GradeAmendmentListCreateView(generics.ListCreateAPIView):
                 "reason": attrs["reason"],
             },
         )
+
+
+class ReportCardPdfView(APIView):
+    """Stream a single report card as a PDF document."""
+
+    permission_classes = [IsAcademicMemberRole]
+
+    def _get_report_card(self, pk):
+        report_card = (
+            ReportCard.objects
+            .select_related(
+                "student",
+                "exam",
+                "exam__campus",
+                "exam__class_obj",
+            )
+            .filter(pk=pk)
+            .first()
+        )
+
+        if report_card is None:
+            return None
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if report_card.student_id not in student_ids:
+                    return None
+
+                if report_card.status != "published":
+                    return None
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None or profile.pk != report_card.student_id:
+                    return None
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if report_card.student_id not in student_ids:
+                    return None
+
+        return report_card
+
+    def get(self, request, pk):
+        report_card = self._get_report_card(pk)
+
+        if report_card is None:
+            return Response(
+                {"detail": "Report card not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        pdf_bytes = build_report_card_pdf(report_card)
+
+        filename = (
+            f"report_card_{report_card.student.admission_number}_"
+            f"{report_card.exam.pk}.pdf"
+        )
+
+        response = HttpResponse(
+            pdf_bytes,
+            content_type="application/pdf",
+        )
+
+        response["Content-Disposition"] = (
+            f'attachment; filename="{filename}"'
+        )
+
+        return response
+
+
+class ReportCardPdfBatchView(APIView):
+    """
+    Generate PDF report cards for every student in an exam
+    and bundle them into a single ZIP archive.
+    """
+
+    permission_classes = [IsAcademicMemberRole]
+
+    def get(self, request):
+        from io import BytesIO
+        from zipfile import ZIP_DEFLATED, ZipFile
+
+        exam_id = request.query_params.get("exam")
+
+        if not exam_id:
+            return Response(
+                {"detail": "The exam query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        queryset = (
+            ReportCard.objects
+            .select_related("student", "exam", "exam__class_obj")
+            .filter(exam_id=exam_id)
+        )
+
+        if queryset.exists() is False:
+            return Response(
+                {"detail": "No report cards found for this exam."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        zip_buffer = BytesIO()
+
+        with ZipFile(zip_buffer, "w", ZIP_DEFLATED) as archive:
+            for report_card in queryset:
+                pdf_bytes = build_report_card_pdf(report_card)
+
+                filename = (
+                    f"{report_card.student.admission_number}_"
+                    f"{report_card.student.full_name.replace(' ', '_')}.pdf"
+                )
+
+                archive.writestr(filename, pdf_bytes)
+
+        zip_buffer.seek(0)
+
+        exam = queryset.first().exam
+
+        response = HttpResponse(
+            zip_buffer.getvalue(),
+            content_type="application/zip",
+        )
+
+        response["Content-Disposition"] = (
+            f'attachment; filename="report_cards_{exam.name}.zip"'
+        )
+
+        return response

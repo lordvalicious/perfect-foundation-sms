@@ -1,9 +1,12 @@
 from django.db.models import Q
-from rest_framework import generics
+from rest_framework import generics, status
+from rest_framework.exceptions import PermissionDenied
+from rest_framework.response import Response
 
-from apps.accounts.permissions import IsAcademicMemberRole
+from apps.accounts.permissions import IsAcademicMemberRole, IsTeacherRole
 from apps.accounts.scopes import (
     get_student_profile,
+    get_teacher_profile,
     is_manager,
     is_parent,
     is_student,
@@ -14,13 +17,38 @@ from apps.accounts.scopes import (
     teacher_class_ids,
     teacher_student_ids,
 )
+from apps.audit.models import record_audit
 
-from .models import Exam, ExamSubject, StudentResult
+from .models import Exam, ExamSubject, PracticalResult, StudentResult
 from .serializers import (
     ExamSerializer,
     ExamSubjectSerializer,
+    PracticalResultSerializer,
     StudentResultSerializer,
+    StudentResultWriteSerializer,
 )
+
+
+def teacher_can_manage_exam_subject(user, exam_subject):
+    """A teacher may manage results for an exam subject only if they
+    are actively assigned to teach that subject in the exam's class."""
+    if is_manager(user):
+        return True
+
+    teacher = get_teacher_profile(user)
+
+    if teacher is None:
+        return False
+
+    from apps.teachers.models import TeacherAssignment
+
+    return TeacherAssignment.objects.filter(
+        teacher=teacher,
+        class_obj=exam_subject.exam.class_obj,
+        subject=exam_subject.subject,
+        academic_year=exam_subject.exam.academic_year,
+        status="active",
+    ).exists()
 
 
 class ExamListView(generics.ListAPIView):
@@ -105,9 +133,15 @@ class ExamSubjectListView(generics.ListAPIView):
         return queryset
 
 
-class StudentResultListView(generics.ListAPIView):
+class StudentResultListView(generics.ListCreateAPIView):
     serializer_class = StudentResultSerializer
     permission_classes = [IsAcademicMemberRole]
+
+    def get_serializer_class(self):
+        if self.request.method in ("POST", "PUT", "PATCH"):
+            return StudentResultWriteSerializer
+
+        return StudentResultSerializer
 
     def get_queryset(self):
         queryset = (
@@ -166,3 +200,245 @@ class StudentResultListView(generics.ListAPIView):
             queryset = queryset.filter(grade=grade)
 
         return queryset
+
+    def perform_create(self, serializer):
+        exam_subject = serializer.validated_data["exam_subject"]
+
+        if not teacher_can_manage_exam_subject(
+            self.request.user,
+            exam_subject,
+        ):
+            raise PermissionDenied(
+                "You can only enter marks for subjects you are "
+                "assigned to teach."
+            )
+
+        result = serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="create",
+            model_name="StudentResult",
+            object_id=str(result.pk),
+            object_repr=str(result),
+            details={
+                "exam": result.exam.name,
+                "subject": result.exam_subject.subject.name,
+                "student": result.student.full_name,
+                "marks": str(result.obtained_marks),
+            },
+        )
+
+
+class StudentResultDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StudentResultSerializer
+    permission_classes = [IsTeacherRole]
+
+    def get_serializer_class(self):
+        if self.request.method in ("PUT", "PATCH"):
+            return StudentResultWriteSerializer
+
+        return StudentResultSerializer
+
+    def get_queryset(self):
+        queryset = StudentResult.objects.select_related(
+            "exam",
+            "student",
+            "exam_subject__subject",
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
+            elif is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
+
+        return queryset
+
+    def check_object_write(self, result):
+        if not teacher_can_manage_exam_subject(
+            self.request.user,
+            result.exam_subject,
+        ):
+            raise PermissionDenied(
+                "You can only edit marks for subjects you are "
+                "assigned to teach."
+            )
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        self.check_object_write(instance)
+        serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="update",
+            model_name="StudentResult",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+            details={"marks": str(instance.obtained_marks)},
+        )
+
+    def perform_destroy(self, instance):
+        self.check_object_write(instance)
+        instance.delete()
+
+        record_audit(
+            request=self.request,
+            action="delete",
+            model_name="StudentResult",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+        )
+
+
+class PracticalResultListCreateView(generics.ListCreateAPIView):
+    serializer_class = PracticalResultSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def get_queryset(self):
+        queryset = PracticalResult.objects.select_related(
+            "exam",
+            "student",
+            "exam_subject__subject",
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
+            elif is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
+
+        exam = self.request.query_params.get("exam")
+
+        if exam:
+            queryset = queryset.filter(exam_id=exam)
+
+        student = self.request.query_params.get("student")
+
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        exam_subject = self.request.query_params.get("exam_subject")
+
+        if exam_subject:
+            queryset = queryset.filter(exam_subject_id=exam_subject)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        exam_subject = serializer.validated_data["exam_subject"]
+
+        if not teacher_can_manage_exam_subject(
+            self.request.user,
+            exam_subject,
+        ):
+            raise PermissionDenied(
+                "You can only enter practical marks for subjects "
+                "you are assigned to teach."
+            )
+
+        serializer.save()
+
+
+class PracticalResultDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = PracticalResultSerializer
+    permission_classes = [IsTeacherRole]
+
+    def get_queryset(self):
+        queryset = PracticalResult.objects.select_related(
+            "exam",
+            "student",
+            "exam_subject__subject",
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
+            elif is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
+
+        return queryset
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+
+        if not teacher_can_manage_exam_subject(
+            self.request.user,
+            instance.exam_subject,
+        ):
+            raise PermissionDenied(
+                "You can only edit practical marks for subjects "
+                "you are assigned to teach."
+            )
+
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        if not teacher_can_manage_exam_subject(
+            self.request.user,
+            instance.exam_subject,
+        ):
+            raise PermissionDenied(
+                "You can only delete practical marks for subjects "
+                "you are assigned to teach."
+            )
+
+        instance.delete()

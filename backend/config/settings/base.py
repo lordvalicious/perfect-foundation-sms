@@ -40,8 +40,16 @@ INSTALLED_APPS = [
     "apps.reportcards",
     "apps.timetable",
     "apps.events",
+    "apps.communication",
     "apps.audit",
     "apps.dashboard",
+
+    "apps.library",
+    "apps.transport",
+    "apps.inventory",
+    "apps.payroll",
+    "apps.reports",
+    "apps.search",
 
     "corsheaders",
     "rest_framework",
