@@ -42,6 +42,9 @@ class Student(models.Model):
         related_name="student_profile",
     )
 
+    membership = models.OneToOneField("accounts.InstitutionMembership", on_delete=models.SET_NULL, null=True, blank=True, related_name="student_profile")
+    primary_campus = models.ForeignKey(Campus, on_delete=models.SET_NULL, null=True, blank=True, related_name="primary_students")
+
     photo = models.ImageField(
         upload_to="profiles/students/",
         blank=True,
@@ -103,6 +106,12 @@ class Student(models.Model):
 
     def __str__(self):
         return f"{self.admission_number} - {self.full_name}"
+
+    def clean(self):
+        if self.membership_id and self.user_id and self.membership.user_id != self.user_id:
+            raise ValidationError({"membership": "Membership must belong to this user."})
+        if self.membership_id and self.primary_campus_id and self.primary_campus.school_id != self.membership.institution_id:
+            raise ValidationError({"primary_campus": "Campus must belong to the membership institution."})
 
     @property
     def full_name(self):

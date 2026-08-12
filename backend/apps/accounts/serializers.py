@@ -226,6 +226,8 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
             "id",
             "employee_number",
             "user",
+            "membership",
+            "primary_campus",
             "linked_username",
             "generated_password",
             "photo",

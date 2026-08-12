@@ -350,6 +350,8 @@ class StudentSerializer(serializers.ModelSerializer):
             "id",
             "admission_number",
             "user",
+            "membership",
+            "primary_campus",
             "photo",
             "photo_url",
             "first_name",

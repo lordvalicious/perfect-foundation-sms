@@ -192,6 +192,9 @@ class StaffProfile(models.Model):
         related_name="staff_profile",
     )
 
+    membership = models.OneToOneField(InstitutionMembership, on_delete=models.SET_NULL, null=True, blank=True, related_name="staff_profile_membership")
+    primary_campus = models.ForeignKey("schools.Campus", on_delete=models.SET_NULL, null=True, blank=True, related_name="primary_staff")
+
     employee_number = models.CharField(
         max_length=50,
         unique=True,

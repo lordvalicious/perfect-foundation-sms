@@ -27,6 +27,9 @@ class Teacher(models.Model):
         related_name="teacher_profile",
     )
 
+    membership = models.OneToOneField("accounts.InstitutionMembership", on_delete=models.SET_NULL, null=True, blank=True, related_name="teacher_profile")
+    primary_campus = models.ForeignKey("schools.Campus", on_delete=models.SET_NULL, null=True, blank=True, related_name="primary_teachers")
+
     photo = models.ImageField(
         upload_to="profiles/teachers/",
         blank=True,
@@ -116,6 +119,12 @@ class Teacher(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.employee_number})"
+
+    def clean(self):
+        if self.membership_id and self.user_id and self.membership.user_id != self.user_id:
+            raise ValidationError({"membership": "Membership must belong to this user."})
+        if self.membership_id and self.primary_campus_id and self.primary_campus.school_id != self.membership.institution_id:
+            raise ValidationError({"primary_campus": "Campus must belong to the membership institution."})
 
 
 class TeacherAssignment(models.Model):

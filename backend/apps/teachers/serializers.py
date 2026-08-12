@@ -11,8 +11,8 @@ class TeacherSerializer(serializers.ModelSerializer):
 
     photo_url = serializers.SerializerMethodField()
 
-    campus_name = serializers.CharField(
-        source="campus.name",
+    primary_campus_name = serializers.CharField(
+        source="primary_campus.name",
         read_only=True,
     )
 
@@ -49,6 +49,9 @@ class TeacherSerializer(serializers.ModelSerializer):
             "id",
             "employee_number",
             "user",
+            "membership",
+            "primary_campus",
+            "primary_campus_name",
             "linked_username",
             "generated_password",
             "photo",
@@ -61,7 +64,6 @@ class TeacherSerializer(serializers.ModelSerializer):
             "phone",
             "email",
             "campus",
-            "campus_name",
             "joining_date",
             "designation",
             "department",
@@ -80,7 +82,7 @@ class TeacherSerializer(serializers.ModelSerializer):
             "id",
             "full_name",
             "photo_url",
-            "campus_name",
+            "primary_campus_name",
             "class_teacher_classes",
             "created_at",
             "updated_at",
