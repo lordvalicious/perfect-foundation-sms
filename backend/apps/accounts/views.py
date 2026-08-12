@@ -9,20 +9,34 @@ from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
 from rest_framework import generics, serializers, status
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.audit.models import record_audit
-from apps.accounts.permissions import IsAdminOrReadOnly
+from apps.accounts.permissions import (
+    IsAcademicMemberRole,
+    IsAdminOrReadOnly,
+    IsAdminRole,
+    IsStaffRole,
+)
 
-from .models import Role, StaffProfile, User
+from .models import (
+    Role,
+    StaffAttendance,
+    StaffLeave,
+    StaffProfile,
+    User,
+)
 from .serializers import (
     LoginSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    StaffAttendanceSerializer,
+    StaffLeaveActionSerializer,
+    StaffLeaveSerializer,
     StaffProfileCRUDSerializer,
     UserProfileSerializer,
     UserSerializer,
@@ -378,3 +392,190 @@ class StaffMyView(generics.RetrieveAPIView):
             )
 
         return profile
+
+
+class StaffAttendanceListCreateView(generics.ListCreateAPIView):
+    serializer_class = StaffAttendanceSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        queryset = StaffAttendance.objects.select_related(
+            "staff",
+            "marked_by",
+        )
+
+        staff = self.request.query_params.get("staff")
+
+        if staff:
+            queryset = queryset.filter(staff_id=staff)
+
+        status_param = self.request.query_params.get("status")
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        date = self.request.query_params.get("date")
+
+        if date:
+            queryset = queryset.filter(date=date)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(marked_by=self.request.user)
+
+
+class StaffAttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StaffAttendanceSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        return StaffAttendance.objects.select_related(
+            "staff",
+            "marked_by",
+        )
+
+    def perform_update(self, serializer):
+        serializer.save(marked_by=self.request.user)
+
+
+class StaffLeaveListCreateView(generics.ListCreateAPIView):
+    serializer_class = StaffLeaveSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        queryset = StaffLeave.objects.select_related(
+            "staff",
+            "reviewed_by",
+        )
+
+        user = self.request.user
+
+        if not user.has_any_role(
+            ["super_admin", "admin", "principal", "hr"]
+        ):
+            profile = getattr(user, "staff_profile", None)
+
+            if profile is not None:
+                queryset = queryset.filter(staff=profile)
+            else:
+                return queryset.none()
+
+        staff = self.request.query_params.get("staff")
+
+        if staff:
+            queryset = queryset.filter(staff_id=staff)
+
+        status_param = self.request.query_params.get("status")
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        leave_type = self.request.query_params.get("leave_type")
+
+        if leave_type:
+            queryset = queryset.filter(leave_type=leave_type)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        staff = getattr(user, "staff_profile", None)
+
+        if staff is None:
+            raise NotFound(
+                "No staff profile is linked to this account."
+            )
+
+        serializer.save(staff=staff)
+
+
+class StaffLeaveDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StaffLeaveSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        queryset = StaffLeave.objects.select_related(
+            "staff",
+            "reviewed_by",
+        )
+
+        user = self.request.user
+
+        if not user.has_any_role(
+            ["super_admin", "admin", "principal", "hr"]
+        ):
+            profile = getattr(user, "staff_profile", None)
+
+            if profile is not None:
+                queryset = queryset.filter(staff=profile)
+            else:
+                return queryset.none()
+
+        return queryset
+
+
+class StaffLeaveActionView(generics.GenericAPIView):
+    """HR approves or rejects a staff leave request."""
+
+    serializer_class = StaffLeaveActionSerializer
+    permission_classes = [IsStaffRole]
+
+    def post(self, request, pk):
+        reviewer_roles = [
+            "super_admin",
+            "admin",
+            "principal",
+            "vice_principal",
+            "campus_admin",
+            "hr",
+        ]
+
+        if not request.user.has_any_role(reviewer_roles):
+            raise PermissionDenied(
+                "Only HR / administrators can review leave requests."
+            )
+
+        leave = (
+            StaffLeave.objects
+            .select_related("staff")
+            .filter(pk=pk)
+            .first()
+        )
+
+        if leave is None:
+            return Response(
+                {"detail": "Leave request not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        action = serializer.validated_data["action"]
+        review_notes = serializer.validated_data.get("review_notes", "")
+
+        leave.status = (
+            "approved" if action == "approve" else "rejected"
+        )
+        leave.reviewed_by = request.user
+        leave.review_notes = review_notes
+        leave.save()
+
+        record_audit(
+            request=request,
+            action="staff_leave_" + action,
+            model_name="StaffLeave",
+            object_id=str(leave.pk),
+            object_repr=str(leave),
+            details={
+                "staff": leave.staff.employee_number,
+                "leave_type": leave.leave_type,
+                "start_date": str(leave.start_date),
+                "end_date": str(leave.end_date),
+            },
+        )
+
+        return Response(
+            StaffLeaveSerializer(leave).data
+        )

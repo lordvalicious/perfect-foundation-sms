@@ -6,6 +6,8 @@ from .models import (
     InstitutionMembership,
     Role,
     RoleAssignment,
+    StaffAttendance,
+    StaffLeave,
     StaffProfile,
     User,
 )
@@ -405,6 +407,115 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url) if request else url
 
         return None
+
+
+class StaffAttendanceSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(
+        source="staff.full_name",
+        read_only=True,
+    )
+    staff_employee_number = serializers.CharField(
+        source="staff.employee_number",
+        read_only=True,
+    )
+    status_label = serializers.CharField(
+        source="get_status_display",
+        read_only=True,
+    )
+    marked_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffAttendance
+        fields = [
+            "id",
+            "staff",
+            "staff_name",
+            "staff_employee_number",
+            "date",
+            "status",
+            "status_label",
+            "check_in",
+            "check_out",
+            "notes",
+            "marked_by",
+            "marked_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "marked_by", "created_at", "updated_at"]
+
+    def get_marked_by_name(self, obj):
+        if obj.marked_by is None:
+            return None
+
+        return (
+            obj.marked_by.get_full_name()
+            or obj.marked_by.username
+        )
+
+
+class StaffLeaveSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(
+        source="staff.full_name",
+        read_only=True,
+    )
+    staff_employee_number = serializers.CharField(
+        source="staff.employee_number",
+        read_only=True,
+    )
+    leave_type_label = serializers.CharField(
+        source="get_leave_type_display",
+        read_only=True,
+    )
+    status_label = serializers.CharField(
+        source="get_status_display",
+        read_only=True,
+    )
+    reviewed_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = StaffLeave
+        fields = [
+            "id",
+            "staff",
+            "staff_name",
+            "staff_employee_number",
+            "leave_type",
+            "leave_type_label",
+            "start_date",
+            "end_date",
+            "days",
+            "reason",
+            "status",
+            "status_label",
+            "reviewed_by",
+            "reviewed_by_name",
+            "review_notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "days", "reviewed_by", "created_at", "updated_at"]
+
+    def get_reviewed_by_name(self, obj):
+        if obj.reviewed_by is None:
+            return None
+
+        return (
+            obj.reviewed_by.get_full_name()
+            or obj.reviewed_by.username
+        )
+
+
+class StaffLeaveActionSerializer(serializers.Serializer):
+    """Approve or reject a staff leave request."""
+
+    action = serializers.ChoiceField(
+        choices=["approve", "reject"]
+    )
+    review_notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
 
 
 class LoginSerializer(serializers.Serializer):

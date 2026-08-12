@@ -2,7 +2,12 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from rest_framework import serializers
 
-from .models import Guardian, Student, Enrollment
+from .models import (
+    Guardian,
+    Student,
+    Enrollment,
+    StudentDocument,
+)
 
 
 class GuardianSerializer(serializers.ModelSerializer):
@@ -10,6 +15,7 @@ class GuardianSerializer(serializers.ModelSerializer):
         model = Guardian
         fields = [
             "id",
+            "user",
             "name",
             "relationship",
             "phone",
@@ -17,6 +23,160 @@ class GuardianSerializer(serializers.ModelSerializer):
             "email",
             "address",
         ]
+        read_only_fields = ["id"]
+
+
+class GuardianCreateSerializer(serializers.ModelSerializer):
+    """
+    Create a guardian and optionally create or link a user account
+    so they can sign in to the parent portal.
+    """
+
+    username = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+    password = serializers.CharField(
+        required=False,
+        allow_blank=True,
+    )
+
+    class Meta:
+        model = Guardian
+        fields = [
+            "user",
+            "username",
+            "password",
+            "name",
+            "relationship",
+            "phone",
+            "alternate_phone",
+            "email",
+            "address",
+        ]
+
+    def validate(self, attrs):
+        username = attrs.get("username")
+        password = attrs.get("password")
+
+        if bool(username) != bool(password):
+            raise serializers.ValidationError(
+                "Both username and password are required "
+                "to create a parent login."
+            )
+
+        return attrs
+
+    def create(self, validated_data):
+        from django.utils.crypto import get_random_string
+
+        from apps.accounts.models import (
+            InstitutionMembership,
+            Role,
+            RoleAssignment,
+            User,
+        )
+        from apps.schools.models import School
+
+        username = validated_data.pop("username", "")
+        password = validated_data.pop("password", "")
+        user = validated_data.get("user")
+
+        if username or password:
+            base = username or validated_data.get("phone", "parent").strip()
+            candidate = base
+            counter = 1
+
+            while User.objects.filter(username=candidate).exists():
+                candidate = f"{base}{counter}"
+                counter += 1
+
+            email = validated_data.get("email", "").strip()
+            if not email:
+                email = f"{candidate}@perfectfoundation.local"
+
+            generated = password or get_random_string(length=12)
+
+            user = User.objects.create_user(
+                username=candidate,
+                email=email,
+                password=generated,
+                first_name=validated_data.get("name", ""),
+            )
+
+            school = (
+                School.objects.filter(status="active").order_by("id").first()
+                or School.objects.first()
+            )
+
+            if school is not None:
+                membership, _ = InstitutionMembership.objects.get_or_create(
+                    user=user,
+                    institution=school,
+                    defaults={"status": "active"},
+                )
+                RoleAssignment.objects.get_or_create(
+                    membership=membership,
+                    role=Role.PARENT,
+                )
+
+            validated_data["user"] = user
+        elif user is None:
+            validated_data["user"] = None
+
+        return super().create(validated_data)
+
+
+class StudentDocumentSerializer(serializers.ModelSerializer):
+    document_type_label = serializers.CharField(
+        source="get_document_type_display",
+        read_only=True,
+    )
+    uploaded_by_name = serializers.SerializerMethodField()
+    file_url = serializers.SerializerMethodField()
+    student_name = serializers.CharField(
+        source="student.full_name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = StudentDocument
+        fields = [
+            "id",
+            "student",
+            "student_name",
+            "document_type",
+            "document_type_label",
+            "title",
+            "file",
+            "file_url",
+            "notes",
+            "uploaded_by",
+            "uploaded_by_name",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "uploaded_by",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_uploaded_by_name(self, obj):
+        if obj.uploaded_by is None:
+            return None
+
+        return obj.uploaded_by.get_full_name() or obj.uploaded_by.username
+
+    def get_file_url(self, obj):
+        request = self.context.get("request")
+
+        if obj.file:
+            url = obj.file.url
+            return request.build_absolute_uri(url) if request else url
+
+        return None
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
@@ -146,6 +306,11 @@ class StudentSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    documents = StudentDocumentSerializer(
+        many=True,
+        read_only=True,
+    )
+
     current_enrollment = serializers.SerializerMethodField()
 
     guardian_name = serializers.CharField(
@@ -207,6 +372,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "admission_date",
             "enrollments",
             "current_enrollment",
+            "documents",
             "created_at",
             "updated_at",
         ]

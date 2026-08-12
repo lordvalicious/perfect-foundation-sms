@@ -4,10 +4,14 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.scopes import (
+    get_guardian_profile,
     get_student_profile,
     is_manager,
+    is_parent,
     is_student,
     is_teacher,
+    parent_student_ids,
+    parent_student_class_ids,
     student_class_ids,
     teacher_class_ids,
     teacher_student_ids,
@@ -44,6 +48,37 @@ def dashboard_overview(request):
 
         data = {
             "students": {"total": 1, "active": 1},
+            "teachers": {
+                "total": enrollments.values(
+                    "class_obj"
+                ).distinct().count(),
+                "active": 0,
+            },
+            "campuses": enrollments.values("campus").distinct().count(),
+            "classes": enrollments.values("class_obj").distinct().count(),
+            "sections": enrollments.values("section").distinct().count(),
+            "enrollments": enrollments.count(),
+        }
+
+        return JsonResponse(data)
+
+    if is_parent(user):
+        student_ids = parent_student_ids(user)
+        enrollments = Enrollment.objects.filter(
+            student_id__in=student_ids,
+            status="active",
+        )
+
+        data = {
+            "students": {
+                "total": len(student_ids),
+                "active": len(
+                    Student.objects.filter(
+                        pk__in=student_ids,
+                        status="active",
+                    )
+                ),
+            },
             "teachers": {
                 "total": enrollments.values(
                     "class_obj"
@@ -126,6 +161,15 @@ def dashboard_attendance(request):
             )
 
         queryset = queryset.filter(student=profile)
+    elif is_parent(user):
+        student_ids = parent_student_ids(user)
+
+        if not student_ids:
+            return JsonResponse(
+                {"present": 0, "absent": 0, "late": 0, "leave": 0}
+            )
+
+        queryset = queryset.filter(student_id__in=student_ids)
     elif is_teacher(user):
         student_ids = teacher_student_ids(user)
 
@@ -203,6 +247,21 @@ def dashboard_exams(request):
             )
 
         results_queryset = results_queryset.filter(student=profile)
+    elif is_parent(user):
+        student_ids = parent_student_ids(user)
+        class_ids = parent_student_class_ids(user)
+
+        if class_ids:
+            exams_queryset = exams_queryset.filter(
+                class_obj_id__in=class_ids
+            )
+
+        if student_ids:
+            results_queryset = results_queryset.filter(
+                student_id__in=student_ids
+            )
+        else:
+            results_queryset = results_queryset.none()
     elif is_teacher(user):
         student_ids = teacher_student_ids(user)
         class_ids = teacher_class_ids(user)

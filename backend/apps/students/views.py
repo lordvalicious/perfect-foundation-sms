@@ -2,16 +2,31 @@ from django.db.models import Q
 from rest_framework import generics
 from rest_framework.exceptions import NotFound
 
-from apps.accounts.permissions import IsAdminOrReadOnly
+from apps.accounts.permissions import (
+    IsAdminOrReadOnly,
+    IsAdminRole,
+    IsAcademicMemberRole,
+)
 from apps.accounts.scopes import (
+    get_guardian_profile,
     get_student_profile,
     is_manager,
+    is_parent,
+    parent_scope_filter,
     teacher_scope_filter,
 )
 
-from .models import Enrollment, Student
+from .models import (
+    Guardian,
+    Student,
+    Enrollment,
+    StudentDocument,
+)
 from .serializers import (
     EnrollmentCreateSerializer,
+    GuardianCreateSerializer,
+    GuardianSerializer,
+    StudentDocumentSerializer,
     StudentSerializer,
 )
 
@@ -23,6 +38,7 @@ STUDENT_QUERYSET = (
         "enrollments__campus",
         "enrollments__class_obj",
         "enrollments__section",
+        "documents",
     )
 )
 
@@ -37,7 +53,10 @@ class StudentListCreateView(generics.ListCreateAPIView):
         user = self.request.user
 
         if not is_manager(user):
-            queryset = queryset.filter(teacher_scope_filter(user))
+            if is_parent(user):
+                queryset = queryset.filter(parent_scope_filter(user))
+            else:
+                queryset = queryset.filter(teacher_scope_filter(user))
 
         search = self.request.query_params.get("search")
 
@@ -89,7 +108,10 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
         user = self.request.user
 
         if not is_manager(user):
-            queryset = queryset.filter(teacher_scope_filter(user))
+            if is_parent(user):
+                queryset = queryset.filter(parent_scope_filter(user))
+            else:
+                queryset = queryset.filter(teacher_scope_filter(user))
 
         return queryset
 
@@ -112,6 +134,115 @@ class StudentMyView(generics.RetrieveAPIView):
             )
 
         return profile
+
+
+class GuardianListCreateView(generics.ListCreateAPIView):
+    """Guardian registry; admins can create a parent login."""
+
+    permission_classes = [IsAdminRole]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return GuardianCreateSerializer
+
+        return GuardianSerializer
+
+    def get_queryset(self):
+        return Guardian.objects.select_related("user").order_by("name")
+
+
+class GuardianDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdminRole]
+    serializer_class = GuardianSerializer
+
+    def get_queryset(self):
+        return Guardian.objects.select_related("user")
+
+
+class GuardianMyView(generics.RetrieveAPIView):
+    """The logged-in parent's own guardian profile."""
+
+    permission_classes = [IsAcademicMemberRole]
+    serializer_class = GuardianSerializer
+
+    def get_queryset(self):
+        return Guardian.objects.select_related("user")
+
+    def get_object(self):
+        profile = get_guardian_profile(self.request.user)
+
+        if profile is None:
+            raise NotFound(
+                "No guardian profile is linked to this account."
+            )
+
+        return profile
+
+
+class StudentDocumentListCreateView(generics.ListCreateAPIView):
+    serializer_class = StudentDocumentSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = StudentDocument.objects.select_related(
+            "student",
+            "uploaded_by",
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_parent(user):
+                queryset = queryset.filter(
+                    parent_scope_filter(user)
+                )
+            else:
+                queryset = queryset.filter(
+                    teacher_scope_filter(user)
+                )
+
+        student = self.request.query_params.get("student")
+
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        document_type = self.request.query_params.get("document_type")
+
+        if document_type:
+            queryset = queryset.filter(document_type=document_type)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
+
+
+class StudentDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StudentDocumentSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = StudentDocument.objects.select_related(
+            "student",
+            "uploaded_by",
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_parent(user):
+                queryset = queryset.filter(
+                    parent_scope_filter(user)
+                )
+            else:
+                queryset = queryset.filter(
+                    teacher_scope_filter(user)
+                )
+
+        return queryset
+
+    def perform_update(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
 
 
 class EnrollmentListCreateView(generics.ListCreateAPIView):

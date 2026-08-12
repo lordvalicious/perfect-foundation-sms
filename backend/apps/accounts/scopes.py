@@ -12,9 +12,17 @@ Used by the list/detail views across the API.
 
 from django.db.models import Q
 
-MANAGER_ROLES = ["super_admin", "admin", "principal", "academic"]
+MANAGER_ROLES = [
+    "super_admin",
+    "admin",
+    "principal",
+    "vice_principal",
+    "campus_admin",
+    "academic",
+]
 TEACHER_ROLE = "teacher"
 STUDENT_ROLE = "student"
+PARENT_ROLE = "parent"
 
 
 def is_manager(user):
@@ -38,12 +46,23 @@ def is_student(user):
     return user.has_any_role([STUDENT_ROLE]) and not is_manager(user)
 
 
+def is_parent(user):
+    if not (user and user.is_authenticated):
+        return False
+
+    return user.has_any_role([PARENT_ROLE]) and not is_manager(user)
+
+
 def get_teacher_profile(user):
     return getattr(user, "teacher_profile", None)
 
 
 def get_student_profile(user):
     return getattr(user, "student_profile", None)
+
+
+def get_guardian_profile(user):
+    return getattr(user, "guardian_profile", None)
 
 
 def teacher_class_ids(user):
@@ -101,6 +120,50 @@ def student_class_ids(user):
 def teacher_scope_filter(user):
     """Q filter restricting a Student queryset to the teacher's class."""
     student_ids = teacher_student_ids(user)
+
+    if not student_ids:
+        return Q(pk__in=[])
+
+    return Q(pk__in=student_ids)
+
+
+def parent_student_ids(user):
+    """Student ids whose guardian is linked to the logged-in user."""
+    profile = get_guardian_profile(user)
+
+    if profile is None:
+        return []
+
+    from apps.students.models import Student
+
+    return list(
+        Student.objects.filter(guardian=profile).values_list(
+            "id",
+            flat=True,
+        )
+    )
+
+
+def parent_student_class_ids(user):
+    """Class ids of the logged-in parent's children (active year)."""
+    student_ids = parent_student_ids(user)
+
+    if not student_ids:
+        return []
+
+    from apps.students.models import Enrollment
+
+    return list(
+        Enrollment.objects.filter(
+            student_id__in=student_ids,
+            status="active",
+        ).values_list("class_obj_id", flat=True)
+    )
+
+
+def parent_scope_filter(user):
+    """Q filter restricting a Student queryset to the parent's children."""
+    student_ids = parent_student_ids(user)
 
     if not student_ids:
         return Q(pk__in=[])

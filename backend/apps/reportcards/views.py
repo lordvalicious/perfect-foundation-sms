@@ -6,7 +6,19 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsTeacherRole
+from apps.accounts.permissions import (
+    IsAcademicMemberRole,
+    IsTeacherRole,
+)
+from apps.accounts.scopes import (
+    get_student_profile,
+    is_manager,
+    is_parent,
+    is_student,
+    is_teacher,
+    parent_student_ids,
+    teacher_student_ids,
+)
 from apps.audit.models import record_audit
 
 from .models import GradeAmendment, GradeScale, ReportCard
@@ -17,12 +29,19 @@ from .serializers import (
     ReportCardSerializer,
 )
 
-REVIEW_ROLES = ["super_admin", "admin", "academic"]
+REVIEW_ROLES = [
+    "super_admin",
+    "admin",
+    "principal",
+    "vice_principal",
+    "campus_admin",
+    "academic",
+]
 
 
 class ReportCardListView(generics.ListAPIView):
     serializer_class = ReportCardSerializer
-    permission_classes = [IsTeacherRole]
+    permission_classes = [IsAcademicMemberRole]
 
     def get_queryset(self):
         queryset = (
@@ -30,6 +49,34 @@ class ReportCardListView(generics.ListAPIView):
             .select_related("student", "exam", "exam__campus", "exam__class_obj")
             .order_by("exam", "position", "student__first_name")
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
+            elif is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    student_id__in=student_ids,
+                    status="published",
+                )
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
 
         search = self.request.query_params.get("search")
 
@@ -61,15 +108,45 @@ class ReportCardListView(generics.ListAPIView):
 
 class ReportCardDetailView(generics.RetrieveAPIView):
     serializer_class = ReportCardSerializer
-    permission_classes = [IsTeacherRole]
+    permission_classes = [IsAcademicMemberRole]
 
     def get_queryset(self):
-        return ReportCard.objects.select_related(
+        queryset = ReportCard.objects.select_related(
             "student",
             "exam",
             "exam__campus",
             "exam__class_obj",
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    student_id__in=student_ids,
+                    status="published",
+                )
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
+            elif is_teacher(user):
+                student_ids = teacher_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
+
+        return queryset
 
 
 class ReportCardStatusView(APIView):

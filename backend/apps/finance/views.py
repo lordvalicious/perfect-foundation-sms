@@ -1,7 +1,15 @@
 from django.db.models import Q
 from rest_framework import generics
 
-from apps.accounts.permissions import IsAccountantRole
+from apps.accounts.permissions import (
+    IsAccountantRole,
+    IsFinanceReaderRole,
+)
+from apps.accounts.scopes import (
+    is_manager,
+    is_parent,
+    parent_student_ids,
+)
 
 from .models import FeeCategory, Invoice, Payment
 from .serializers import (
@@ -13,7 +21,7 @@ from .serializers import (
 
 class InvoiceListView(generics.ListAPIView):
     serializer_class = InvoiceSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsFinanceReaderRole]
 
     def get_queryset(self):
         queryset = (
@@ -27,6 +35,17 @@ class InvoiceListView(generics.ListAPIView):
             .prefetch_related("items__category")
             .order_by("-issue_date", "-id")
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
 
         search = self.request.query_params.get("search")
 
@@ -49,7 +68,7 @@ class InvoiceListView(generics.ListAPIView):
 
 class PaymentListView(generics.ListAPIView):
     serializer_class = PaymentSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsFinanceReaderRole]
 
     def get_queryset(self):
         queryset = (
@@ -60,6 +79,19 @@ class PaymentListView(generics.ListAPIView):
             )
             .order_by("-payment_date", "-id")
         )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    invoice__student_id__in=student_ids
+                )
 
         search = self.request.query_params.get("search")
 

@@ -4,6 +4,8 @@ from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
     InstitutionMembership,
     RoleAssignment,
+    StaffAttendance,
+    StaffLeave,
     StaffProfile,
     User,
 )
@@ -48,6 +50,42 @@ class StaffProfileAdmin(admin.ModelAdmin):
         "employee_number",
         "user__username",
         "user__email",
+    ]
+
+
+@admin.register(StaffAttendance)
+class StaffAttendanceAdmin(admin.ModelAdmin):
+    list_display = [
+        "staff",
+        "date",
+        "status",
+        "check_in",
+        "check_out",
+    ]
+
+    list_filter = ["status", "date"]
+    search_fields = [
+        "staff__employee_number",
+        "staff__first_name",
+        "staff__last_name",
+    ]
+
+
+@admin.register(StaffLeave)
+class StaffLeaveAdmin(admin.ModelAdmin):
+    list_display = [
+        "staff",
+        "leave_type",
+        "start_date",
+        "end_date",
+        "status",
+    ]
+
+    list_filter = ["status", "leave_type"]
+    search_fields = [
+        "staff__employee_number",
+        "staff__first_name",
+        "staff__last_name",
     ]
 
 

@@ -30,6 +30,7 @@ import {
   ScrollText,
   Layers,
   UserRound,
+  HeartHandshake,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -50,6 +51,7 @@ import AssignmentsPage from "./pages/AssignmentsPage";
 import ProfilePage from "./pages/ProfilePage";
 import ProfileModal from "./pages/ProfileModal";
 import StaffPage from "./pages/StaffPage";
+import ParentPortalPage from "./pages/ParentPortalPage";
 
 const API_URL = "/api/dashboard/overview/";
 
@@ -78,6 +80,7 @@ function authHeaders(extra = {}) {
 const navigation = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, roles: [] },
   { label: "My Profile", path: "/profile", icon: UserRound, roles: [] },
+  { label: "Parent Portal", path: "/parent-portal", icon: HeartHandshake, roles: ["parent"] },
   { label: "Students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic"] },
@@ -86,7 +89,7 @@ const navigation = [
   { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
   { label: "Exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
-  { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student"] },
+  { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
 ];
@@ -2958,6 +2961,15 @@ function Shell() {
         />
 
         <Route
+          path="/parent-portal"
+          element={
+            <RequireRoles roles={["parent"]}>
+              <ParentPortalPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
           path="/teachers"
           element={
             <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
@@ -3023,7 +3035,7 @@ function Shell() {
         <Route
           path="/timetable"
           element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff", "student"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"]}>
               <TimetablePage />
             </RequireRoles>
           }

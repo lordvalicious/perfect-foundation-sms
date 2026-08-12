@@ -1,12 +1,15 @@
 from django.db.models import Q
 from rest_framework import generics
 
-from apps.accounts.permissions import IsTeacherRole
+from apps.accounts.permissions import IsAcademicMemberRole
 from apps.accounts.scopes import (
     get_student_profile,
     is_manager,
+    is_parent,
     is_student,
     is_teacher,
+    parent_student_class_ids,
+    parent_student_ids,
     student_class_ids,
     teacher_class_ids,
     teacher_student_ids,
@@ -22,7 +25,7 @@ from .serializers import (
 
 class ExamListView(generics.ListAPIView):
     serializer_class = ExamSerializer
-    permission_classes = [IsTeacherRole]
+    permission_classes = [IsAcademicMemberRole]
 
     def get_queryset(self):
         queryset = (
@@ -37,6 +40,13 @@ class ExamListView(generics.ListAPIView):
         if not is_manager(user):
             if is_student(user):
                 class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
+            elif is_parent(user):
+                class_ids = parent_student_class_ids(user)
 
                 if not class_ids:
                     return queryset.none()
@@ -77,7 +87,7 @@ class ExamListView(generics.ListAPIView):
 
 class ExamSubjectListView(generics.ListAPIView):
     serializer_class = ExamSubjectSerializer
-    permission_classes = [IsTeacherRole]
+    permission_classes = [IsAcademicMemberRole]
     pagination_class = None
 
     def get_queryset(self):
@@ -97,7 +107,7 @@ class ExamSubjectListView(generics.ListAPIView):
 
 class StudentResultListView(generics.ListAPIView):
     serializer_class = StudentResultSerializer
-    permission_classes = [IsTeacherRole]
+    permission_classes = [IsAcademicMemberRole]
 
     def get_queryset(self):
         queryset = (
@@ -120,6 +130,13 @@ class StudentResultListView(generics.ListAPIView):
                     return queryset.none()
 
                 queryset = queryset.filter(student=profile)
+            elif is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
             elif is_teacher(user):
                 student_ids = teacher_student_ids(user)
 

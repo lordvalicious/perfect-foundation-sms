@@ -1,12 +1,14 @@
 from django.db.models import Q
 from rest_framework import generics
 
-from apps.accounts.permissions import IsTeacherRole
+from apps.accounts.permissions import IsAcademicMemberRole
 from apps.accounts.scopes import (
     get_student_profile,
     is_manager,
+    is_parent,
     is_student,
     is_teacher,
+    parent_student_ids,
     teacher_student_ids,
 )
 
@@ -16,7 +18,7 @@ from .serializers import AttendanceSerializer
 
 class AttendanceListView(generics.ListAPIView):
     serializer_class = AttendanceSerializer
-    permission_classes = [IsTeacherRole]
+    permission_classes = [IsAcademicMemberRole]
 
     def get_queryset(self):
         queryset = (
@@ -41,6 +43,13 @@ class AttendanceListView(generics.ListAPIView):
                     return queryset.none()
 
                 queryset = queryset.filter(student=profile)
+            elif is_parent(user):
+                student_ids = parent_student_ids(user)
+
+                if not student_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(student_id__in=student_ids)
             elif is_teacher(user):
                 student_ids = teacher_student_ids(user)
 
@@ -68,6 +77,11 @@ class AttendanceListView(generics.ListAPIView):
 
         if date:
             queryset = queryset.filter(date=date)
+
+        student = self.request.query_params.get("student")
+
+        if student:
+            queryset = queryset.filter(student_id=student)
 
         campus = self.request.query_params.get("campus")
 
