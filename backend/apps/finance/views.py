@@ -16,13 +16,14 @@ from apps.accounts.scopes import (
 )
 from apps.audit.models import record_audit
 
-from .models import FeeCategory, Invoice, Payment
+from .models import FeeCategory, Invoice, Payment, PaymentReversal
 from .pdf import payment_receipt_pdf
 from .serializers import (
     FeeCategorySerializer,
     InvoiceCreateSerializer,
     InvoiceSerializer,
     PaymentCreateSerializer,
+    PaymentReversalSerializer,
     PaymentSerializer,
 )
 
@@ -238,6 +239,15 @@ class PaymentCreateView(generics.CreateAPIView):
                 "amount": str(payment.amount),
             },
         )
+
+
+class PaymentReversalCreateView(generics.CreateAPIView):
+    serializer_class = PaymentReversalSerializer
+    permission_classes = [IsAccountantRole]
+
+    def perform_create(self, serializer):
+        reversal = serializer.save(created_by=self.request.user)
+        record_audit(request=self.request, action="payment_reversal", model_name="PaymentReversal", object_id=str(reversal.pk), object_repr=str(reversal.payment), details={"amount": str(reversal.amount), "payment": reversal.payment.receipt_number})
 
 
 class PaymentReceiptHTMLView(APIView):

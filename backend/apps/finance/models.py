@@ -221,7 +221,7 @@ class Invoice(models.Model):
     def paid_amount(self):
         return sum(
             (
-                payment.amount
+                payment.net_amount
                 for payment in self.payments.filter(
                     status="completed"
                 )
@@ -412,10 +412,49 @@ class Payment(models.Model):
         if self.status == "completed":
             self.invoice.refresh_status()
 
+    @property
+    def reversed_amount(self):
+        return sum(
+            (reversal.amount for reversal in self.reversals.filter(status="completed")),
+            Decimal("0.00"),
+        )
+
+    @property
+    def net_amount(self):
+        return max(self.amount - self.reversed_amount, Decimal("0.00"))
+
     def __str__(self):
         return (
             f"{self.receipt_number} - "
             f"{self.invoice.student.full_name} - "
             f"{self.amount}"
         )
+
+
+class PaymentReversal(models.Model):
+    """An auditable correction to a completed payment; payments are never deleted."""
+
+    STATUS_CHOICES = [("completed", "Completed"), ("cancelled", "Cancelled")]
+
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="reversals")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reversal_date = models.DateField(default=date.today)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="completed")
+    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="payment_reversals")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if self.amount <= Decimal("0.00"):
+            raise ValidationError({"amount": "Reversal amount must be greater than zero."})
+        prior = self.payment.reversed_amount
+        if self.pk:
+            prior -= self.amount
+        if self.amount + prior > self.payment.amount:
+            raise ValidationError({"amount": "Reversal cannot exceed the original payment."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+        self.payment.invoice.refresh_status()
 

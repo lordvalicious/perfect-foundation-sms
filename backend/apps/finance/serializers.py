@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import FeeCategory, Invoice, InvoiceItem, Payment
+from .models import FeeCategory, Invoice, InvoiceItem, Payment, PaymentReversal
 from .services import next_invoice_number, next_receipt_number
 
 
@@ -239,6 +239,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "student_name",
             "admission_number",
             "amount",
+            "net_amount",
             "payment_date",
             "payment_method",
             "payment_method_display",
@@ -249,3 +250,10 @@ class PaymentSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class PaymentReversalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaymentReversal
+        fields = ["id", "payment", "amount", "reversal_date", "reason", "status", "created_by", "created_at"]
+        read_only_fields = ["id", "created_by", "created_at"]
