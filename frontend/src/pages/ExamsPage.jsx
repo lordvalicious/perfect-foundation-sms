@@ -10,6 +10,7 @@ import {
   StatusBadge,
 } from "./ui";
 import { formatDate } from "./format";
+import MarksEntryPanel from "./MarksEntryPanel";
 
 const API_URL = "/api/exams/";
 
@@ -65,7 +66,12 @@ export default function ExamsPage() {
       <PageHeader
         crumb="Home / Exams"
         title="Exams"
-        subtitle="View examinations scheduled across campuses."
+        subtitle="Schedule examinations and enter student marks."
+      />
+
+      <MarksEntryPanel
+        exams={rows}
+        onSaved={() => applyFilters(page)}
       />
 
       <div className="panel students-filters">
@@ -83,9 +89,7 @@ export default function ExamsPage() {
                 type="text"
                 placeholder="Search by exam name..."
                 value={search}
-                onChange={(event) =>
-                  setSearch(event.target.value)
-                }
+                onChange={(event) => setSearch(event.target.value)}
               />
             </div>
 
@@ -109,11 +113,7 @@ export default function ExamsPage() {
               Search
             </button>
 
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={clearFilters}
-            >
+            <button type="button" className="secondary-button" onClick={clearFilters}>
               Clear
             </button>
           </div>
@@ -121,11 +121,7 @@ export default function ExamsPage() {
       </div>
 
       <div className="panel">
-        <PanelHeader
-          title="Exam List"
-          subtitle="exams found"
-          count={count}
-        />
+        <PanelHeader title="Exam List" subtitle="exams found" count={count} />
 
         <StateArea
           loading={loading}
@@ -197,9 +193,7 @@ export default function ExamsPage() {
                 page={page}
                 next={next}
                 previous={previous}
-                onPage={(pageNumber) =>
-                  applyFilters(pageNumber)
-                }
+                onPage={(pageNumber) => applyFilters(pageNumber)}
               />
             </>
           )}
