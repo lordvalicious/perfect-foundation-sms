@@ -1,5 +1,6 @@
 import { CalendarDays } from "lucide-react";
 import { useApiList } from "./useApiList";
+import { useAuth } from "../auth";
 import {
   PageHeader,
   PanelHeader,
@@ -14,13 +15,26 @@ const ENTRIES_API_URL = "/api/timetable/entries/";
 export default function TimetablePage() {
   const periods = useApiList(PERIODS_API_URL);
   const entries = useApiList(ENTRIES_API_URL);
+  const { user, hasRole } = useAuth();
+
+  const isTeacher = hasRole(["teacher"]);
+
+  const teacherName = user
+    ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
+    : "";
+
+  const pageTitle = isTeacher ? "My Timetable" : "Timetable";
+
+  const pageSubtitle = isTeacher
+    ? `Welcome, ${teacherName || "Teacher"}. This is your personal class schedule.`
+    : "View class timetables and period schedules.";
 
   return (
     <section className="content">
       <PageHeader
         crumb="Home / Timetable"
-        title="Timetable"
-        subtitle="View class timetables and period schedules."
+        title={pageTitle}
+        subtitle={pageSubtitle}
       />
 
       <div className="panel">
@@ -104,9 +118,9 @@ export default function TimetablePage() {
                     <th>DAY</th>
                     <th>PERIOD</th>
                     <th>TIME</th>
+                    <th>GRADE</th>
                     <th>SUBJECT</th>
                     <th>TEACHER</th>
-                    <th>CLASS</th>
                     <th>SECTION</th>
                     <th>ROOM</th>
                     <th>STATUS</th>
@@ -131,12 +145,24 @@ export default function TimetablePage() {
                       </td>
 
                       <td>
-                        {entry.subject_name || "—"}
+                        <span className="grade-badge">
+                          {entry.class_name || "—"}
+                        </span>
+                      </td>
+
+                      <td>
+                        <strong>
+                          {entry.subject_name || "—"}
+                        </strong>
+
+                        {entry.subject_code && (
+                          <span className="cell-sub">
+                            {entry.subject_code}
+                          </span>
+                        )}
                       </td>
 
                       <td>{entry.teacher_name || "—"}</td>
-
-                      <td>{entry.class_name || "—"}</td>
 
                       <td>{entry.section_name || "—"}</td>
 

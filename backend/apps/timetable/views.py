@@ -1,13 +1,15 @@
 from django.db.models import Q
 from rest_framework import generics
 
-from apps.accounts.permissions import IsStaffRole
+from apps.accounts.permissions import IsAcademicMemberRole
 from apps.accounts.scopes import (
+    get_teacher_profile,
     is_manager,
+    is_parent,
     is_student,
     is_teacher,
+    parent_student_class_ids,
     student_class_ids,
-    teacher_class_ids,
 )
 
 from .models import Period, TimetableEntry
@@ -19,7 +21,7 @@ from .serializers import (
 
 class PeriodListView(generics.ListAPIView):
     serializer_class = PeriodSerializer
-    permission_classes = [IsStaffRole]
+    permission_classes = [IsAcademicMemberRole]
     pagination_class = None
 
     def get_queryset(self):
@@ -35,7 +37,7 @@ class PeriodListView(generics.ListAPIView):
 
 class TimetableEntryListView(generics.ListAPIView):
     serializer_class = TimetableEntrySerializer
-    permission_classes = [IsStaffRole]
+    permission_classes = [IsAcademicMemberRole]
 
     def get_queryset(self):
         queryset = (
@@ -62,13 +64,22 @@ class TimetableEntryListView(generics.ListAPIView):
                     return queryset.none()
 
                 queryset = queryset.filter(class_obj_id__in=class_ids)
-            elif is_teacher(user):
-                class_ids = teacher_class_ids(user)
+            elif is_parent(user):
+                class_ids = parent_student_class_ids(user)
 
                 if not class_ids:
                     return queryset.none()
 
                 queryset = queryset.filter(class_obj_id__in=class_ids)
+            elif is_teacher(user):
+                teacher_profile = get_teacher_profile(user)
+
+                if teacher_profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    teacher=teacher_profile
+                )
 
         day = self.request.query_params.get("day")
 
@@ -89,6 +100,11 @@ class TimetableEntryListView(generics.ListAPIView):
 
         if section:
             queryset = queryset.filter(section_id=section)
+
+        teacher = self.request.query_params.get("teacher")
+
+        if teacher:
+            queryset = queryset.filter(teacher_id=teacher)
 
         search = self.request.query_params.get("search")
 

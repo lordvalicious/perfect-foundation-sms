@@ -73,6 +73,15 @@ class Command(BaseCommand):
             "last_name": "Staff",
             "roles": [Role.STAFF],
         },
+        {
+            "username": "parent",
+            "email": "parent@perfectfoundation.edu",
+            "password": "Parent123!",
+            "first_name": "Guardian",
+            "last_name": "Demo",
+            "roles": [Role.PARENT],
+            "link_guardian": True,
+        },
     ]
 
     def add_arguments(self, parser):
@@ -134,6 +143,36 @@ class Command(BaseCommand):
                     membership=membership,
                     role=role,
                 )
+
+            if item.get("link_guardian"):
+                from django.db.models import Count
+
+                from apps.students.models import Guardian
+
+                guardian = (
+                    Guardian.objects
+                    .filter(user__isnull=True)
+                    .annotate(child_count=Count("students"))
+                    .order_by("child_count", "id")
+                    .first()
+                )
+
+                if guardian is None:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "No unlinked guardian found; "
+                            "the parent demo user has no children."
+                        )
+                    )
+                elif created or not guardian.user_id:
+                    guardian.user = user
+                    guardian.save(update_fields=["user"])
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"linked parent account to guardian "
+                            f"{guardian.name}"
+                        )
+                    )
 
             self.stdout.write(
                 self.style.SUCCESS(

@@ -1,4 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   BrowserRouter,
   Routes,
@@ -6,7 +11,6 @@ import {
   NavLink,
   Navigate,
   useLocation,
-  useNavigate,
 } from "react-router-dom";
 import {
   LayoutDashboard,
@@ -21,12 +25,15 @@ import {
   Settings,
   Bell,
   Search,
-  Menu,
   LogOut,
   CalendarClock,
   ScrollText,
   Layers,
   UserRound,
+  HeartHandshake,
+  Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -42,6 +49,9 @@ import EventsPage from "./pages/EventsPage";
 import AuditLogsPage from "./pages/AuditLogsPage";
 import AssignmentsPage from "./pages/AssignmentsPage";
 import ProfilePage from "./pages/ProfilePage";
+import ProfileModal from "./pages/ProfileModal";
+import StaffPage from "./pages/StaffPage";
+import ParentPortalPage from "./pages/ParentPortalPage";
 
 const API_URL = "/api/dashboard/overview/";
 
@@ -70,14 +80,16 @@ function authHeaders(extra = {}) {
 const navigation = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, roles: [] },
   { label: "My Profile", path: "/profile", icon: UserRound, roles: [] },
+  { label: "Parent Portal", path: "/parent-portal", icon: HeartHandshake, roles: ["parent"] },
   { label: "Students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
   { label: "Exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
-  { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student"] },
+  { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
 ];
@@ -89,6 +101,29 @@ const systemNavigation = [
 
 function Layout({ children }) {
   const { user, logout, hasRole } = useAuth();
+
+  const [collapsed, setCollapsed] = useState(
+    () => localStorage.getItem("sidebar-collapsed") === "1"
+  );
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const toggleSidebar = () => {
+    if (window.matchMedia("(max-width: 960px)").matches) {
+      setMobileOpen((open) => !open);
+    } else {
+      setCollapsed((value) => {
+        const next = !value;
+        localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
+        return next;
+      });
+    }
+  };
+
+  const closeMobileDrawer = () => {
+    if (window.matchMedia("(max-width: 960px)").matches) {
+      setMobileOpen(false);
+    }
+  };
 
   const visibleNavigation = navigation.filter(
     (item) =>
@@ -118,20 +153,28 @@ function Layout({ children }) {
         )
     : "";
 
+  const sidebarClass = [
+    "sidebar",
+    collapsed ? "collapsed" : "",
+    mobileOpen ? "mobile-open" : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
+      <aside className={sidebarClass}>
+        <div className="sidebar-brand">
           <div className="brand-logo">PF</div>
 
-          <div>
+          <div className="sidebar-brand-text">
             <strong>Perfect Foundation</strong>
-            <span>School Management</span>
+            <span>School Management System</span>
           </div>
         </div>
 
-        <nav>
-          <div className="nav-title">MAIN MENU</div>
+        <nav className="sidebar-nav">
+          <span className="sidebar-section-label">Main</span>
 
           {visibleNavigation.map(
             ({ label, path, icon: Icon }) => (
@@ -139,28 +182,34 @@ function Layout({ children }) {
                 key={label}
                 to={path}
                 end={path === "/"}
+                title={label}
+                onClick={closeMobileDrawer}
                 className={({ isActive }) =>
-                  `nav-item ${isActive ? "active" : ""}`
+                  `sidebar-link ${isActive ? "active" : ""}`
                 }
               >
-                <Icon size={19} />
+                <Icon size={18} />
                 <span>{label}</span>
               </NavLink>
             )
           )}
 
-          <div className="nav-title settings-title">SYSTEM</div>
+          <span className="sidebar-section-label">
+            System
+          </span>
 
           {visibleSystemNavigation.map(
             ({ label, path, icon: Icon }) => (
               <NavLink
                 key={label}
                 to={path}
+                title={label}
+                onClick={closeMobileDrawer}
                 className={({ isActive }) =>
-                  `nav-item ${isActive ? "active" : ""}`
+                  `sidebar-link ${isActive ? "active" : ""}`
                 }
               >
-                <Icon size={19} />
+                <Icon size={18} />
                 <span>{label}</span>
               </NavLink>
             )
@@ -168,15 +217,37 @@ function Layout({ children }) {
         </nav>
 
         <div className="sidebar-footer">
-          <div className="school-year">Academic Year</div>
-          <strong>2026–2027</strong>
+          <button
+            className="sidebar-collapse"
+            onClick={toggleSidebar}
+            title={
+              collapsed ? "Expand sidebar" : "Collapse sidebar"
+            }
+          >
+            {collapsed ? (
+              <PanelLeftOpen size={18} />
+            ) : (
+              <PanelLeftClose size={18} />
+            )}
+          </button>
         </div>
       </aside>
 
-      <main className="main">
+      {mobileOpen && (
+        <div
+          className="sidebar-backdrop"
+          onClick={toggleSidebar}
+        />
+      )}
+
+      <div className="app-body">
         <header className="topbar">
-          <button className="mobile-menu">
-            <Menu size={22} />
+          <button
+            className="icon-button sidebar-toggle"
+            onClick={toggleSidebar}
+            title="Toggle navigation"
+          >
+            <Menu size={20} />
           </button>
 
           <div className="search">
@@ -184,8 +255,8 @@ function Layout({ children }) {
             <input placeholder="Search students, teachers..." />
           </div>
 
-          <div className="topbar-right">
-            <button className="icon-button">
+          <div className="topbar-actions">
+            <button className="icon-button" title="Notifications">
               <Bell size={20} />
               <span className="notification-dot" />
             </button>
@@ -217,8 +288,8 @@ function Layout({ children }) {
           </div>
         </header>
 
-        {children}
-      </main>
+        <main className="main">{children}</main>
+      </div>
     </div>
   );
 }
@@ -448,7 +519,6 @@ function Dashboard() {
 
 function StudentsPage() {
   const { hasRole } = useAuth();
-  const navigate = useNavigate();
   const campusSectionRefs = useRef({});
 
   const isStudentSelf =
@@ -485,6 +555,8 @@ function StudentsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [saving, setSaving] = useState(false);
+
+  const [profileView, setProfileView] = useState(null);
 
   const emptyForm = {
     admission_number: "",
@@ -1419,9 +1491,10 @@ function StudentsPage() {
                                   <button
                                     className="table-action"
                                     onClick={() =>
-                                      navigate(
-                                        `/profile/student/${student.id}`
-                                      )
+                                      setProfileView({
+                                        type: "student",
+                                        id: student.id,
+                                      })
                                     }
                                   >
                                     View Profile
@@ -1774,6 +1847,14 @@ function StudentsPage() {
           </div>
         </div>
       )}
+
+      {profileView && (
+        <ProfileModal
+          type={profileView.type}
+          id={profileView.id}
+          onClose={() => setProfileView(null)}
+        />
+      )}
     </section>
   );
 }
@@ -1785,8 +1866,6 @@ function StudentsPage() {
 const TEACHERS_API_URL = "/api/teachers/";
 
 function TeachersPage() {
-  const navigate = useNavigate();
-
   const [teachers, setTeachers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -1799,6 +1878,8 @@ function TeachersPage() {
 
   const [showForm, setShowForm] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState(null);
+
+  const [profileView, setProfileView] = useState(null);
 
   const emptyForm = {
     employee_number: "",
@@ -2472,9 +2553,10 @@ function TeachersPage() {
                       <button
                         className="table-action"
                         onClick={() =>
-                          navigate(
-                            `/profile/teacher/${teacher.id}`
-                          )
+                          setProfileView({
+                            type: "teacher",
+                            id: teacher.id,
+                          })
                         }
                       >
                         View Profile
@@ -2810,6 +2892,14 @@ function TeachersPage() {
           </div>
         </div>
       )}
+
+      {profileView && (
+        <ProfileModal
+          type={profileView.type}
+          id={profileView.id}
+          onClose={() => setProfileView(null)}
+        />
+      )}
     </section>
   );
 }
@@ -2854,6 +2944,10 @@ function Shell() {
           path="/profile/student/:id"
           element={<ProfilePage key={location.pathname} />}
         />
+        <Route
+          path="/profile/staff/:id"
+          element={<ProfilePage key={location.pathname} />}
+        />
 
         <Route
           path="/students"
@@ -2867,10 +2961,28 @@ function Shell() {
         />
 
         <Route
+          path="/parent-portal"
+          element={
+            <RequireRoles roles={["parent"]}>
+              <ParentPortalPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
           path="/teachers"
           element={
             <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
               <TeachersPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/staff"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+              <StaffPage />
             </RequireRoles>
           }
         />
@@ -2923,7 +3035,7 @@ function Shell() {
         <Route
           path="/timetable"
           element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff", "student"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"]}>
               <TimetablePage />
             </RequireRoles>
           }

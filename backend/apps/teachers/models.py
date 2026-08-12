@@ -75,6 +75,24 @@ class Teacher(models.Model):
         default="Teacher",
     )
 
+    department = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    qualification = models.CharField(
+        max_length=200,
+        blank=True,
+    )
+
+    experience_years = models.PositiveIntegerField(
+        default=0,
+    )
+
+    address = models.TextField(
+        blank=True,
+    )
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

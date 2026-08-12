@@ -6,6 +6,14 @@ from apps.schools.models import AcademicYear, Campus, Class, Section
 
 
 class Guardian(models.Model):
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="guardian_profile",
+    )
+
     name = models.CharField(max_length=200)
     relationship = models.CharField(max_length=50)
     phone = models.CharField(max_length=30)
@@ -218,4 +226,50 @@ class Enrollment(models.Model):
             f"{self.class_obj.name} - "
             f"{self.section.name}"
         )
+
+
+class StudentDocument(models.Model):
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="documents",
+    )
+
+    DOCUMENT_TYPE_CHOICES = [
+        ("birth_certificate", "Birth Certificate"),
+        ("b_form", "B-Form / CNIC"),
+        ("report_card", "Report Card"),
+        ("transfer_certificate", "Transfer Certificate"),
+        ("fee_challan", "Fee Challan"),
+        ("medical", "Medical Record"),
+        ("other", "Other"),
+    ]
+
+    document_type = models.CharField(
+        max_length=30,
+        choices=DOCUMENT_TYPE_CHOICES,
+    )
+
+    title = models.CharField(max_length=200)
+    file = models.FileField(
+        upload_to="students/documents/",
+    )
+    notes = models.TextField(blank=True)
+
+    uploaded_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_student_documents",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.student.admission_number} - {self.title}"
 

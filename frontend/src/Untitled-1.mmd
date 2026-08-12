@@ -1,0 +1,109 @@
+---
+references:
+  - "File:
+    /backend/apps/accounts/migrations/0003_staffprofile_photo_user_photo_and_mo\
+    re.py"
+  - "File: /backend/apps/accounts/models.py"
+  - "File: /backend/apps/accounts/permissions.py"
+  - "File: /backend/apps/accounts/scopes.py"
+  - "File: /backend/apps/accounts/serializers.py"
+  - "File: /backend/apps/attendance/views.py"
+  - "File: /backend/apps/dashboard/views.py"
+  - "File: /backend/apps/exams/views.py"
+  - "File: /backend/apps/students/management/commands/seed_students.py"
+  - "File: /backend/apps/students/migrations/0003_student_photo_student_user.py"
+  - "File: /backend/apps/students/models.py"
+  - "File: /backend/apps/students/serializers.py"
+  - "File: /backend/apps/students/urls.py"
+  - "File: /backend/apps/students/views.py"
+  - "File:
+    /backend/apps/teachers/migrations/0004_teacher_photo_teacher_user_teacheras\
+    signment.py"
+  - "File: /backend/apps/teachers/models.py"
+  - "File: /backend/apps/teachers/serializers.py"
+  - "File: /backend/apps/teachers/urls.py"
+  - "File: /backend/apps/teachers/views.py"
+  - "File: /backend/apps/timetable/views.py"
+  - "File: /backend/config/settings/base.py"
+  - "File: /backend/config/urls.py"
+  - "File: /frontend/src/App.jsx"
+  - "File: /frontend/src/auth.jsx"
+  - "File: /frontend/src/pages/AssignmentsPage.jsx"
+  - "File: /frontend/src/pages/ProfilePage.jsx"
+generationTime: 2026-08-12T08:06:25.737Z
+---
+flowchart TD
+    subgraph FE["Frontend"]
+        A["App init: AuthProvider calls /api/auth/me"]
+        B{"Authenticated?"}
+        C["Render Shell / Routes"]
+        D["Login flow: /api/auth/csrf -> /api/auth/login"]
+        E["Render protected pages by role"]
+        F["ProfilePage loads account/profile endpoints"]
+        G["AssignmentsPage loads ref data and list endpoints"]
+        P["ProfileModal for viewing profiles"]
+        Q["StaffPage loads staff data"]
+        T["ParentPortalPage for parent access"]
+    end
+
+    subgraph BE["Backend"]
+        H["config/urls routes API paths"]
+        I["Permission classes evaluate user roles"]
+        J["Scope helpers determine role context and IDs"]
+        K["Views apply role-based filters and query params"]
+        L["Dashboard endpoints return scoped stats"]
+        M["Serializers validate/persist assignments, enrollments"]
+        N["Models: User/Membership/RoleAssignment/Student/Teacher/StaffProfile"]
+        O["seed_students command loops campuses -> Guardian/Student/Enrollment"]
+        R["StaffProfileCRUDSerializer handles staff data"]
+        S["get_teacher_profile function retrieves teacher profile"]
+        U["StaffAttendance model for attendance records"]
+        V["StaffLeave model for leave requests"]
+        W["Guardian model for parent profiles"]
+        X["StudentDocument model for student documents"]
+        Y["AttendanceBulkMarkView for bulk attendance marking"]
+        Z["AttendanceSummaryView for attendance statistics"]
+        AA["AttendanceMonthlyView for monthly attendance breakdown"]
+        AB["dashboard_finance_breakdown for finance data"]
+        AC["PracticalResultListCreateView for practical results"]
+        AD["PracticalResultDetailView for practical result details"]
+    end
+
+    A --> B
+    B -->|Yes| C
+    B -->|No| D
+    C --> E
+    D --> H
+    E --> F
+    E --> G
+    E --> Q
+    E --> T
+    F --> H
+    G --> H
+    Q --> H
+    T --> H
+    H --> I
+    H --> K
+    I -->|role check| K
+    J -->|scope data| K
+    K -->|compute stats| L
+    K -->|serialize actions| M
+    K -->|query models| N
+    N --> I
+    N --> J
+    N --> M
+    N --> R
+    N --> U
+    N --> V
+    N --> W
+    N --> X
+    O --> N
+    F --> P
+    G --> P
+    S --> K
+    Y --> K
+    Z --> K
+    AA --> K
+    AB --> L
+    AC --> K
+    AD --> K

@@ -309,3 +309,157 @@ class StudentResult(models.Model):
             f"{self.exam.name} - "
             f"{self.exam_subject.subject.name}"
         )
+
+
+class PracticalResult(models.Model):
+    """Practical examination marks for a student on an exam subject.
+
+    Practical marks are stored separately from theory (StudentResult)
+    and can be combined with them for a final subject total.
+    """
+
+    GRADE_CHOICES = StudentResult.GRADE_CHOICES
+
+    exam = models.ForeignKey(
+        Exam,
+        on_delete=models.CASCADE,
+        related_name="practical_results",
+    )
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="practical_exam_results",
+    )
+
+    exam_subject = models.ForeignKey(
+        ExamSubject,
+        on_delete=models.CASCADE,
+        related_name="practical_results",
+    )
+
+    obtained_marks = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+    )
+
+    maximum_marks = models.PositiveIntegerField(default=50)
+    passing_marks = models.PositiveIntegerField(default=20)
+
+    is_absent = models.BooleanField(default=False)
+
+    grade = models.CharField(
+        max_length=3,
+        choices=GRADE_CHOICES,
+        blank=True,
+    )
+
+    is_pass = models.BooleanField(default=False)
+
+    remarks = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exam", "student", "exam_subject"],
+                name="unique_student_exam_subject_practical",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+
+        if self.exam_id and self.exam_subject_id:
+            if self.exam_subject.exam_id != self.exam_id:
+                errors["exam_subject"] = (
+                    "The selected subject does not belong to this exam."
+                )
+
+        if self.student_id and self.exam_id:
+            from apps.students.models import Enrollment
+
+            enrolled = Enrollment.objects.filter(
+                student=self.student,
+                academic_year=self.exam.academic_year,
+                campus=self.exam.campus,
+                class_obj=self.exam.class_obj,
+                status="active",
+            ).exists()
+
+            if not enrolled:
+                errors["student"] = (
+                    "The student is not actively enrolled "
+                    "in this exam's class and campus."
+                )
+
+        if self.obtained_marks < 0:
+            errors["obtained_marks"] = (
+                "Obtained marks cannot be negative."
+            )
+
+        if self.maximum_marks <= 0:
+            errors["maximum_marks"] = (
+                "Maximum marks must be greater than zero."
+            )
+
+        if self.passing_marks > self.maximum_marks:
+            errors["passing_marks"] = (
+                "Passing marks cannot exceed maximum marks."
+            )
+
+        if self.is_absent and self.obtained_marks != 0:
+            errors["obtained_marks"] = (
+                "An absent student must have zero obtained marks."
+            )
+
+        if self.exam_subject_id and not self.is_absent:
+            if self.obtained_marks > self.maximum_marks:
+                errors["obtained_marks"] = (
+                    "Obtained marks cannot exceed maximum marks."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+
+        from apps.reportcards.models import GradeBand
+
+        if self.is_absent:
+            self.obtained_marks = Decimal("0.00")
+            self.grade = ""
+            self.is_pass = False
+        else:
+            percentage = (
+                self.obtained_marks / Decimal(str(self.maximum_marks))
+            ) * Decimal("100")
+
+            band = GradeBand.band_for_percentage(percentage)
+
+            self.grade = band.letter_grade if band else ""
+            self.is_pass = self.obtained_marks >= self.passing_marks
+
+        super().save(*args, **kwargs)
+
+    @property
+    def percentage(self):
+        if not self.maximum_marks:
+            return Decimal("0.00")
+
+        return (
+            self.obtained_marks / Decimal(str(self.maximum_marks))
+        ) * Decimal("100")
+
+    def __str__(self):
+        return (
+            f"{self.student.full_name} - "
+            f"{self.exam.name} - "
+            f"{self.exam_subject.subject.name} (Practical)"
+        )

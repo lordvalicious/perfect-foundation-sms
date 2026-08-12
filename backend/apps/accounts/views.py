@@ -3,23 +3,42 @@ from django.contrib.auth import logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
+from django.db.models import Q
 from django.http import JsonResponse
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
-from rest_framework import serializers, status
+from rest_framework import generics, serializers, status
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.audit.models import record_audit
+from apps.accounts.permissions import (
+    IsAcademicMemberRole,
+    IsAdminOrReadOnly,
+    IsAdminRole,
+    IsStaffRole,
+)
 
-from .models import Role, User
+from .models import (
+    Role,
+    StaffAttendance,
+    StaffLeave,
+    StaffProfile,
+    User,
+)
 from .serializers import (
     LoginSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    StaffAttendanceSerializer,
+    StaffLeaveActionSerializer,
+    StaffLeaveSerializer,
+    StaffProfileCRUDSerializer,
+    UserProfileSerializer,
     UserSerializer,
 )
 
@@ -105,6 +124,36 @@ class CurrentUserView(APIView):
 
         return Response(
             UserSerializer(
+                user,
+                context={"request": request},
+            ).data
+        )
+
+
+class UserProfileView(APIView):
+    """Public profile of any user (student / teacher / staff / admin)."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        user = (
+            User.objects.prefetch_related(
+                "memberships__institution",
+                "memberships__role_assignments",
+            )
+            .select_related("staff_profile")
+            .filter(pk=pk)
+            .first()
+        )
+
+        if user is None:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(
+            UserProfileSerializer(
                 user,
                 context={"request": request},
             ).data
@@ -273,3 +322,260 @@ class PasswordResetConfirmView(APIView):
         )
 
         return Response({"detail": "Password has been reset."})
+
+
+class StaffListCreateView(generics.ListCreateAPIView):
+    serializer_class = StaffProfileCRUDSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = StaffProfile.objects.all()
+
+        search = self.request.query_params.get("search")
+
+        if search:
+            queryset = queryset.filter(
+                Q(employee_number__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(phone__icontains=search)
+                | Q(email__icontains=search)
+                | Q(designation__icontains=search)
+                | Q(department__icontains=search)
+            )
+
+        designation = self.request.query_params.get("designation")
+
+        if designation:
+            queryset = queryset.filter(
+                designation__iexact=designation
+            )
+
+        department = self.request.query_params.get("department")
+
+        if department:
+            queryset = queryset.filter(
+                department__iexact=department
+            )
+
+        status_param = self.request.query_params.get("status")
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        campus = self.request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(campus__iexact=campus)
+
+        return queryset
+
+
+class StaffDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StaffProfileCRUDSerializer
+    permission_classes = [IsAdminOrReadOnly]
+    queryset = StaffProfile.objects.all()
+
+
+class StaffMyView(generics.RetrieveAPIView):
+    """The logged-in staff member's own profile."""
+
+    serializer_class = StaffProfileCRUDSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_object(self):
+        profile = getattr(self.request.user, "staff_profile", None)
+
+        if profile is None:
+            raise NotFound(
+                "No staff profile is linked to this account."
+            )
+
+        return profile
+
+
+class StaffAttendanceListCreateView(generics.ListCreateAPIView):
+    serializer_class = StaffAttendanceSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        queryset = StaffAttendance.objects.select_related(
+            "staff",
+            "marked_by",
+        )
+
+        staff = self.request.query_params.get("staff")
+
+        if staff:
+            queryset = queryset.filter(staff_id=staff)
+
+        status_param = self.request.query_params.get("status")
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        date = self.request.query_params.get("date")
+
+        if date:
+            queryset = queryset.filter(date=date)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(marked_by=self.request.user)
+
+
+class StaffAttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StaffAttendanceSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        return StaffAttendance.objects.select_related(
+            "staff",
+            "marked_by",
+        )
+
+    def perform_update(self, serializer):
+        serializer.save(marked_by=self.request.user)
+
+
+class StaffLeaveListCreateView(generics.ListCreateAPIView):
+    serializer_class = StaffLeaveSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        queryset = StaffLeave.objects.select_related(
+            "staff",
+            "reviewed_by",
+        )
+
+        user = self.request.user
+
+        if not user.has_any_role(
+            ["super_admin", "admin", "principal", "hr"]
+        ):
+            profile = getattr(user, "staff_profile", None)
+
+            if profile is not None:
+                queryset = queryset.filter(staff=profile)
+            else:
+                return queryset.none()
+
+        staff = self.request.query_params.get("staff")
+
+        if staff:
+            queryset = queryset.filter(staff_id=staff)
+
+        status_param = self.request.query_params.get("status")
+
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+
+        leave_type = self.request.query_params.get("leave_type")
+
+        if leave_type:
+            queryset = queryset.filter(leave_type=leave_type)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+        staff = getattr(user, "staff_profile", None)
+
+        if staff is None:
+            raise NotFound(
+                "No staff profile is linked to this account."
+            )
+
+        serializer.save(staff=staff)
+
+
+class StaffLeaveDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = StaffLeaveSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        queryset = StaffLeave.objects.select_related(
+            "staff",
+            "reviewed_by",
+        )
+
+        user = self.request.user
+
+        if not user.has_any_role(
+            ["super_admin", "admin", "principal", "hr"]
+        ):
+            profile = getattr(user, "staff_profile", None)
+
+            if profile is not None:
+                queryset = queryset.filter(staff=profile)
+            else:
+                return queryset.none()
+
+        return queryset
+
+
+class StaffLeaveActionView(generics.GenericAPIView):
+    """HR approves or rejects a staff leave request."""
+
+    serializer_class = StaffLeaveActionSerializer
+    permission_classes = [IsStaffRole]
+
+    def post(self, request, pk):
+        reviewer_roles = [
+            "super_admin",
+            "admin",
+            "principal",
+            "vice_principal",
+            "campus_admin",
+            "hr",
+        ]
+
+        if not request.user.has_any_role(reviewer_roles):
+            raise PermissionDenied(
+                "Only HR / administrators can review leave requests."
+            )
+
+        leave = (
+            StaffLeave.objects
+            .select_related("staff")
+            .filter(pk=pk)
+            .first()
+        )
+
+        if leave is None:
+            return Response(
+                {"detail": "Leave request not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        action = serializer.validated_data["action"]
+        review_notes = serializer.validated_data.get("review_notes", "")
+
+        leave.status = (
+            "approved" if action == "approve" else "rejected"
+        )
+        leave.reviewed_by = request.user
+        leave.review_notes = review_notes
+        leave.save()
+
+        record_audit(
+            request=request,
+            action="staff_leave_" + action,
+            model_name="StaffLeave",
+            object_id=str(leave.pk),
+            object_repr=str(leave),
+            details={
+                "staff": leave.staff.employee_number,
+                "leave_type": leave.leave_type,
+                "start_date": str(leave.start_date),
+                "end_date": str(leave.end_date),
+            },
+        )
+
+        return Response(
+            StaffLeaveSerializer(leave).data
+        )

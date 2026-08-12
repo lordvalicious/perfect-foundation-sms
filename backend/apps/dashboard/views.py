@@ -1,13 +1,19 @@
+from decimal import Decimal
+
 from django.db.models import Sum
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.scopes import (
+    get_guardian_profile,
     get_student_profile,
     is_manager,
+    is_parent,
     is_student,
     is_teacher,
+    parent_student_ids,
+    parent_student_class_ids,
     student_class_ids,
     teacher_class_ids,
     teacher_student_ids,
@@ -44,6 +50,37 @@ def dashboard_overview(request):
 
         data = {
             "students": {"total": 1, "active": 1},
+            "teachers": {
+                "total": enrollments.values(
+                    "class_obj"
+                ).distinct().count(),
+                "active": 0,
+            },
+            "campuses": enrollments.values("campus").distinct().count(),
+            "classes": enrollments.values("class_obj").distinct().count(),
+            "sections": enrollments.values("section").distinct().count(),
+            "enrollments": enrollments.count(),
+        }
+
+        return JsonResponse(data)
+
+    if is_parent(user):
+        student_ids = parent_student_ids(user)
+        enrollments = Enrollment.objects.filter(
+            student_id__in=student_ids,
+            status="active",
+        )
+
+        data = {
+            "students": {
+                "total": len(student_ids),
+                "active": len(
+                    Student.objects.filter(
+                        pk__in=student_ids,
+                        status="active",
+                    )
+                ),
+            },
             "teachers": {
                 "total": enrollments.values(
                     "class_obj"
@@ -126,6 +163,15 @@ def dashboard_attendance(request):
             )
 
         queryset = queryset.filter(student=profile)
+    elif is_parent(user):
+        student_ids = parent_student_ids(user)
+
+        if not student_ids:
+            return JsonResponse(
+                {"present": 0, "absent": 0, "late": 0, "leave": 0}
+            )
+
+        queryset = queryset.filter(student_id__in=student_ids)
     elif is_teacher(user):
         student_ids = teacher_student_ids(user)
 
@@ -158,18 +204,128 @@ def dashboard_finance(request):
         or 0
     )
 
+    invoices = Invoice.objects.all()
+
+    total_billed = Decimal("0.00")
+    outstanding_total = Decimal("0.00")
+
+    for invoice in invoices:
+        total_billed += invoice.total_amount
+        outstanding_total += invoice.balance
+
     data = {
-        "invoices": Invoice.objects.count(),
-        "paid": Invoice.objects.filter(
-            status="paid"
-        ).count(),
-        "partial": Invoice.objects.filter(
-            status="partial"
-        ).count(),
-        "issued": Invoice.objects.filter(
-            status="issued"
-        ).count(),
-        "payments_collected": payments_total,
+        "invoices": invoices.count(),
+        "paid": invoices.filter(status="paid").count(),
+        "partial": invoices.filter(status="partial").count(),
+        "issued": invoices.filter(status="issued").count(),
+        "overdue": invoices.filter(status="overdue").count(),
+        "cancelled": invoices.filter(status="cancelled").count(),
+        "total_billed": str(total_billed),
+        "payments_collected": str(payments_total),
+        "outstanding": str(outstanding_total),
+    }
+
+    return JsonResponse(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dashboard_finance_breakdown(request):
+    """Collection by campus / method, monthly collection and
+    outstanding student balances. School-wide finance only."""
+    user = request.user
+
+    if is_parent(user) or is_student(user):
+        return JsonResponse(
+            {"detail": "Finance breakdown is not available."},
+            status=403,
+        )
+
+    invoices = Invoice.objects.select_related(
+        "enrollment__campus",
+        "student",
+    ).prefetch_related("payments")
+
+    campus_totals = {}
+    method_totals = {}
+    monthly_totals = {}
+
+    for invoice in invoices:
+        campus_name = invoice.enrollment.campus.name
+
+        paid = invoice.paid_amount
+
+        entry = campus_totals.setdefault(
+            campus_name,
+            {"billed": Decimal("0.00"), "collected": Decimal("0.00")},
+        )
+        entry["billed"] += invoice.total_amount
+        entry["collected"] += paid
+
+    completed_payments = Payment.objects.filter(
+        status="completed"
+    ).select_related("invoice__enrollment__campus")
+
+    for payment in completed_payments:
+        method = payment.get_payment_method_display()
+        method_totals[method] = (
+            method_totals.get(method, Decimal("0.00"))
+            + payment.amount
+        )
+
+        month_key = payment.payment_date.strftime("%Y-%m")
+        monthly_totals[month_key] = (
+            monthly_totals.get(month_key, Decimal("0.00"))
+            + payment.amount
+        )
+
+    outstanding_rows = []
+
+    for invoice in invoices:
+        balance = invoice.balance
+
+        if balance > 0:
+            outstanding_rows.append(
+                {
+                    "student_id": invoice.student_id,
+                    "student_name": invoice.student.full_name,
+                    "admission_number": invoice.student.admission_number,
+                    "campus": invoice.enrollment.campus.name,
+                    "invoice_number": invoice.invoice_number,
+                    "balance": str(balance),
+                }
+            )
+
+    outstanding_rows.sort(
+        key=lambda row: Decimal(row["balance"]),
+        reverse=True,
+    )
+
+    data = {
+        "by_campus": [
+            {
+                "campus": name,
+                "billed": str(values["billed"]),
+                "collected": str(values["collected"]),
+                "outstanding": str(
+                    values["billed"] - values["collected"]
+                ),
+            }
+            for name, values in sorted(campus_totals.items())
+        ],
+        "by_method": [
+            {"method": name, "total": str(total)}
+            for name, total in sorted(
+                method_totals.items(),
+                key=lambda item: item[1],
+                reverse=True,
+            )
+        ],
+        "monthly": [
+            {"month": name, "total": str(total)}
+            for name, total in sorted(monthly_totals.items())
+        ],
+        "outstanding_students": outstanding_rows[:25],
     }
 
     return JsonResponse(data)
@@ -203,6 +359,21 @@ def dashboard_exams(request):
             )
 
         results_queryset = results_queryset.filter(student=profile)
+    elif is_parent(user):
+        student_ids = parent_student_ids(user)
+        class_ids = parent_student_class_ids(user)
+
+        if class_ids:
+            exams_queryset = exams_queryset.filter(
+                class_obj_id__in=class_ids
+            )
+
+        if student_ids:
+            results_queryset = results_queryset.filter(
+                student_id__in=student_ids
+            )
+        else:
+            results_queryset = results_queryset.none()
     elif is_teacher(user):
         student_ids = teacher_student_ids(user)
         class_ids = teacher_class_ids(user)
