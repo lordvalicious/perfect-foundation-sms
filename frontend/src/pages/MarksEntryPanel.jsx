@@ -168,6 +168,8 @@ export default function MarksEntryPanel({ exams, onSaved }) {
 
     const theoryErrors = [];
     const practicalErrors = [];
+    const createdTheory = {};
+    const createdPractical = {};
 
     for (const student of roster) {
       const entry = existing[student.id] || {};
@@ -185,9 +187,11 @@ export default function MarksEntryPanel({ exams, onSaved }) {
           remarks: entry.remarks || "",
         };
 
+        const theoryId = entry.theory_id || createdTheory[student.id];
+
         try {
-          if (entry.theory_id) {
-            const response = await fetch(`${RESULTS_URL}${entry.theory_id}/`, {
+          if (theoryId) {
+            const response = await fetch(`${RESULTS_URL}${theoryId}/`, {
               method: "PATCH",
               credentials: "include",
               headers: jsonHeaders(),
@@ -209,7 +213,7 @@ export default function MarksEntryPanel({ exams, onSaved }) {
               theoryErrors.push(`${student.full_name}: POST failed`);
             } else {
               const data = await response.json();
-              entry.theory_id = data.id;
+              createdTheory[student.id] = data.id;
             }
           }
         } catch {
@@ -229,10 +233,13 @@ export default function MarksEntryPanel({ exams, onSaved }) {
           remarks: "",
         };
 
+        const practicalId =
+          entry.practical_id || createdPractical[student.id];
+
         try {
-          if (entry.practical_id) {
+          if (practicalId) {
             const response = await fetch(
-              `${PRACTICAL_URL}${entry.practical_id}/`,
+              `${PRACTICAL_URL}${practicalId}/`,
               {
                 method: "PATCH",
                 credentials: "include",
@@ -254,12 +261,34 @@ export default function MarksEntryPanel({ exams, onSaved }) {
 
             if (!response.ok) {
               practicalErrors.push(`${student.full_name}: POST failed`);
+            } else {
+              const data = await response.json();
+              createdPractical[student.id] = data.id;
             }
           }
         } catch {
           practicalErrors.push(`${student.full_name}: network error`);
         }
       }
+    }
+
+    if (Object.keys(createdTheory).length || Object.keys(createdPractical).length) {
+      setExisting((previous) => {
+        const next = { ...previous };
+
+        for (const [studentId, id] of Object.entries(createdTheory)) {
+          next[studentId] = { ...(next[studentId] || {}), theory_id: id };
+        }
+
+        for (const [studentId, id] of Object.entries(createdPractical)) {
+          next[studentId] = {
+            ...(next[studentId] || {}),
+            practical_id: id,
+          };
+        }
+
+        return next;
+      });
     }
 
     setSaving(false);

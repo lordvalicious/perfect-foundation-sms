@@ -1,7 +1,6 @@
 import { useState } from "react";
 import {
   BarChart3,
-  FileSpreadsheet,
   Download,
   ClipboardCheck,
   GraduationCap,
@@ -10,7 +9,7 @@ import {
   FileText,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
-import { formatCurrency, formatDate } from "./format";
+import { formatCurrency } from "./format";
 import { apiDownload } from "../api";
 
 const BASE = "/api/reports/";

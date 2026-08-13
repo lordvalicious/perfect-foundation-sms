@@ -454,7 +454,6 @@ export default function FinancePage() {
 
   const [dashboard, setDashboard] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
-  const [breakdownError, setBreakdownError] = useState("");
 
   const [paymentInvoice, setPaymentInvoice] = useState(null);
 
@@ -467,7 +466,7 @@ export default function FinancePage() {
     fetch(DASHBOARD_BREAKDOWN_URL, { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
       .then(setBreakdown)
-      .catch(() => setBreakdownError("Unable to load finance breakdown."));
+      .catch(() => {});
   };
 
   const applyInvoices = (pageNumber = 1) => {

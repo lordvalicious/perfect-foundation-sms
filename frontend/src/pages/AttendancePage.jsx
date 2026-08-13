@@ -1,5 +1,5 @@
-import { useCallback, useState } from "react";
-import { Search, ClipboardCheck, CalendarCheck } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Search, CalendarCheck } from "lucide-react";
 import { useApiList } from "./useApiList";
 import {
   PageHeader,
@@ -88,6 +88,10 @@ function MarkAttendance({ onSaved }) {
       })
       .catch(() => {});
   };
+
+  useEffect(() => {
+    loadOptions();
+  }, []);
 
   const loadRoster = () => {
     if (!campus || !classObj || !section) {
