@@ -28,8 +28,12 @@ CSRF_TRUSTED_ORIGINS = [
     if origin
 ]
 
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+SESSION_COOKIE_SECURE = (
+    os.environ.get("DJANGO_SESSION_COOKIE_SECURE", "1") == "1"
+)
+CSRF_COOKIE_SECURE = (
+    os.environ.get("DJANGO_CSRF_COOKIE_SECURE", "1") == "1"
+)
 # The frontend reads the csrf token from document.cookie and sends
 # it back as the X-CSRFToken header, so it must not be HttpOnly.
 CSRF_COOKIE_HTTPONLY = False
@@ -40,7 +44,10 @@ SECURE_PROXY_SSL_HEADER = (
     "https",
 )
 
-SECURE_SSL_REDIRECT = True
+# Set to 0 when testing locally over plain HTTP (no terminating proxy).
+SECURE_SSL_REDIRECT = (
+    os.environ.get("DJANGO_SECURE_SSL_REDIRECT", "1") == "1"
+)
 
 SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
@@ -68,6 +75,14 @@ MEDIA_ROOT = os.environ.get(
     "DJANGO_MEDIA_ROOT",
     str(BASE_DIR / "media"),
 )
+
+# Transactional email via SMTP (set the DJANGO_EMAIL_* variables).
+EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+EMAIL_HOST = os.environ.get("DJANGO_EMAIL_HOST", "")
+EMAIL_PORT = int(os.environ.get("DJANGO_EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("DJANGO_EMAIL_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("DJANGO_EMAIL_PASSWORD", "")
+EMAIL_USE_TLS = os.environ.get("DJANGO_EMAIL_USE_TLS", "1") == "1"
 
 LOGGING = {
     "version": 1,

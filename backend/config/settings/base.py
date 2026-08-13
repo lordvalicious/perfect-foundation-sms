@@ -212,10 +212,9 @@ DEFAULT_FROM_EMAIL = os.environ.get(
     "no-reply@perfectfoundation.edu",
 )
 
-MAILERS = {
-    "default": {
-        "BACKEND": (
-            "django.core.mail.backends.console.EmailBackend"
-        ),
-    },
-}
+# Development default: print emails to the console.
+# config.settings.production switches to SMTP.
+EMAIL_BACKEND = os.environ.get(
+    "DJANGO_EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
