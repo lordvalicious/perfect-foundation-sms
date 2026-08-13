@@ -35,10 +35,8 @@ services:
     dockerfilePath: Dockerfile
     region: singapore
     healthCheckPath: /api/health/
-    # Runs before each deploy: applies migrations + collects static files.
-    preDeployCommand: sh ./startup.sh
-    # Docker services use `dockerCommand` (overrides the Dockerfile CMD).
-    # Binds to Render's $PORT so the health check / routing works.
+    # Note: free-tier services don't support `preDeployCommand`; migrations
+    # + collectstatic are handled at runtime by the dockerCommand below.
     dockerCommand: sh ./startup.sh && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120
     envVars:
       - key: DJANGO_SETTINGS_MODULE
