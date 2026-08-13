@@ -51,9 +51,8 @@ services:
       # the URL your users open in the browser.
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
         value: https://perfect-foundation-sms.vercel.app
-      # Neon free Postgres. This value is NOT used for the VPS deployment
-      # (the connection string lives in the server's backend/.env, which is
-      # gitignored). If you ever use this Render blueprint, paste your Neon
-      # connection string here before deploying.
+      # Neon free Postgres. Keep the connection string from the Neon
+      # console (must include ?sslmode=require). Can be overridden later
+      # in Render Dashboard -> Environment.
       - key: DATABASE_URL
-        value: REPLACE_ME
+        value: postgresql://neondb_owner:npg_QyqMOIkYe41d@ep-sweet-sky-azl6rk67-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
