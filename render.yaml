@@ -29,6 +29,7 @@ services:
     name: perfect-foundation-backend
     runtime: docker
     repo: https://github.com/lordvalicious/perfect-foundation-sms
+    branch: Improvement-2
     plan: free
     rootDir: backend
     dockerfilePath: Dockerfile
@@ -36,7 +37,9 @@ services:
     healthCheckPath: /api/health/
     # Runs before each deploy: applies migrations + collects static files.
     preDeployCommand: sh ./startup.sh
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120
+    # Docker services use `dockerCommand` (overrides the Dockerfile CMD).
+    # Binds to Render's $PORT so the health check / routing works.
+    dockerCommand: sh ./startup.sh && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 3 --timeout 120
     envVars:
       - key: DJANGO_SETTINGS_MODULE
         value: config.settings.production
@@ -54,4 +57,4 @@ services:
       # your Neon project (must include ?sslmode=require). You can also
       # set/override this later in Render Dashboard -> Environment.
       - key: DATABASE_URL
-        value: postgresql://neondb_owner:npg_3YCciIVXQK2j@ep-shiny-night-azriqmle-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+        value: postgresql://neondb_owner:npg_QyqMOIkYe41d@ep-sweet-sky-azl6rk67-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
