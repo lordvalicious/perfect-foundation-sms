@@ -1,0 +1,24 @@
+# systemd unit for the Perfect Foundation Django backend (gunicorn).
+# Place in /etc/systemd/system/perfect-foundation.service
+#
+#   sudo cp backend/deploy/perfect-foundation.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now perfect-foundation
+
+[Unit]
+Description=Perfect Foundation Django backend (gunicorn)
+After=network.target
+
+[Service]
+# Run as a dedicated, unprivileged user.
+User=perfect
+Group=perfect
+WorkingDirectory=/opt/perfect-foundation/backend
+# Reads the settings from the gitignored backend/.env file.
+EnvironmentFile=/opt/perfect-foundation/backend/.env
+ExecStart=/opt/perfect-foundation/backend/.venv/bin/gunicorn config.wsgi:application --bind 127.0.0.1:8000 --workers 3 --timeout 120
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
