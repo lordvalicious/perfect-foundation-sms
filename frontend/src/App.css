@@ -3198,6 +3198,22 @@ button {
   min-width: 240px;
 }
 
+.report-stack .report-content {
+  margin-top: 18px;
+}
+
+.report-stack .report-content:first-child {
+  margin-top: 0;
+}
+
+.report-stack .report-content .dashboard-grid {
+  display: none;
+}
+
+.report-stack .report-content:first-child .dashboard-grid {
+  display: grid;
+}
+
 /* =========================
    GLOBAL SEARCH + NOTIFICATIONS
 ========================= */

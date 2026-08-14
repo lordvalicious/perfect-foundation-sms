@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   BarChart3,
   Download,
@@ -7,6 +7,10 @@ import {
   Wallet,
   Users,
   FileText,
+  PieChart,
+  Banknote,
+  UserCheck,
+  Tags,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
@@ -45,6 +49,30 @@ const REPORTS = [
     title: "Staff Report",
     icon: Users,
   },
+  {
+    key: "subjects",
+    url: "subjects/",
+    title: "Subject Performance",
+    icon: PieChart,
+  },
+  {
+    key: "payments",
+    url: "payments/",
+    title: "Payment Methods",
+    icon: Banknote,
+  },
+  {
+    key: "student-status",
+    url: "student-status/",
+    title: "Student Status",
+    icon: UserCheck,
+  },
+  {
+    key: "fee-categories",
+    url: "fee-categories/",
+    title: "Fee Categories",
+    icon: Tags,
+  },
 ];
 
 export default function ReportsPage() {
@@ -53,38 +81,73 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [exam, setExam] = useState("");
+  const [exams, setExams] = useState([]);
   const [downloading, setDownloading] = useState(false);
 
-  const load = (key) => {
-    const config = REPORTS.find((item) => item.key === key);
+  const load = useCallback(
+    (key) => {
+      const config = REPORTS.find((item) => item.key === key);
 
-    setLoading(true);
-    setError("");
+      setLoading(true);
+      setError("");
 
-    const params = new URLSearchParams();
+      const params = new URLSearchParams();
 
-    if (key === "results" && exam) {
-      params.append("exam", exam);
-    }
+      if (key === "results" || key === "subjects") {
+        if (exam) {
+          params.append("exam", exam);
+        }
+      }
 
-    const query = params.toString() ? `?${params.toString()}` : "";
+      const query = params.toString() ? `?${params.toString()}` : "";
 
-    fetch(`${BASE}${config.url}${query}`, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : {}))
+      fetch(`${BASE}${config.url}${query}`, { credentials: "include" })
+        .then((response) => (response.ok ? response.json() : {}))
+        .then((json) => {
+          setData((previous) => ({ ...previous, [key]: json }));
+          setLoading(false);
+        })
+        .catch((err) => {
+          setError(err.message);
+          setLoading(false);
+        });
+    },
+    [exam]
+  );
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads the default report on mount
+    load("enrollment");
+  }, [load]);
+
+  useEffect(() => {
+    fetch("/api/exams/?page_size=500", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : { results: [] }))
       .then((json) => {
-        setData((previous) => ({ ...previous, [key]: json }));
-        setLoading(false);
+        const withResults = (json.results || [])
+          .filter((examItem) => examItem.result_count > 0)
+          .sort((a, b) => b.result_count - a.result_count);
+
+        setExams(withResults);
+
+        if (withResults.length > 0) {
+          setExam(String(withResults[0].id));
+        }
       })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  };
+      .catch(() => setExams([]));
+  }, []);
+
+  useEffect(() => {
+    if ((active === "results" || active === "subjects") && exam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reloads the report when the exam changes
+      load(active);
+    }
+  }, [active, exam, load]);
 
   const switchReport = (key) => {
     setActive(key);
 
-    if (data[key] === undefined) {
+    if (key !== "results" && key !== "subjects" && data[key] === undefined) {
       load(key);
     }
   };
@@ -96,8 +159,10 @@ export default function ReportsPage() {
 
     const params = new URLSearchParams();
 
-    if (active === "results" && exam) {
-      params.append("exam", exam);
+    if (active === "results" || active === "subjects") {
+      if (exam) {
+        params.append("exam", exam);
+      }
     }
 
     params.append("format", "csv");
@@ -198,42 +263,66 @@ export default function ReportsPage() {
             />
           )}
 
-          {active === "results" && (
+          {(active === "results" || active === "subjects") && (
             <div className="report-results">
               <div className="filter-row">
-                <input
-                  type="text"
-                  placeholder="Exam ID (required for results report)"
+                <select
                   value={exam}
                   onChange={(event) => setExam(event.target.value)}
-                />
+                >
+                  {exams.length === 0 && <option value="">No exams with results</option>}
 
-                <button type="button" className="primary-button" onClick={() => load("results")}>
-                  Load
-                </button>
+                  {exams.map((item) => (
+                    <option key={item.id} value={String(item.id)}>
+                      {item.name} - {item.exam_type_display} ({item.academic_year_name})
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <ReportContent
-                summary={[
-                  { label: "Students", value: current.summary?.total_students ?? 0 },
-                  { label: "Passed", value: current.summary?.passed ?? 0 },
-                  { label: "Pass Rate", value: current.summary?.pass_rate != null ? `${current.summary.pass_rate}%` : 0 },
-                  { label: "Average %", value: current.summary?.average_percentage ?? 0 },
-                  { label: "Highest", value: current.summary?.highest ?? 0 },
-                  { label: "Lowest", value: current.summary?.lowest ?? 0 },
-                ]}
-                headers={["Admission No", "Student", "Total", "Max", "Percentage", "Grade", "Result", "Position"]}
-                rows={(current.students || []).map((row) => [
-                  row.admission_number,
-                  row.student,
-                  row.total_marks,
-                  row.maximum_marks,
-                  `${row.percentage}%`,
-                  row.grade,
-                  row.result,
-                  row.position,
-                ])}
-              />
+              {active === "results" && (
+                <ReportContent
+                  summary={[
+                    { label: "Students", value: current.summary?.total_students ?? 0 },
+                    { label: "Passed", value: current.summary?.passed ?? 0 },
+                    { label: "Pass Rate", value: current.summary?.pass_rate != null ? `${current.summary.pass_rate}%` : 0 },
+                    { label: "Average %", value: current.summary?.average_percentage ?? 0 },
+                    { label: "Highest", value: current.summary?.highest ?? 0 },
+                    { label: "Lowest", value: current.summary?.lowest ?? 0 },
+                  ]}
+                  headers={["Admission No", "Student", "Total", "Max", "Percentage", "Grade", "Result", "Position"]}
+                  rows={(current.students || []).map((row) => [
+                    row.admission_number,
+                    row.student,
+                    row.total_marks,
+                    row.maximum_marks,
+                    `${row.percentage}%`,
+                    row.grade,
+                    row.result,
+                    row.position,
+                  ])}
+                />
+              )}
+
+              {active === "subjects" && (
+                <ReportContent
+                  summary={[
+                    { label: "Subjects", value: current.summary?.subjects ?? 0 },
+                    { label: "Results", value: current.summary?.results ?? 0 },
+                    { label: "Pass Rate", value: current.summary?.pass_rate != null ? `${current.summary.pass_rate}%` : 0 },
+                    { label: "Average %", value: current.summary?.average_percentage ?? 0 },
+                  ]}
+                  headers={["Subject", "Students", "Average %", "Pass Rate %", "Highest %", "Lowest %"]}
+                  rows={(current.subjects || []).map((row) => [
+                    row.subject,
+                    row.students,
+                    row.average_percentage,
+                    `${row.pass_rate}%`,
+                    row.highest,
+                    row.lowest,
+                  ])}
+                />
+              )}
             </div>
           )}
 
@@ -268,13 +357,82 @@ export default function ReportsPage() {
               ])}
             />
           )}
+
+          {active === "payments" && (
+            <div className="report-stack">
+              <ReportContent
+                summary={[
+                  { label: "Total Collected", value: formatCurrency(current.summary?.total_collected) },
+                  { label: "Methods", value: current.summary?.methods ?? 0 },
+                ]}
+                headers={["Method", "Payments", "Collected"]}
+                rows={(current.by_method || []).map((row) => [
+                  row.method,
+                  row.payments,
+                  formatCurrency(row.collected),
+                ])}
+              />
+
+              <ReportContent
+                headers={["Campus", "Payments", "Collected"]}
+                rows={(current.by_campus || []).map((row) => [
+                  row.campus,
+                  row.payments,
+                  formatCurrency(row.collected),
+                ])}
+              />
+            </div>
+          )}
+
+          {active === "student-status" && (
+            <ReportContent
+              summary={[
+                { label: "Total Students", value: current.total_students ?? 0 },
+                ...(current.statuses || []).map((item) => ({
+                  label: item.status,
+                  value: item.count,
+                })),
+              ]}
+              headers={["Campus", "Status", "Count"]}
+              rows={(current.rows || []).map((row) => [
+                row.campus,
+                row.status,
+                row.count,
+              ])}
+            />
+          )}
+
+          {active === "fee-categories" && (
+            <div className="report-stack">
+              <ReportContent
+                summary={[
+                  { label: "Total Invoiced", value: formatCurrency(current.summary?.total_invoiced) },
+                  { label: "Categories", value: current.summary?.categories ?? 0 },
+                ]}
+                headers={["Fee Category", "Invoiced"]}
+                rows={(current.by_category || []).map((row) => [
+                  row.category,
+                  formatCurrency(row.invoiced),
+                ])}
+              />
+
+              <ReportContent
+                headers={["Fee Category", "Campus", "Invoiced"]}
+                rows={(current.by_campus_category || []).map((row) => [
+                  row.category,
+                  row.campus,
+                  formatCurrency(row.invoiced),
+                ])}
+              />
+            </div>
+          )}
         </StateArea>
       </div>
     </section>
   );
 }
 
-function ReportContent({ summary, headers, rows }) {
+function ReportContent({ summary = [], headers, rows }) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">

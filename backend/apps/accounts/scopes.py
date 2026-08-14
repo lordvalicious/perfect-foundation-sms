@@ -83,18 +83,60 @@ def teacher_class_ids(user):
     )
 
 
+def teacher_can_access_section(user, class_id, section_id):
+    """Whether the user is the class teacher of this exact class/section."""
+    profile = get_teacher_profile(user)
+
+    if profile is None:
+        return False
+
+    from apps.teachers.models import TeacherAssignment
+
+    return (
+        TeacherAssignment.objects.filter(
+            teacher=profile,
+            role="class_teacher",
+            status="active",
+            class_obj_id=class_id,
+            section_id=section_id,
+        ).exists()
+    )
+
+
+def teacher_section_pairs(user):
+    """(class, section) pairs the user is the class teacher of (active year)."""
+    profile = get_teacher_profile(user)
+
+    if profile is None:
+        return []
+
+    from apps.teachers.models import TeacherAssignment
+
+    return list(
+        TeacherAssignment.objects.filter(
+            teacher=profile,
+            role="class_teacher",
+            status="active",
+        ).values_list("class_obj_id", "section_id")
+    )
+
+
 def teacher_student_ids(user):
     """Student ids enrolled (active) in the teacher's class(es)."""
-    class_ids = teacher_class_ids(user)
+    pairs = teacher_section_pairs(user)
 
-    if not class_ids:
+    if not pairs:
         return []
 
     from apps.students.models import Enrollment
 
+    q = Q()
+    for class_id, section_id in pairs:
+        q |= Q(class_obj_id=class_id, section_id=section_id)
+
     return list(
         Enrollment.objects.filter(
-            class_obj_id__in=class_ids,
+            q,
             status="active",
         ).values_list("student_id", flat=True)
     )

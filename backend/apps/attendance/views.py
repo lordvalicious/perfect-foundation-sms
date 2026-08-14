@@ -19,7 +19,7 @@ from apps.accounts.scopes import (
     is_student,
     is_teacher,
     parent_student_ids,
-    teacher_class_ids,
+    teacher_can_access_section,
     teacher_student_ids,
 )
 from apps.audit.models import record_audit
@@ -163,7 +163,11 @@ class AttendanceBulkMarkView(APIView):
             )
 
         if not is_manager(user):
-            if int(class_obj) not in teacher_class_ids(user):
+            if not teacher_can_access_section(
+                user,
+                int(class_obj),
+                int(section),
+            ):
                 return Response(
                     {
                         "detail": (
@@ -404,7 +408,11 @@ class AttendanceMonthlyView(APIView):
             queryset = queryset.filter(class_obj_id=class_obj)
 
             if not is_manager(user):
-                if int(class_obj) not in teacher_class_ids(user):
+                if not teacher_can_access_section(
+                    user,
+                    int(class_obj),
+                    int(section) if section else None,
+                ):
                     return Response(
                         {
                             "detail": (

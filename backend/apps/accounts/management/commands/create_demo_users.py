@@ -56,6 +56,7 @@ class Command(BaseCommand):
             "first_name": "Classroom",
             "last_name": "Teacher",
             "roles": [Role.TEACHER],
+            "link_teacher": True,
         },
         {
             "username": "student",
@@ -64,6 +65,7 @@ class Command(BaseCommand):
             "first_name": "Student",
             "last_name": "User",
             "roles": [Role.STUDENT],
+            "link_student": True,
         },
         {
             "username": "staff",
@@ -143,6 +145,60 @@ class Command(BaseCommand):
                     membership=membership,
                     role=role,
                 )
+
+            if item.get("link_teacher"):
+                from apps.teachers.models import Teacher
+
+                teacher = (
+                    Teacher.objects.filter(user__isnull=True)
+                    .order_by("id")
+                    .first()
+                )
+
+                if teacher is None:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "No unlinked teacher profile found; "
+                            "the teacher demo user has no profile."
+                        )
+                    )
+                else:
+                    teacher.user = user
+                    teacher.membership = membership
+                    teacher.save(update_fields=["user", "membership"])
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"linked teacher account to "
+                            f"{teacher.full_name}"
+                        )
+                    )
+
+            if item.get("link_student"):
+                from apps.students.models import Student
+
+                student = (
+                    Student.objects.filter(user__isnull=True)
+                    .order_by("id")
+                    .first()
+                )
+
+                if student is None:
+                    self.stdout.write(
+                        self.style.WARNING(
+                            "No unlinked student profile found; "
+                            "the student demo user has no profile."
+                        )
+                    )
+                else:
+                    student.user = user
+                    student.membership = membership
+                    student.save(update_fields=["user", "membership"])
+                    self.stdout.write(
+                        self.style.SUCCESS(
+                            f"linked student account to "
+                            f"{student.full_name}"
+                        )
+                    )
 
             if item.get("link_guardian"):
                 from django.db.models import Count

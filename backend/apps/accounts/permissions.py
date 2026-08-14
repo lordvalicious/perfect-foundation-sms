@@ -225,3 +225,38 @@ class IsFinanceReaderRole(BasePermission):
             self.roles,
             institution=getattr(request, "institution", None),
         )
+
+
+class IsAnnouncementRole(BasePermission):
+    """
+    Announcements are readable by every active member of the school
+    (scoped by the view), but only managers/accounts staff may create,
+    edit or delete them.
+    """
+
+    read_roles = IsAcademicMemberRole.roles
+    write_roles = [
+        "super_admin",
+        "admin",
+        "principal",
+        "vice_principal",
+        "campus_admin",
+        "academic",
+        "accountant",
+        "hr",
+    ]
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+
+        roles = (
+            self.read_roles
+            if request.method in SAFE_METHODS
+            else self.write_roles
+        )
+
+        return request.user.has_any_role(
+            roles,
+            institution=getattr(request, "institution", None),
+        )

@@ -45,6 +45,7 @@ export default function AuditLogsPage() {
   }, [actionFilter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- fires a debounced data fetch
     loadLogs();
   }, [loadLogs]);
 

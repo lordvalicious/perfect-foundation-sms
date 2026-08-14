@@ -1,6 +1,7 @@
 from django.db.models import Q
 from rest_framework import generics, status
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
 from apps.accounts.permissions import IsAcademicMemberRole, IsTeacherRole
@@ -51,9 +52,15 @@ def teacher_can_manage_exam_subject(user, exam_subject):
     ).exists()
 
 
+class ExamListPagination(PageNumberPagination):
+    page_size_query_param = "page_size"
+    max_page_size = 500
+
+
 class ExamListView(generics.ListAPIView):
     serializer_class = ExamSerializer
     permission_classes = [IsAcademicMemberRole]
+    pagination_class = ExamListPagination
 
     def get_queryset(self):
         queryset = (

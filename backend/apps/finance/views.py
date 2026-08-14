@@ -10,8 +10,10 @@ from apps.accounts.permissions import (
     IsFinanceReaderRole,
 )
 from apps.accounts.scopes import (
+    get_student_profile,
     is_manager,
     is_parent,
+    is_student,
     parent_student_ids,
 )
 from apps.audit.models import record_audit
@@ -55,6 +57,13 @@ class InvoiceListView(generics.ListAPIView):
                     return queryset.none()
 
                 queryset = queryset.filter(student_id__in=student_ids)
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
 
         search = self.request.query_params.get("search")
 
@@ -101,6 +110,13 @@ class PaymentListView(generics.ListAPIView):
                 queryset = queryset.filter(
                     invoice__student_id__in=student_ids
                 )
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(invoice__student=profile)
 
         search = self.request.query_params.get("search")
 
@@ -167,6 +183,13 @@ class InvoiceDetailView(generics.RetrieveAPIView):
                 queryset = queryset.filter(
                     student_id__in=student_ids
                 )
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(student=profile)
 
         return queryset
 
@@ -216,6 +239,13 @@ class PaymentDetailView(generics.RetrieveAPIView):
                 queryset = queryset.filter(
                     invoice__student_id__in=student_ids
                 )
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if profile is None:
+                    return queryset.none()
+
+                queryset = queryset.filter(invoice__student=profile)
 
         return queryset
 
@@ -280,6 +310,16 @@ class PaymentReceiptHTMLView(APIView):
                 student_ids = parent_student_ids(user)
 
                 if payment.invoice.student_id not in student_ids:
+                    raise PermissionDenied(
+                        "You cannot view this receipt."
+                    )
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if (
+                    profile is None
+                    or payment.invoice.student_id != profile.pk
+                ):
                     raise PermissionDenied(
                         "You cannot view this receipt."
                     )
@@ -416,6 +456,16 @@ class PaymentReceiptPDFView(APIView):
                 student_ids = parent_student_ids(user)
 
                 if payment.invoice.student_id not in student_ids:
+                    raise PermissionDenied(
+                        "You cannot view this receipt."
+                    )
+            elif is_student(user):
+                profile = get_student_profile(user)
+
+                if (
+                    profile is None
+                    or payment.invoice.student_id != profile.pk
+                ):
                     raise PermissionDenied(
                         "You cannot view this receipt."
                     )

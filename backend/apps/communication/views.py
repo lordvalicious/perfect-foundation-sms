@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsAccountantRole
+from apps.accounts.permissions import IsAnnouncementRole
 from apps.accounts.scopes import (
     get_guardian_profile,
     get_teacher_profile,
@@ -25,9 +25,9 @@ from .serializers import (
 )
 
 
-class AnnouncementListView(generics.ListAPIView):
+class AnnouncementListView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsAnnouncementRole]
 
     def get_queryset(self):
         queryset = Announcement.objects.select_related(
@@ -81,10 +81,22 @@ class AnnouncementListView(generics.ListAPIView):
 
         return queryset
 
+    def perform_create(self, serializer):
+        instance = serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="create",
+            model_name="Announcement",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+            details={"status": instance.status},
+        )
+
 
 class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AnnouncementSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsAnnouncementRole]
 
     def get_queryset(self):
         return Announcement.objects.all()

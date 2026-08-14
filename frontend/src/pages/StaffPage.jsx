@@ -363,6 +363,23 @@ export default function StaffPage() {
      FILTERS
   ========================= */
 
+  const getStaffName = (member) => {
+    const firstName = member.first_name || "";
+    const lastName = member.last_name || "";
+
+    return `${firstName} ${lastName}`.trim() || "Unnamed Staff";
+  };
+
+  const getStatus = (member) => {
+    return member.status || "active";
+  };
+
+  const getStatusLabel = (value) => {
+    if (!value) return "Active";
+
+    return value.charAt(0).toUpperCase() + value.slice(1);
+  };
+
   const filteredStaff = staff.filter((member) => {
     const fullName = getStaffName(member);
     const employeeNumber = member.employee_number || "";
@@ -437,27 +454,6 @@ export default function StaffPage() {
     (member) =>
       (member.status || "active").toLowerCase() === "active"
   ).length;
-
-  /* =========================
-     HELPERS
-  ========================= */
-
-  const getStaffName = (member) => {
-    const firstName = member.first_name || "";
-    const lastName = member.last_name || "";
-
-    return `${firstName} ${lastName}`.trim() || "Unnamed Staff";
-  };
-
-  const getStatus = (member) => {
-    return member.status || "active";
-  };
-
-  const getStatusLabel = (value) => {
-    if (!value) return "Active";
-
-    return value.charAt(0).toUpperCase() + value.slice(1);
-  };
 
   return (
     <section className="content">

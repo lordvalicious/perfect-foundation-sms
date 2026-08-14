@@ -106,6 +106,7 @@ function GlobalSearch() {
     const value = query.trim();
 
     if (value.length < 2) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets dependent search state
       setResults([]);
       setOpen(false);
       return;

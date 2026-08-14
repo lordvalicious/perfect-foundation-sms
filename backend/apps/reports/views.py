@@ -1,7 +1,7 @@
 from datetime import date
 from decimal import Decimal
 
-from django.db.models import Count, Sum
+from django.db.models import Count, Prefetch, Sum
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -22,7 +22,12 @@ class EnrollmentReportView(APIView):
         queryset = (
             Enrollment.objects
             .filter(status="active")
-            .select_related("campus", "class_obj", "student")
+            .select_related(
+                "campus",
+                "class_obj",
+                "section",
+                "student",
+            )
         )
 
         academic_year = request.query_params.get("academic_year")
@@ -428,11 +433,23 @@ class FeesReportView(APIView):
     permission_classes = [IsAccountantRole]
 
     def _data(self, request):
-        from apps.finance.models import Invoice
+        from apps.finance.models import Invoice, Payment
 
-        invoices = Invoice.objects.prefetch_related(
-            "items",
-            "payments",
+        invoices = (
+            Invoice.objects
+            .prefetch_related(
+                "items",
+                Prefetch(
+                    "payments",
+                    queryset=Payment.objects.filter(
+                        status="completed",
+                    ),
+                ),
+            )
+            .select_related(
+                "enrollment__campus",
+                "academic_year",
+            )
         )
 
         campus = request.query_params.get("campus")
@@ -457,10 +474,28 @@ class FeesReportView(APIView):
         total_collected = Decimal("0")
         total_outstanding = Decimal("0")
 
+        method = request.query_params.get("payment_method")
+
         for invoice in invoices:
-            invoiced = invoice.total_amount
-            collected = invoice.paid_amount
-            balance = invoice.balance
+            items = invoice.items.all()
+            payments = invoice.payments.all()
+
+            invoiced = sum(
+                (item.amount for item in items),
+                Decimal("0"),
+            ) - invoice.discount
+
+            invoiced = max(invoiced, Decimal("0"))
+
+            collected = sum(
+                (payment.amount for payment in payments),
+                Decimal("0"),
+            )
+
+            balance = max(
+                invoiced - collected,
+                Decimal("0"),
+            )
 
             total_invoiced += invoiced
             total_discount += invoice.discount
@@ -483,11 +518,7 @@ class FeesReportView(APIView):
             campus_entry["collected"] += collected
             campus_entry["outstanding"] += balance
 
-            method = request.query_params.get("payment_method")
-
-            for payment in invoice.payments.filter(
-                status="completed",
-            ):
+            for payment in payments:
                 if method and payment.payment_method != method:
                     continue
 
@@ -589,6 +620,555 @@ class FeesReportView(APIView):
         )
 
 
+class SubjectPerformanceReportView(APIView):
+    """Per-subject performance statistics for a given exam."""
+
+    permission_classes = [IsAccountantRole]
+
+    def _data(self, request):
+        from apps.exams.models import StudentResult
+
+        exam = request.query_params.get("exam")
+
+        if not exam:
+            return {
+                "summary": {
+                    "subjects": 0,
+                    "results": 0,
+                    "pass_rate": 0,
+                    "average_percentage": 0,
+                },
+                "subjects": [],
+            }
+
+        results = (
+            StudentResult.objects
+            .filter(exam_id=exam, is_absent=False)
+            .select_related("exam_subject", "exam_subject__subject")
+        )
+
+        rows = {}
+
+        for result in results:
+            exam_subject = result.exam_subject
+            name = exam_subject.subject.name
+            maximum = exam_subject.maximum_marks
+
+            percentage = (
+                float(result.obtained_marks) / maximum * 100
+                if maximum
+                else 0
+            )
+
+            entry = rows.setdefault(
+                name,
+                {
+                    "subject": name,
+                    "students": 0,
+                    "passed": 0,
+                    "average_percentage": 0,
+                    "pass_rate": 0,
+                    "highest": 0,
+                    "lowest": None,
+                    "_total": 0,
+                },
+            )
+
+            entry["students"] += 1
+            entry["passed"] += int(result.is_pass)
+            entry["_total"] += percentage
+
+            if percentage > entry["highest"]:
+                entry["highest"] = percentage
+
+            if (
+                entry["lowest"] is None
+                or percentage < entry["lowest"]
+            ):
+                entry["lowest"] = percentage
+
+        subjects = []
+
+        for entry in rows.values():
+            total = entry.pop("_total")
+            students = entry["students"]
+
+            entry["average_percentage"] = (
+                round(total / students, 2) if students else 0
+            )
+            entry["pass_rate"] = (
+                round(entry["passed"] / students * 100, 2)
+                if students
+                else 0
+            )
+            entry["highest"] = round(entry["highest"], 2)
+            entry["lowest"] = (
+                round(entry["lowest"], 2)
+                if entry["lowest"] is not None
+                else 0
+            )
+
+            subjects.append(entry)
+
+        subjects.sort(key=lambda item: item["subject"])
+
+        total_results = sum(item["students"] for item in subjects)
+        total_passed = sum(item["passed"] for item in subjects)
+        total_average = sum(
+            item["average_percentage"] for item in subjects
+        )
+
+        return {
+            "summary": {
+                "subjects": len(subjects),
+                "results": total_results,
+                "pass_rate": (
+                    round(total_passed / total_results * 100, 2)
+                    if total_results
+                    else 0
+                ),
+                "average_percentage": (
+                    round(total_average / len(subjects), 2)
+                    if subjects
+                    else 0
+                ),
+            },
+            "subjects": subjects,
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+
+        return to_csv(
+            "subject_performance_report.csv",
+            [
+                "Subject",
+                "Students",
+                "Average %",
+                "Pass Rate %",
+                "Highest %",
+                "Lowest %",
+            ],
+            [
+                [
+                    row["subject"],
+                    row["students"],
+                    row["average_percentage"],
+                    row["pass_rate"],
+                    row["highest"],
+                    row["lowest"],
+                ]
+                for row in data["subjects"]
+            ],
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+
+        return super().finalize_response(
+            request,
+            response,
+            *args,
+            **kwargs,
+        )
+
+
+class PaymentMethodsReportView(APIView):
+    """Fee collection totals grouped by payment method."""
+
+    permission_classes = [IsAccountantRole]
+
+    def _data(self, request):
+        from apps.finance.models import Payment
+
+        queryset = (
+            Payment.objects
+            .filter(status="completed")
+            .select_related(
+                "invoice__enrollment__campus",
+                "invoice__academic_year",
+            )
+        )
+
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        if start_date:
+            queryset = queryset.filter(
+                payment_date__gte=start_date,
+            )
+
+        if end_date:
+            queryset = queryset.filter(
+                payment_date__lte=end_date,
+            )
+
+        method_totals = {}
+        campus_totals = {}
+        total_collected = Decimal("0")
+
+        for payment in queryset:
+            amount = payment.amount
+
+            total_collected += amount
+
+            method = payment.get_payment_method_display()
+
+            method_entry = method_totals.setdefault(
+                method,
+                {
+                    "method": method,
+                    "collected": Decimal("0"),
+                    "payments": 0,
+                },
+            )
+
+            method_entry["collected"] += amount
+            method_entry["payments"] += 1
+
+            campus_name = (
+                payment.invoice.enrollment.campus.name
+                if payment.invoice.enrollment_id
+                and payment.invoice.enrollment.campus_id
+                else "-"
+            )
+
+            campus_entry = campus_totals.setdefault(
+                campus_name,
+                {
+                    "campus": campus_name,
+                    "collected": Decimal("0"),
+                    "payments": 0,
+                },
+            )
+
+            campus_entry["collected"] += amount
+            campus_entry["payments"] += 1
+
+        methods = [
+            {
+                "method": entry["method"],
+                "collected": quantize(entry["collected"]),
+                "payments": entry["payments"],
+            }
+            for entry in sorted(
+                method_totals.values(),
+                key=lambda item: item["collected"],
+                reverse=True,
+            )
+        ]
+
+        campuses = [
+            {
+                "campus": entry["campus"],
+                "collected": quantize(entry["collected"]),
+                "payments": entry["payments"],
+            }
+            for entry in sorted(
+                campus_totals.values(),
+                key=lambda item: item["campus"],
+            )
+        ]
+
+        return {
+            "summary": {
+                "total_collected": quantize(total_collected),
+                "methods": len(methods),
+            },
+            "by_method": methods,
+            "by_campus": campuses,
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+
+        rows = []
+
+        for entry in data["by_method"]:
+            rows.append(
+                [
+                    "By Method",
+                    entry["method"],
+                    entry["payments"],
+                    entry["collected"],
+                ]
+            )
+
+        for entry in data["by_campus"]:
+            rows.append(
+                [
+                    "By Campus",
+                    entry["campus"],
+                    entry["payments"],
+                    entry["collected"],
+                ]
+            )
+
+        return to_csv(
+            "payment_methods_report.csv",
+            ["Grouping", "Name", "Payments", "Collected"],
+            rows,
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+
+        return super().finalize_response(
+            request,
+            response,
+            *args,
+            **kwargs,
+        )
+
+
+class StudentStatusReportView(APIView):
+    """Students grouped by campus and status."""
+
+    permission_classes = [IsAccountantRole]
+
+    STATUS_LABELS = {
+        "active": "Active",
+        "inactive": "Inactive",
+        "graduated": "Graduated",
+        "withdrawn": "Withdrawn",
+    }
+
+    def _data(self, request):
+        from apps.students.models import Enrollment
+
+        queryset = (
+            Enrollment.objects
+            .filter(status="active")
+            .select_related("campus", "student")
+        )
+
+        campus = request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(campus_id=campus)
+
+        rows = {}
+        status_counts = {}
+
+        for enrollment in queryset:
+            status = enrollment.student.status or "active"
+            label = self.STATUS_LABELS.get(status, status)
+            campus_name = enrollment.campus.name
+
+            key = (campus_name, label)
+
+            entry = rows.setdefault(
+                key,
+                {
+                    "campus": campus_name,
+                    "status": label,
+                    "count": 0,
+                },
+            )
+
+            entry["count"] += 1
+
+            status_entry = status_counts.setdefault(
+                label,
+                {"status": label, "count": 0},
+            )
+
+            status_entry["count"] += 1
+
+        return {
+            "total_students": sum(
+                entry["count"] for entry in status_counts.values()
+            ),
+            "statuses": sorted(
+                status_counts.values(),
+                key=lambda item: item["count"],
+                reverse=True,
+            ),
+            "rows": sorted(
+                rows.values(),
+                key=lambda item: (
+                    item["campus"],
+                    item["status"],
+                ),
+            ),
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+
+        return to_csv(
+            "student_status_report.csv",
+            ["Campus", "Status", "Count"],
+            [
+                [
+                    row["campus"],
+                    row["status"],
+                    row["count"],
+                ]
+                for row in data["rows"]
+            ],
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+
+        return super().finalize_response(
+            request,
+            response,
+            *args,
+            **kwargs,
+        )
+
+
+class FeeCategoryReportView(APIView):
+    """Invoiced amounts grouped by fee category."""
+
+    permission_classes = [IsAccountantRole]
+
+    def _data(self, request):
+        from apps.finance.models import InvoiceItem
+
+        queryset = (
+            InvoiceItem.objects
+            .filter(
+                invoice__status__in=[
+                    "issued",
+                    "partial",
+                    "paid",
+                    "overdue",
+                ],
+            )
+            .select_related(
+                "category",
+                "invoice__enrollment__campus",
+            )
+        )
+
+        campus = request.query_params.get("campus")
+
+        if campus:
+            queryset = queryset.filter(
+                invoice__enrollment__campus_id=campus,
+            )
+
+        category_totals = {}
+        rows = {}
+        total_invoiced = Decimal("0")
+
+        for item in queryset:
+            amount = item.amount
+
+            total_invoiced += amount
+
+            category_name = item.category.name
+
+            category_entry = category_totals.setdefault(
+                category_name,
+                {
+                    "category": category_name,
+                    "invoiced": Decimal("0"),
+                    "items": 0,
+                },
+            )
+
+            category_entry["invoiced"] += amount
+            category_entry["items"] += 1
+
+            campus_name = (
+                item.invoice.enrollment.campus.name
+                if item.invoice.enrollment_id
+                and item.invoice.enrollment.campus_id
+                else "-"
+            )
+
+            key = (category_name, campus_name)
+
+            entry = rows.setdefault(
+                key,
+                {
+                    "category": category_name,
+                    "campus": campus_name,
+                    "invoiced": Decimal("0"),
+                },
+            )
+
+            entry["invoiced"] += amount
+
+        return {
+            "summary": {
+                "total_invoiced": quantize(total_invoiced),
+                "categories": len(category_totals),
+            },
+            "by_category": [
+                {
+                    "category": entry["category"],
+                    "invoiced": quantize(entry["invoiced"]),
+                    "items": entry["items"],
+                }
+                for entry in sorted(
+                    category_totals.values(),
+                    key=lambda item: item["category"],
+                )
+            ],
+            "by_campus_category": [
+                {
+                    "category": entry["category"],
+                    "campus": entry["campus"],
+                    "invoiced": quantize(entry["invoiced"]),
+                }
+                for entry in sorted(
+                    rows.values(),
+                    key=lambda item: (
+                        item["category"],
+                        item["campus"],
+                    ),
+                )
+            ],
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+
+        return to_csv(
+            "fee_categories_report.csv",
+            ["Category", "Campus", "Invoiced"],
+            [
+                [
+                    row["category"],
+                    row["campus"],
+                    row["invoiced"],
+                ]
+                for row in data["by_campus_category"]
+            ],
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+
+        return super().finalize_response(
+            request,
+            response,
+            *args,
+            **kwargs,
+        )
+
+
 class StaffReportView(APIView):
     """Staff summary grouped by campus and designation."""
 
@@ -599,21 +1179,21 @@ class StaffReportView(APIView):
 
         queryset = (
             Teacher.objects
-            .select_related("campus")
+            .select_related("primary_campus")
         )
 
         campus = request.query_params.get("campus")
 
         if campus:
-            queryset = queryset.filter(campus_id=campus)
+            queryset = queryset.filter(primary_campus_id=campus)
 
         rows = {}
 
         for teacher in queryset:
             campus_name = (
-                teacher.campus.name
-                if teacher.campus_id
-                else "-"
+                teacher.primary_campus.name
+                if teacher.primary_campus_id
+                else teacher.campus or "-"
             )
             designation = teacher.designation or "Teacher"
 
