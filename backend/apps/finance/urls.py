@@ -2,6 +2,8 @@ from django.urls import path
 
 from .views import (
     FeeCategoryListView,
+    FeeStructureDetailView,
+    FeeStructureListView,
     InvoiceCreateView,
     InvoiceDetailView,
     InvoiceListView,
@@ -50,5 +52,15 @@ urlpatterns = [
         "categories/",
         FeeCategoryListView.as_view(),
         name="fee-category-list",
+    ),
+    path(
+        "fee-structures/",
+        FeeStructureListView.as_view(),
+        name="fee-structure-list",
+    ),
+    path(
+        "fee-structures/<int:pk>/",
+        FeeStructureDetailView.as_view(),
+        name="fee-structure-detail",
     ),
 ]

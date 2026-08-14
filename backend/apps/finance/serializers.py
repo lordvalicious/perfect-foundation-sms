@@ -2,7 +2,14 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from .models import FeeCategory, Invoice, InvoiceItem, Payment, PaymentReversal
+from .models import (
+    FeeCategory,
+    FeeStructure,
+    Invoice,
+    InvoiceItem,
+    Payment,
+    PaymentReversal,
+)
 from .services import next_invoice_number, next_receipt_number
 
 
@@ -132,6 +139,85 @@ class FeeCategorySerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class FeeStructureSerializer(serializers.ModelSerializer):
+    academic_year_name = serializers.CharField(
+        source="academic_year.name",
+        read_only=True,
+    )
+    campus_name = serializers.CharField(
+        source="campus.name",
+        read_only=True,
+    )
+    class_name = serializers.CharField(
+        source="class_obj.name",
+        read_only=True,
+    )
+    category_name = serializers.CharField(
+        source="category.name",
+        read_only=True,
+    )
+    category_frequency = serializers.CharField(
+        source="category.frequency",
+        read_only=True,
+    )
+    category_frequency_display = serializers.CharField(
+        source="category.get_frequency_display",
+        read_only=True,
+    )
+    status_display = serializers.CharField(
+        source="get_status_display",
+        read_only=True,
+    )
+
+    class Meta:
+        model = FeeStructure
+        fields = [
+            "id",
+            "academic_year",
+            "academic_year_name",
+            "campus",
+            "campus_name",
+            "class_obj",
+            "class_name",
+            "category",
+            "category_name",
+            "category_frequency",
+            "category_frequency_display",
+            "amount",
+            "due_day",
+            "status",
+            "status_display",
+            "created_at",
+            "updated_at",
+        ]
+
+    def validate(self, attrs):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        if self.instance is not None:
+            candidate = self.instance
+
+            for field, value in attrs.items():
+                setattr(candidate, field, value)
+        else:
+            candidate = FeeStructure(**attrs)
+
+        try:
+            candidate.clean()
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+        return attrs
+
+    def create(self, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        try:
+            return FeeStructure.objects.create(**validated_data)
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
 
 
 class InvoiceItemSerializer(serializers.ModelSerializer):

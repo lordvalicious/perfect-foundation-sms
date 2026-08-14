@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   Wallet,
   Receipt,
   FileDown,
   PlusCircle,
+  Plus,
 } from "lucide-react";
 import { useApiList } from "./useApiList";
 import {
@@ -21,6 +22,10 @@ import { jsonHeaders } from "../api";
 const INVOICES_API_URL = "/api/finance/invoices/";
 const PAYMENTS_API_URL = "/api/finance/payments/";
 const CATEGORIES_API_URL = "/api/finance/categories/";
+const FEE_STRUCTURES_API_URL = "/api/finance/fee-structures/";
+const ACADEMIC_YEARS_API_URL = "/api/schools/academic-years/";
+const CAMPUSES_API_URL = "/api/schools/campuses/";
+const CLASSES_API_URL = "/api/schools/classes/";
 const DASHBOARD_FINANCE_URL = "/api/dashboard/finance/";
 const DASHBOARD_BREAKDOWN_URL = "/api/dashboard/finance/breakdown/";
 
@@ -444,6 +449,440 @@ function PaymentModal({ invoice, onClose, onSaved }) {
   );
 }
 
+function FeeStructureModal({
+  categories,
+  academicYears,
+  campuses,
+  classes,
+  onClose,
+  onSaved,
+}) {
+  const [academicYear, setAcademicYear] = useState("");
+  const [campus, setCampus] = useState("");
+  const [classObj, setClassObj] = useState("");
+  const [category, setCategory] = useState("");
+  const [amount, setAmount] = useState("");
+  const [dueDay, setDueDay] = useState("10");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const campusClasses = classes.filter(
+    (item) => Number(item.campus) === Number(campus)
+  );
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    try {
+      const response = await fetch(FEE_STRUCTURES_API_URL, {
+        method: "POST",
+        credentials: "include",
+        headers: jsonHeaders(),
+        body: JSON.stringify({
+          academic_year: academicYear,
+          campus: campus,
+          class_obj: classObj,
+          category: category,
+          amount: Number(amount),
+          due_day: Number(dueDay),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        let message = "Unable to add fee structure.";
+
+        if (data && typeof data === "object") {
+          const parts = Object.entries(data).map(([field, value]) => {
+            const text = Array.isArray(value)
+              ? value.join(", ")
+              : String(value);
+
+            return `${field}: ${text}`;
+          });
+
+          if (parts.length) {
+            message = parts.join(" | ");
+          }
+        }
+
+        throw new Error(message);
+      }
+
+      onSaved(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) {
+          onClose();
+        }
+      }}
+    >
+      <div className="teacher-modal">
+        <div className="modal-header">
+          <div>
+            <h3>Add Fee Structure</h3>
+            <p>Set the amount charged per category for a class.</p>
+          </div>
+
+          <button
+            className="modal-close"
+            onClick={onClose}
+            disabled={saving}
+          >
+            &times;
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit}>
+          <div className="form-section">
+            <h4>Fee Structure Details</h4>
+
+            <div className="form-grid">
+              <label>
+                Academic Year
+                <select
+                  value={academicYear}
+                  onChange={(event) => setAcademicYear(event.target.value)}
+                  required
+                >
+                  <option value="">Select year</option>
+
+                  {academicYears.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Campus
+                <select
+                  value={campus}
+                  onChange={(event) => {
+                    setCampus(event.target.value);
+                    setClassObj("");
+                  }}
+                  required
+                >
+                  <option value="">Select campus</option>
+
+                  {campuses.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Class
+                <select
+                  value={classObj}
+                  onChange={(event) => setClassObj(event.target.value)}
+                  required
+                  disabled={!campus}
+                >
+                  <option value="">Select class</option>
+
+                  {campusClasses.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Fee Category
+                <select
+                  value={category}
+                  onChange={(event) => setCategory(event.target.value)}
+                  required
+                >
+                  <option value="">Select category</option>
+
+                  {categories.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} ({item.frequency_display})
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Amount (Rs.)
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={amount}
+                  onChange={(event) => setAmount(event.target.value)}
+                  placeholder="0.00"
+                  required
+                />
+              </label>
+
+              <label>
+                Due Day
+                <input
+                  type="number"
+                  min="1"
+                  max="31"
+                  value={dueDay}
+                  onChange={(event) => setDueDay(event.target.value)}
+                  placeholder="10"
+                  required
+                />
+              </label>
+            </div>
+
+            <p className="field-hint">
+              Due day is the day of the month on which this fee is expected.
+            </p>
+          </div>
+
+          {error && (
+            <div className="state-card error">
+              <strong>Unable to add fee structure.</strong>
+              <span>{error}</span>
+            </div>
+          )}
+
+          <div className="modal-footer">
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onClose}
+              disabled={saving}
+            >
+              Cancel
+            </button>
+
+            <button type="submit" className="primary-button" disabled={saving}>
+              {saving ? "Saving..." : "Add Fee Structure"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function FeeStructureSection({ categories }) {
+  const structures = useApiList(FEE_STRUCTURES_API_URL);
+
+  const [academicYears, setAcademicYears] = useState([]);
+  const [campuses, setCampuses] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [notice, setNotice] = useState("");
+
+  const refresh = () => {
+    structures.refresh(new URLSearchParams({ page: 1 }));
+  };
+
+  useEffect(() => {
+    fetch(ACADEMIC_YEARS_API_URL, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then(setAcademicYears)
+      .catch(() => {});
+
+    fetch(CAMPUSES_API_URL, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then(setCampuses)
+      .catch(() => {});
+
+    fetch(CLASSES_API_URL, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then(setClasses)
+      .catch(() => {});
+  }, []);
+
+  const handleSaved = () => {
+    setShowModal(false);
+    refresh();
+  };
+
+  const toggleStatus = (structure) => {
+    fetch(`${FEE_STRUCTURES_API_URL}${structure.id}/`, {
+      method: "PATCH",
+      credentials: "include",
+      headers: jsonHeaders(),
+      body: JSON.stringify({
+        status: structure.status === "active" ? "inactive" : "active",
+      }),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Unable to update fee structure status.");
+        }
+
+        return response.json();
+      })
+      .then(refresh)
+      .catch((err) => setNotice(err.message));
+  };
+
+  const removeStructure = (structure) => {
+    if (
+      !window.confirm(
+        `Delete fee structure for ${structure.class_name} - ${structure.category_name}?`
+      )
+    ) {
+      return;
+    }
+
+    fetch(`${FEE_STRUCTURES_API_URL}${structure.id}/`, {
+      method: "DELETE",
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Unable to delete fee structure.");
+        }
+      })
+      .then(refresh)
+      .catch((err) => setNotice(err.message));
+  };
+
+  return (
+    <div className="panel">
+      <PanelHeader
+        title="Fee Structures"
+        subtitle="structures configured"
+        count={structures.count}
+        action={
+          <button
+            className="primary-button"
+            onClick={() => {
+              setNotice("");
+              setShowModal(true);
+            }}
+          >
+            <Plus size={16} /> Add Fee Structure
+          </button>
+        }
+      />
+
+      {notice && (
+        <div className="state-card error">
+          <strong>Something went wrong.</strong>
+          <span>{notice}</span>
+        </div>
+      )}
+
+      <StateArea
+        loading={structures.loading}
+        error={structures.error}
+        onRetry={refresh}
+      >
+        {structures.rows.length === 0 ? (
+          <EmptyState
+            icon={PlusCircle}
+            title="No fee structures"
+            message="Configure the amount charged per fee category for each class."
+          />
+        ) : (
+          <div className="table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>ACADEMIC YEAR</th>
+                  <th>CAMPUS</th>
+                  <th>CLASS</th>
+                  <th>CATEGORY</th>
+                  <th>AMOUNT</th>
+                  <th>DUE DAY</th>
+                  <th>STATUS</th>
+                  <th></th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {structures.rows.map((structure) => (
+                  <tr key={structure.id}>
+                    <td>{structure.academic_year_name}</td>
+
+                    <td>{structure.campus_name}</td>
+
+                    <td>
+                      <strong>{structure.class_name}</strong>
+                    </td>
+
+                    <td>
+                      {structure.category_name}
+                      <span className="cell-sub">
+                        {structure.category_frequency_display}
+                      </span>
+                    </td>
+
+                    <td>
+                      <strong>{formatCurrency(structure.amount)}</strong>
+                    </td>
+
+                    <td>{structure.due_day}</td>
+
+                    <td>
+                      <StatusBadge
+                        status={structure.status}
+                        label={structure.status_display}
+                      />
+                    </td>
+
+                    <td>
+                      <div className="action-group">
+                        <button
+                          className="table-action"
+                          onClick={() => toggleStatus(structure)}
+                        >
+                          {structure.status === "active"
+                            ? "Deactivate"
+                            : "Activate"}
+                        </button>
+
+                        <button
+                          className="table-action"
+                          onClick={() => removeStructure(structure)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </StateArea>
+
+      {showModal && (
+        <FeeStructureModal
+          categories={categories}
+          academicYears={academicYears}
+          campuses={campuses}
+          classes={classes}
+          onClose={() => setShowModal(false)}
+          onSaved={handleSaved}
+        />
+      )}
+    </div>
+  );
+}
+
 export default function FinancePage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -751,7 +1190,7 @@ export default function FinancePage() {
               {categories.rows.map((category) => (
                 <div key={category.id}>
                   <span>
-                    {category.name} · {category.frequency_display}
+                    {category.name} A� {category.frequency_display}
                   </span>
 
                   <StatusBadge status={category.status} />
@@ -761,6 +1200,8 @@ export default function FinancePage() {
           )}
         </StateArea>
       </div>
+
+      <FeeStructureSection categories={categories.rows} />
 
       {paymentInvoice && (
         <PaymentModal

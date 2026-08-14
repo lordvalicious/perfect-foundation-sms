@@ -89,6 +89,10 @@ class AcademicUnitSerializer(serializers.ModelSerializer):
 
 
 class ClassSerializer(serializers.ModelSerializer):
+    campus = serializers.IntegerField(
+        source="unit.campus_id",
+        read_only=True,
+    )
     campus_name = serializers.CharField(
         source="unit.campus.name",
         read_only=True,
@@ -111,6 +115,7 @@ class ClassSerializer(serializers.ModelSerializer):
             "id",
             "unit",
             "unit_name",
+            "campus",
             "campus_name",
             "name",
             "level",

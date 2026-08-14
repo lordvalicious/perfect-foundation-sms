@@ -18,10 +18,17 @@ from apps.accounts.scopes import (
 )
 from apps.audit.models import record_audit
 
-from .models import FeeCategory, Invoice, Payment, PaymentReversal
+from .models import (
+    FeeCategory,
+    FeeStructure,
+    Invoice,
+    Payment,
+    PaymentReversal,
+)
 from .pdf import payment_receipt_pdf
 from .serializers import (
     FeeCategorySerializer,
+    FeeStructureSerializer,
     InvoiceCreateSerializer,
     InvoiceSerializer,
     PaymentCreateSerializer,
@@ -156,6 +163,60 @@ class FeeCategoryListView(generics.ListAPIView):
             queryset = queryset.filter(status=status)
 
         return queryset
+
+
+class FeeStructureListView(generics.ListCreateAPIView):
+    serializer_class = FeeStructureSerializer
+    permission_classes = [IsAccountantRole]
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = (
+            FeeStructure.objects
+            .select_related(
+                "academic_year",
+                "campus",
+                "class_obj__unit__campus",
+                "category",
+            )
+            .order_by("campus", "class_obj", "category")
+        )
+
+        params = self.request.query_params
+
+        if params.get("academic_year"):
+            queryset = queryset.filter(
+                academic_year_id=params.get("academic_year")
+            )
+
+        if params.get("campus"):
+            queryset = queryset.filter(campus_id=params.get("campus"))
+
+        if params.get("class_obj"):
+            queryset = queryset.filter(class_obj_id=params.get("class_obj"))
+
+        if params.get("category"):
+            queryset = queryset.filter(category_id=params.get("category"))
+
+        status = params.get("status")
+
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
+
+class FeeStructureDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = FeeStructureSerializer
+    permission_classes = [IsAccountantRole]
+
+    def get_queryset(self):
+        return FeeStructure.objects.select_related(
+            "academic_year",
+            "campus",
+            "class_obj__unit__campus",
+            "category",
+        )
 
 
 class InvoiceDetailView(generics.RetrieveAPIView):
