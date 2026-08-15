@@ -3297,7 +3297,7 @@ function Shell() {
         <Route
           path="/announcements"
           element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff"]}>
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
               <AnnouncementsPage />
             </RequireRoles>
           }
