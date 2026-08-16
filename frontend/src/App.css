@@ -61,6 +61,8 @@
   --surface-2: var(--stone-800);
   --surface-3: var(--stone-700);
   --surface-4: var(--stone-600);
+  --glass: rgba(16, 20, 40, 0.72);
+  --glass-card: rgba(16, 20, 40, 0.6);
   --border: #232b4a;
   --border-strong: #323c66;
   --border-soft: rgba(123, 108, 240, 0.13);
@@ -128,6 +130,8 @@
   --surface-2: var(--stone-800);
   --surface-3: var(--stone-700);
   --surface-4: var(--stone-600);
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-card: rgba(255, 255, 255, 0.66);
   --border: #e0e3f2;
   --border-strong: #c9cfe8;
   --border-soft: rgba(109, 93, 240, 0.13);
@@ -167,15 +171,118 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
   color: var(--text);
-  background:
-    radial-gradient(1100px 620px at 88% -12%, var(--primary-glow), transparent 55%),
-    radial-gradient(900px 520px at -8% 108%, rgba(167, 139, 250, 0.09), transparent 55%),
-    radial-gradient(700px 460px at 55% 120%, rgba(251, 191, 36, 0.05), transparent 60%),
-    var(--bg);
-  background-attachment: fixed;
+  background: var(--bg);
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   transition: background 0.3s var(--ease), color 0.3s var(--ease);
+}
+
+/* ==========================================================================
+   IMMERSIVE AMBIENT BACKDROP
+   Aurora layers + starfield + floating orbs + grain + vignette. All fixed,
+   pointer-transparent, rendered behind the app shell.
+   ========================================================================== */
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(900px 620px at 12% 8%, rgba(123, 108, 240, 0.22), transparent 60%),
+    radial-gradient(820px 600px at 88% 16%, rgba(56, 189, 248, 0.14), transparent 60%),
+    radial-gradient(920px 720px at 82% 94%, rgba(123, 108, 240, 0.16), transparent 62%),
+    radial-gradient(720px 540px at 18% 92%, rgba(251, 191, 36, 0.08), transparent 60%),
+    radial-gradient(1400px 900px at 50% 42%, rgba(167, 139, 250, 0.06), transparent 65%);
+  background-size: 160% 160%, 140% 140%, 150% 150%, 130% 130%, 180% 180%;
+  animation: aurora-drift 30s ease-in-out infinite alternate;
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E"),
+    radial-gradient(120% 100% at 50% 38%, transparent 52%, rgba(3, 5, 12, 0.42) 100%);
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+}
+
+/* Floating glow orbs above the aurora, below all content */
+.app::before,
+.app::after {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  border-radius: 50%;
+  pointer-events: none;
+  will-change: transform;
+  filter: blur(70px);
+}
+
+.app::before {
+  width: 44vw;
+  height: 44vw;
+  min-width: 420px;
+  min-height: 420px;
+  top: -14vw;
+  right: -8vw;
+  background: radial-gradient(circle, rgba(123, 108, 240, 0.4), rgba(56, 189, 248, 0.16) 52%, transparent 72%);
+  animation: orb-a 32s ease-in-out infinite alternate;
+}
+
+.app::after {
+  width: 38vw;
+  height: 38vw;
+  min-width: 380px;
+  min-height: 380px;
+  bottom: -12vw;
+  left: -6vw;
+  background: radial-gradient(circle, rgba(167, 139, 250, 0.34), rgba(123, 108, 240, 0.14) 55%, transparent 72%);
+  animation: orb-b 42s ease-in-out infinite alternate;
+}
+
+@keyframes aurora-drift {
+  0% {
+    background-position: 0% 0%, 0% 0%, 0% 0%, 0% 0%, 0% 0%;
+    opacity: 0.8;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    background-position: 6% 4%, -5% -3%, 3% -2%, -4% 3%, 2% -4%;
+    opacity: 0.92;
+  }
+}
+
+@keyframes orb-a {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-6vw, 5vh) scale(1.1);
+  }
+  100% {
+    transform: translate(-2vw, -3vh) scale(0.94);
+  }
+}
+
+@keyframes orb-b {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(5vw, -5vh) scale(0.95);
+  }
+  100% {
+    transform: translate(3vw, 4vh) scale(1.12);
+  }
 }
 
 button,
@@ -289,8 +396,8 @@ h4,
   display: flex;
   flex-direction: column;
   background: var(--sidebar-bg);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  backdrop-filter: blur(26px) saturate(1.8);
   border-right: 1px solid var(--border);
   box-shadow: 0 1px 0 var(--glass-border) inset;
   transition: width 0.22s var(--ease);
@@ -486,10 +593,10 @@ h4,
   align-items: center;
   gap: 14px;
   background: var(--topbar-bg);
-  -webkit-backdrop-filter: blur(18px) saturate(1.5);
-  backdrop-filter: blur(18px) saturate(1.5);
+  -webkit-backdrop-filter: blur(26px) saturate(1.7);
+  backdrop-filter: blur(26px) saturate(1.7);
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 1px 0 var(--glass-border) inset, 0 4px 20px rgba(0, 0, 0, 0.05);
+  box-shadow: 0 1px 0 var(--glass-border) inset, 0 6px 24px rgba(0, 0, 0, 0.24);
 }
 
 .sidebar-toggle {
@@ -1199,12 +1306,28 @@ h4,
   padding: 20px 22px;
   margin-bottom: 20px;
   border-radius: var(--radius);
-  background: linear-gradient(120deg, var(--surface), var(--primary-soft));
+  background: linear-gradient(120deg, var(--glass), var(--primary-soft));
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
   animation: fade-up 0.45s var(--ease) both;
+}
+
+.welcome-strip::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 40%,
+    rgba(255, 255, 255, 0.09) 50%,
+    transparent 60%
+  );
+  animation: sheen 7s ease-in-out infinite;
+  pointer-events: none;
 }
 
 .welcome-strip::after {
@@ -1290,14 +1413,16 @@ h4,
   padding: 22px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(22px) saturate(1.4);
+  backdrop-filter: blur(22px) saturate(1.4);
   box-shadow: var(--shadow);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .panel:hover {
-  border-color: var(--border-strong);
-  box-shadow: var(--shadow-lg);
+  border-color: var(--primary);
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--primary-glow), 0 10px 44px var(--primary-glow);
 }
 
 .panel-header {
@@ -1434,8 +1559,10 @@ h4,
 .students-table-wrapper {
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(18px) saturate(1.3);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: var(--shadow);
   overflow: auto;
 }
 
@@ -1912,8 +2039,8 @@ select {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(10, 20, 18, 0.5);
-  backdrop-filter: blur(6px);
+  background: var(--overlay);
+  backdrop-filter: blur(8px);
   animation: fade-in 0.22s var(--ease) both;
 }
 
@@ -1926,7 +2053,9 @@ select {
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 18px;
-  background: var(--surface);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(26px) saturate(1.5);
+  backdrop-filter: blur(26px) saturate(1.5);
   box-shadow: var(--shadow-xl);
   animation: modal-pop 0.32s var(--ease) both;
 }
@@ -2244,8 +2373,10 @@ select {
   margin-bottom: 24px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  background: linear-gradient(120deg, var(--glass), var(--primary-soft));
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--shadow);
 }
 
 .staff-hero-glow {
@@ -2714,8 +2845,10 @@ select {
   padding: 36px 34px 30px;
   border: 1px solid var(--border);
   border-radius: 20px;
-  background: var(--surface);
-  box-shadow: var(--shadow-xl);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6);
+  backdrop-filter: blur(28px) saturate(1.6);
+  box-shadow: var(--shadow-xl), 0 0 60px var(--primary-glow);
   animation: modal-pop 0.4s var(--ease) both;
 }
 
@@ -2977,8 +3110,10 @@ select {
   margin-bottom: 24px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: linear-gradient(120deg, var(--surface), var(--primary-soft));
-  box-shadow: var(--shadow-sm);
+  background: linear-gradient(120deg, var(--glass), var(--primary-soft));
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow: var(--shadow);
 }
 
 .portal-hero-label {
@@ -3185,6 +3320,74 @@ select {
 }
 
 /* =========================
+   IMMERSIVE GLASS CARDS
+========================= */
+
+.stat-card,
+.kpi-card,
+.fin-widget,
+.campus-card,
+.staff-card,
+.document-card,
+.event-card,
+.report-content,
+.portal-section,
+.state-card {
+  background: var(--glass-card);
+}
+
+.stat-card:hover,
+.kpi-card:hover,
+.fin-widget:hover,
+.campus-card:hover,
+.staff-card:hover,
+.document-card:hover,
+.event-card:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-lg), 0 0 0 1px var(--primary-glow), 0 10px 40px var(--primary-glow);
+}
+
+.sidebar-link.active {
+  box-shadow: 0 0 18px var(--primary-glow);
+}
+
+.brand-logo {
+  animation: logo-breathe 5s ease-in-out infinite;
+}
+
+@keyframes logo-breathe {
+  0%,
+  100% {
+    box-shadow: 0 6px 16px var(--primary-glow);
+  }
+  50% {
+    box-shadow: 0 6px 22px var(--primary-glow), 0 0 32px var(--primary-glow);
+  }
+}
+
+@keyframes sheen {
+  0% {
+    transform: translateX(-120%);
+  }
+  55%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before,
+  body::after,
+  .app::before,
+  .app::after,
+  .welcome-strip::before,
+  .brand-logo,
+  .live-hint {
+    animation: none !important;
+  }
+}
+
+/* =========================
    ANIMATIONS
 ========================= */
 
@@ -3246,8 +3449,8 @@ select {
     position: fixed;
     inset: 0;
     z-index: 70;
-    background: rgba(10, 20, 18, 0.5);
-    backdrop-filter: blur(4px);
+    background: var(--overlay);
+    backdrop-filter: blur(6px);
     animation: fade-in 0.25s var(--ease) both;
   }
 
