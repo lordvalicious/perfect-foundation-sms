@@ -2230,9 +2230,9 @@ select {
 }
 
 .campus-student-lists {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
 
 /* =========================
