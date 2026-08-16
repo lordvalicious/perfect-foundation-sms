@@ -1,50 +1,118 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap");
 
 /* ==========================================================================
-   PERFECT FOUNDATION — ENTERPRISE TEAL DESIGN SYSTEM
-   Tokens first, light/dark, glassmorphism. Ported from the demo theme.
+   PERFECT FOUNDATION — MIDNIGHT INDIGO DESIGN SYSTEM
+   Dark-first premium theme with indigo-violet accents and gold highlights.
+   Tokens first; everything cascades from these.
    ========================================================================== */
 
 :root {
   --font-sans: "Inter", "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif;
   --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
-  --radius: 14px;
-  --radius-sm: 10px;
+  --radius: 16px;
+  --radius-sm: 11px;
   --radius-xs: 8px;
   --topbar-h: 68px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Light theme (default) */
+/* Midnight Indigo (default) */
 :root,
-[data-theme="light"] {
-  --void: #f2f6f5;
-  --abyss: #e9efed;
-  --stone-900: #ffffff;
-  --stone-800: #f8fbfa;
-  --stone-700: #eef3f1;
-  --stone-600: #e3ece9;
-  --iron: #c3d3cf;
-  --iron-bright: #a9c2bb;
-  --gold: #0f9d8e;
-  --gold-soft: #0b7f72;
-  --gold-deep: #0b7f72;
-  --cinnabar: #0f9d8e;
-  --cinnabar-soft: #0b7f72;
-  --cinnabar-deep: #0b7f72;
-  --cinnabar-glow: rgba(15, 157, 142, 0.28);
+[data-theme="dark"] {
+  --void: #070a14;
+  --abyss: #0a0e1c;
+  --stone-900: #12162a;
+  --stone-800: #171c33;
+  --stone-700: #1d2440;
+  --stone-600: #262f52;
+  --iron: #2c3557;
+  --iron-bright: #3a4470;
+  --gold: #f0b45a;
+  --gold-soft: #d99a38;
+  --gold-deep: #b97f24;
+  --cinnabar: #7b6cf0;
+  --cinnabar-soft: #6a5ae0;
+  --cinnabar-deep: #5a48d6;
+  --cinnabar-glow: rgba(123, 108, 240, 0.34);
   --ember: var(--cinnabar);
-  --candle: rgba(15, 157, 142, 0.16);
+  --candle: rgba(123, 108, 240, 0.16);
+  --violet: #a78bfa;
+  --cyan: #38bdf8;
+  --primary: #7b6cf0;
+  --primary-strong: #8f82f5;
+  --primary-soft: rgba(123, 108, 240, 0.16);
+  --primary-glow: rgba(123, 108, 240, 0.36);
+  --violet-soft: rgba(167, 139, 250, 0.16);
+  --sky: #38bdf8;
+  --emerald: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.16);
+  --success: #34d399;
+  --success-soft: rgba(52, 211, 153, 0.16);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.16);
+  --info-soft: rgba(56, 189, 248, 0.16);
+  --bg: var(--void);
+  --sidebar-bg: rgba(10, 14, 28, 0.82);
+  --sidebar-hover: var(--stone-700);
+  --surface: var(--stone-900);
+  --surface-2: var(--stone-800);
+  --surface-3: var(--stone-700);
+  --surface-4: var(--stone-600);
+  --border: #232b4a;
+  --border-strong: #323c66;
+  --border-soft: rgba(123, 108, 240, 0.13);
+  --text: #e8eaf8;
+  --text-2: #a9b0d6;
+  --text-muted: #7c84ad;
+  --accent: var(--ember);
+  --accent-2: var(--cinnabar-deep);
+  --sidebar-text: var(--text);
+  --sidebar-muted: #828ab5;
+  --row-hover: #1a2038;
+  --chart-grid: #232b4a;
+  --topbar-bg: rgba(10, 14, 28, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --shadow: 0 8px 30px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 20px 55px rgba(0, 0, 0, 0.62);
+  --overlay: rgba(3, 5, 12, 0.68);
+
+  color-scheme: dark;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* Starlight (light variant) */
+[data-theme="light"] {
+  --void: #f4f5fb;
+  --abyss: #eceef8;
+  --stone-900: #ffffff;
+  --stone-800: #f8f9fd;
+  --stone-700: #eef0f9;
+  --stone-600: #e3e6f3;
+  --iron: #c7cce8;
+  --iron-bright: #a9b2da;
+  --gold: #b97f24;
+  --gold-soft: #d99a38;
+  --gold-deep: #a06b1b;
+  --cinnabar: #6d5df0;
+  --cinnabar-soft: #5a4ad6;
+  --cinnabar-deep: #4a3bc4;
+  --cinnabar-glow: rgba(109, 93, 240, 0.28);
+  --ember: var(--cinnabar);
+  --candle: rgba(109, 93, 240, 0.14);
   --violet: #7c3aed;
-  --cyan: #14b8a6;
-  --primary: #0f9d8e;
-  --primary-strong: #0b7f72;
-  --primary-soft: #dff4ef;
-  --primary-glow: rgba(15, 157, 142, 0.26);
+  --cyan: #0891b2;
+  --primary: #6d5df0;
+  --primary-strong: #5a4ad6;
+  --primary-soft: #ece8ff;
+  --primary-glow: rgba(109, 93, 240, 0.26);
   --violet-soft: #ede9fe;
   --sky: #0ea5e9;
-  --emerald: #10b981;
-  --amber: #f59e0b;
+  --emerald: #059669;
+  --amber: #d97706;
   --rose: #f43f5e;
   --danger: #dc2626;
   --danger-soft: #fee2e2;
@@ -54,97 +122,31 @@
   --warning-soft: #fef3c7;
   --info-soft: #e0f2fe;
   --bg: var(--void);
-  --sidebar-bg: rgba(255, 255, 255, 0.72);
+  --sidebar-bg: rgba(255, 255, 255, 0.74);
   --sidebar-hover: var(--stone-700);
   --surface: var(--stone-900);
   --surface-2: var(--stone-800);
   --surface-3: var(--stone-700);
   --surface-4: var(--stone-600);
-  --border: #dfe8e5;
-  --border-strong: #c3d3cf;
-  --border-soft: rgba(15, 157, 142, 0.14);
-  --text: #14302b;
-  --text-2: #3f5b55;
-  --text-muted: #64807a;
+  --border: #e0e3f2;
+  --border-strong: #c9cfe8;
+  --border-soft: rgba(109, 93, 240, 0.13);
+  --text: #171a2e;
+  --text-2: #3f4570;
+  --text-muted: #6a719e;
   --accent: var(--ember);
   --accent-2: var(--cinnabar-deep);
   --sidebar-text: var(--text);
-  --sidebar-muted: #6f8a84;
-  --row-hover: #edf3f1;
-  --chart-grid: #e0e9e6;
-  --topbar-bg: rgba(255, 255, 255, 0.74);
+  --sidebar-muted: #6f76a3;
+  --row-hover: #eef0fa;
+  --chart-grid: #e3e6f3;
+  --topbar-bg: rgba(255, 255, 255, 0.76);
   --glass-border: rgba(255, 255, 255, 0.65);
-  --shadow: 0 6px 24px rgba(16, 40, 34, 0.07);
-  --shadow-lg: 0 16px 44px rgba(16, 40, 34, 0.13);
-  --overlay: rgba(16, 40, 34, 0.5);
+  --shadow: 0 8px 28px rgba(23, 27, 60, 0.08);
+  --shadow-lg: 0 18px 48px rgba(23, 27, 60, 0.15);
+  --overlay: rgba(23, 27, 60, 0.5);
 
   color-scheme: light;
-  color: var(--text);
-  background: var(--bg);
-}
-
-[data-theme="dark"] {
-  --void: #08110f;
-  --abyss: #0f1b19;
-  --stone-900: #0f1b19;
-  --stone-800: #13211e;
-  --stone-700: #182a26;
-  --stone-600: #223a35;
-  --iron: #305248;
-  --iron-bright: #3d5f54;
-  --gold: #2dd4bf;
-  --gold-soft: #14b8a6;
-  --gold-deep: #0d9488;
-  --cinnabar: #2dd4bf;
-  --cinnabar-soft: #14b8a6;
-  --cinnabar-deep: #0d9488;
-  --cinnabar-glow: rgba(45, 212, 191, 0.32);
-  --ember: var(--cinnabar);
-  --candle: rgba(45, 212, 191, 0.16);
-  --violet: #a78bfa;
-  --cyan: #2dd4bf;
-  --primary: #2dd4bf;
-  --primary-strong: #14b8a6;
-  --primary-soft: rgba(45, 212, 191, 0.14);
-  --primary-glow: rgba(45, 212, 191, 0.3);
-  --violet-soft: rgba(167, 139, 250, 0.16);
-  --sky: #38bdf8;
-  --emerald: #34d399;
-  --amber: #fbbf24;
-  --rose: #fb7185;
-  --danger: #f87171;
-  --danger-soft: rgba(248, 113, 113, 0.16);
-  --success: #4ade80;
-  --success-soft: rgba(74, 222, 128, 0.16);
-  --warning: #fbbf24;
-  --warning-soft: rgba(251, 191, 36, 0.16);
-  --info-soft: rgba(56, 189, 248, 0.16);
-  --bg: var(--void);
-  --sidebar-bg: rgba(8, 17, 15, 0.78);
-  --sidebar-hover: var(--stone-700);
-  --surface: var(--stone-900);
-  --surface-2: var(--stone-800);
-  --surface-3: var(--stone-700);
-  --surface-4: var(--stone-600);
-  --border: #223a35;
-  --border-strong: #305248;
-  --border-soft: rgba(45, 212, 191, 0.12);
-  --text: #e6f2ef;
-  --text-2: #b5cfc9;
-  --text-muted: #8aa6a0;
-  --accent: var(--ember);
-  --accent-2: var(--cinnabar-deep);
-  --sidebar-text: var(--text);
-  --sidebar-muted: #7d9a94;
-  --row-hover: #1b2f2a;
-  --chart-grid: #223a35;
-  --topbar-bg: rgba(8, 17, 15, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.06);
-  --shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 16px 44px rgba(0, 0, 0, 0.55);
-  --overlay: rgba(4, 12, 10, 0.6);
-
-  color-scheme: dark;
   color: var(--text);
   background: var(--bg);
 }
@@ -167,7 +169,8 @@ body {
   color: var(--text);
   background:
     radial-gradient(1100px 620px at 88% -12%, var(--primary-glow), transparent 55%),
-    radial-gradient(900px 520px at -8% 108%, rgba(20, 184, 166, 0.07), transparent 55%),
+    radial-gradient(900px 520px at -8% 108%, rgba(167, 139, 250, 0.09), transparent 55%),
+    radial-gradient(700px 460px at 55% 120%, rgba(251, 191, 36, 0.05), transparent 60%),
     var(--bg);
   background-attachment: fixed;
   -webkit-font-smoothing: antialiased;
