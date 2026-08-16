@@ -8,6 +8,7 @@ from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed
 from apps.accounts.permissions import (
     IsAcademicMemberRole,
     IsTeacherRole,
@@ -96,10 +97,7 @@ class AttendanceListView(generics.ListAPIView):
         if student:
             queryset = queryset.filter(student_id=student)
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, self.request, "campus_id")
 
         class_obj = self.request.query_params.get("class")
 
@@ -162,6 +160,16 @@ class AttendanceBulkMarkView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        try:
+            campus_id = int(campus)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "campus is invalid."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assert_campus_allowed(user, campus_id)
+
         if not is_manager(user):
             if not teacher_can_access_section(
                 user,
@@ -186,7 +194,7 @@ class AttendanceBulkMarkView(APIView):
 
         enrollments = Enrollment.objects.filter(
             academic_year_id=academic_year,
-            campus_id=campus,
+            campus_id=campus_id,
             class_obj_id=class_obj,
             section_id=section,
             status="active",
@@ -225,7 +233,7 @@ class AttendanceBulkMarkView(APIView):
                         defaults={
                             "enrollment": enrollment,
                             "academic_year_id": academic_year,
-                            "campus_id": campus,
+                            "campus_id": campus_id,
                             "class_obj_id": class_obj,
                             "section_id": section,
                             "status": att_status,
@@ -337,10 +345,7 @@ class AttendanceSummaryView(APIView):
         if academic_year:
             queryset = queryset.filter(academic_year_id=academic_year)
 
-        campus = request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, request, "campus_id")
 
         class_obj = request.query_params.get("class")
 
@@ -399,7 +404,6 @@ class AttendanceMonthlyView(APIView):
         queryset = Attendance.objects.all()
 
         academic_year = request.query_params.get("academic_year")
-        campus = request.query_params.get("campus")
         class_obj = request.query_params.get("class")
         section = request.query_params.get("section")
         month = request.query_params.get("month")
@@ -433,8 +437,7 @@ class AttendanceMonthlyView(APIView):
         if academic_year:
             queryset = queryset.filter(academic_year_id=academic_year)
 
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, request, "campus_id")
 
         if section:
             queryset = queryset.filter(section_id=section)

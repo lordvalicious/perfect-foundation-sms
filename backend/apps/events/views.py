@@ -3,6 +3,7 @@ from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import IsStaffRole
 from apps.audit.models import record_audit
 
@@ -41,10 +42,7 @@ class EventListCreateView(generics.ListCreateAPIView):
         ):
             queryset = queryset.filter(status="published")
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, self.request, "campus_id")
 
         status_param = self.request.query_params.get("status")
 

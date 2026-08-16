@@ -1,6 +1,7 @@
 from django.db.models import Q
 from rest_framework import generics
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import IsAcademicMemberRole
 from apps.accounts.scopes import (
     get_teacher_profile,
@@ -86,10 +87,7 @@ class TimetableEntryListView(generics.ListAPIView):
         if day:
             queryset = queryset.filter(day=day)
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, self.request, "campus_id")
 
         class_obj = self.request.query_params.get("class")
 

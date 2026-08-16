@@ -6,6 +6,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import IsAccountantRole
 
 from .utils import quantize, to_csv
@@ -37,10 +38,7 @@ class EnrollmentReportView(APIView):
                 academic_year_id=academic_year,
             )
 
-        campus = request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, request, "campus_id")
 
         records = []
 
@@ -151,10 +149,7 @@ class AttendanceReportView(APIView):
             .select_related("campus", "class_obj")
         )
 
-        campus = request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, request, "campus_id")
 
         class_obj = request.query_params.get("class_obj")
 
@@ -452,10 +447,11 @@ class FeesReportView(APIView):
             )
         )
 
-        campus = request.query_params.get("campus")
-
-        if campus:
-            invoices = invoices.filter(enrollment__campus_id=campus)
+        invoices = apply_campus_scope(
+            invoices,
+            request,
+            "enrollment__campus_id",
+        )
 
         start_date = request.query_params.get("start_date")
         end_date = request.query_params.get("end_date")
@@ -950,10 +946,7 @@ class StudentStatusReportView(APIView):
             .select_related("campus", "student")
         )
 
-        campus = request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, request, "campus_id")
 
         rows = {}
         status_counts = {}
@@ -1056,12 +1049,11 @@ class FeeCategoryReportView(APIView):
             )
         )
 
-        campus = request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(
-                invoice__enrollment__campus_id=campus,
-            )
+        queryset = apply_campus_scope(
+            queryset,
+            request,
+            "invoice__enrollment__campus_id",
+        )
 
         category_totals = {}
         rows = {}
@@ -1182,10 +1174,11 @@ class StaffReportView(APIView):
             .select_related("primary_campus")
         )
 
-        campus = request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(primary_campus_id=campus)
+        queryset = apply_campus_scope(
+            queryset,
+            request,
+            "primary_campus_id",
+        )
 
         rows = {}
 

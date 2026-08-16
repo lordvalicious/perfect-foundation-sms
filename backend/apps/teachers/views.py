@@ -2,6 +2,7 @@ from django.db.models import Q
 from rest_framework import generics
 from rest_framework.exceptions import NotFound
 
+from apps.accounts.access import restrict_to_allowed_campuses
 from apps.accounts.permissions import IsAdminOrReadOnly
 from apps.accounts.scopes import get_teacher_profile, is_manager
 
@@ -56,6 +57,12 @@ class TeacherListCreateView(generics.ListCreateAPIView):
 
         if campus:
             queryset = queryset.filter(campus__iexact=campus)
+
+        queryset = restrict_to_allowed_campuses(
+            queryset,
+            user,
+            "primary_campus_id",
+        )
 
         return queryset
 

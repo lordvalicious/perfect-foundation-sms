@@ -4,6 +4,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import IsAcademicMemberRole, IsTeacherRole
 from apps.accounts.scopes import (
     get_student_profile,
@@ -102,10 +103,7 @@ class ExamListView(generics.ListAPIView):
                 Q(name__icontains=search)
             )
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(queryset, self.request, "campus_id")
 
         class_obj = self.request.query_params.get("class")
 

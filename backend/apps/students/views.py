@@ -2,6 +2,7 @@ from django.db.models import Q
 from rest_framework import generics
 from rest_framework.exceptions import NotFound
 
+from apps.accounts.access import campus_access
 from apps.accounts.permissions import (
     IsAdminOrReadOnly,
     IsAdminRole,
@@ -79,11 +80,17 @@ class StudentListCreateView(generics.ListCreateAPIView):
         if gender:
             queryset = queryset.filter(gender=gender)
 
-        campus = self.request.query_params.get("campus")
+        access = campus_access(self.request)
 
-        if campus:
+        if not access["global"]:
+            allowed = access["allowed_ids"]
             queryset = queryset.filter(
-                enrollments__campus_id=campus,
+                enrollments__campus_id__in=allowed or [-1],
+                enrollments__status="active",
+            )
+        elif access["requested"]:
+            queryset = queryset.filter(
+                enrollments__campus_id=access["requested"],
                 enrollments__status="active",
             )
 

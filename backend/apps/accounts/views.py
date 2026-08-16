@@ -16,6 +16,7 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.audit.models import record_audit
+from .access import restrict_to_allowed_campuses
 from apps.accounts.permissions import (
     IsAcademicMemberRole,
     IsAdminOrReadOnly,
@@ -438,6 +439,12 @@ class StaffListCreateView(generics.ListCreateAPIView):
 
         if campus:
             queryset = queryset.filter(campus__iexact=campus)
+
+        queryset = restrict_to_allowed_campuses(
+            queryset,
+            self.request.user,
+            "primary_campus_id",
+        )
 
         return queryset
 

@@ -5,6 +5,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import (
     IsAccountantRole,
     IsFinanceReaderRole,
@@ -189,8 +190,11 @@ class FeeStructureListView(generics.ListCreateAPIView):
                 academic_year_id=params.get("academic_year")
             )
 
-        if params.get("campus"):
-            queryset = queryset.filter(campus_id=params.get("campus"))
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "campus_id",
+        )
 
         if params.get("class_obj"):
             queryset = queryset.filter(class_obj_id=params.get("class_obj"))

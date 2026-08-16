@@ -1,6 +1,7 @@
 from django.db.models import Count, Q
 from rest_framework import generics
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import HasActiveInstitution, IsAdminOrReadOnly
 from apps.students.models import Enrollment
 from .models import (
@@ -116,10 +117,11 @@ class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
             .order_by("campus__name", "name")
         )
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(campus_id=campus)
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "campus_id",
+        )
 
         return queryset
 
@@ -135,10 +137,11 @@ class ClassListView(NoPaginationMixin, generics.ListAPIView):
             .order_by("level", "name")
         )
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(unit__campus_id=campus)
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "unit__campus_id",
+        )
 
         status = self.request.query_params.get("status")
 
@@ -161,10 +164,11 @@ class SectionListView(NoPaginationMixin, generics.ListAPIView):
             .order_by("class_obj__name", "name")
         )
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(class_obj__unit__campus_id=campus)
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "class_obj__unit__campus_id",
+        )
 
         class_obj = self.request.query_params.get("class")
 
@@ -220,10 +224,11 @@ class SubjectOfferingListView(NoPaginationMixin, generics.ListAPIView):
             .order_by("class_obj__name", "subject__name")
         )
 
-        campus = self.request.query_params.get("campus")
-
-        if campus:
-            queryset = queryset.filter(class_obj__unit__campus_id=campus)
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "class_obj__unit__campus_id",
+        )
 
         class_obj = self.request.query_params.get("class")
 
