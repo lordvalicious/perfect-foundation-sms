@@ -255,6 +255,96 @@ window.PFCharts = (() => {
         colors: ["#f59e0b"],
       },
     },
+
+    chartWeeklyAttendance: {
+      type: "bar", height: 220,
+      series: [
+        { name: "Present", data: D.attendanceWeekly.map((p) => p.present) },
+        { name: "Absent", data: D.attendanceWeekly.map((p) => p.absent) },
+      ],
+      options: {
+        ...base("bar", 220),
+        xaxis: catAxis(D.attendanceWeekly.map((p) => p.day)),
+        yaxis: { labels: { formatter: (v) => v.toLocaleString() } },
+        plotOptions: { bar: { borderRadius: 4, columnWidth: "52%", stacked: false } },
+        colors: ["#10b981", "#f43f5e"],
+        legend: { position: "bottom" },
+        chart: { ...base("bar", 220).chart, id: "weekly-att" },
+      },
+    },
+
+    chartRevenueGrowth: {
+      type: "area", height: 300,
+      series: [{ name: "Revenue (₨ M)", data: D.revenueGrowth.map((p) => p.value) }],
+      options: {
+        ...base("area", 300),
+        title: { text: "Revenue Growth", style: { fontSize: "14px", fontWeight: 700, color: readTheme().text } },
+        xaxis: catAxis(D.revenueGrowth.map((p) => p.month)),
+        yaxis: { labels: { formatter: (v) => `₨${v}M` } },
+        fill: { type: "gradient", gradient: { opacityFrom: 0.38, opacityTo: 0.02 } },
+        colors: ["#4f46e5"],
+      },
+    },
+
+    chartLibraryUsage: {
+      type: "line", height: 300,
+      series: [
+        { name: "Issued", data: D.libraryUsage.map((p) => p.issued) },
+        { name: "Returned", data: D.libraryUsage.map((p) => p.returned) },
+      ],
+      options: {
+        ...base("line", 300),
+        title: { text: "Library Usage", style: { fontSize: "14px", fontWeight: 700, color: readTheme().text } },
+        xaxis: catAxis(D.libraryUsage.map((p) => p.month)),
+        yaxis: { labels: { formatter: (v) => v.toLocaleString() } },
+        colors: ["#f59e0b", "#14b8a6"],
+        stroke: { width: 2.5, curve: "smooth" },
+        legend: { position: "bottom" },
+      },
+    },
+
+    chartTransportUsage: {
+      type: "donut", height: 300,
+      series: D.transportUsage.map((p) => p.students),
+      options: {
+        ...base("donut", 300),
+        title: { text: "Transport Usage", style: { fontSize: "14px", fontWeight: 700, color: readTheme().text } },
+        labels: D.transportUsage.map((p) => p.mode),
+        colors: ["#4f46e5", "#0ea5e9", "#10b981", "#f59e0b"],
+        legend: { position: "bottom" },
+      },
+    },
+
+    chartPerformanceTrends: {
+      type: "line", height: 300,
+      series: [
+        { name: "Average Score %", data: D.performanceTrends.map((p) => p.avg) },
+        { name: "Pass Rate %", data: D.performanceTrends.map((p) => p.pass) },
+      ],
+      options: {
+        ...base("line", 300),
+        title: { text: "Performance Trends", style: { fontSize: "14px", fontWeight: 700, color: readTheme().text } },
+        xaxis: catAxis(D.performanceTrends.map((p) => p.term)),
+        yaxis: { min: 60, max: 100, labels: { formatter: (v) => `${v}%` } },
+        colors: ["#7c3aed", "#f97316"],
+        stroke: { width: 2.5, curve: "smooth" },
+        markers: { size: 3 },
+        legend: { position: "bottom" },
+      },
+    },
+
+    chartTopSubjects: {
+      type: "bar", height: 300,
+      series: [{ name: "Pass Rate %", data: D.topSubjects.map((p) => p.pass) }],
+      options: {
+        ...base("bar", 300),
+        title: { text: "Top Performing Subjects", style: { fontSize: "14px", fontWeight: 700, color: readTheme().text } },
+        xaxis: catAxis(D.topSubjects.map((p) => p.subject)),
+        yaxis: { max: 100, labels: { formatter: (v) => `${v}%` } },
+        plotOptions: { bar: { borderRadius: 5, horizontal: true, barHeight: "58%" } },
+        colors: ["#0ea5e9"],
+      },
+    },
   });
 
   function init() {

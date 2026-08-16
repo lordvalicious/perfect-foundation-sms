@@ -71,6 +71,9 @@ window.PFData = (() => {
     studentTeacherRatio: "15:1",
     avgScore: 71.4,
     passRate: 88.7,
+    promotionRate: 91.4,
+    graduationRate: 96.2,
+    dropoutRate: 2.1,
     systemUsers: 26,
     todayCollection: 684000,
     scholarships: 640000,
@@ -218,6 +221,139 @@ window.PFData = (() => {
     { title: "Summer Sports Gala", date: "14 Aug", type: "Sports" },
   ];
 
+  // --- analytics additions --------------------------------------------------
+  const revenueGrowth = revenueExpenses.map((r) => ({ month: r.month, value: +(r.revenue / 1000000).toFixed(1) }));
+  const libraryUsage = months.map((m) => ({
+    month: m,
+    issued: rint(260, 480),
+    returned: rint(240, 430),
+  }));
+  const transportUsage = [
+    { mode: "School Bus", students: 742 },
+    { mode: "School Van", students: 396 },
+    { mode: "Private Transport", students: 514 },
+    { mode: "Walking / Other", students: 190 },
+  ];
+  const performanceTrends = [
+    { term: "2023 T1", avg: 66.2, pass: 82.1 },
+    { term: "2023 T2", avg: 67.8, pass: 83.4 },
+    { term: "2024 T1", avg: 68.5, pass: 84.0 },
+    { term: "2024 T2", avg: 69.3, pass: 85.2 },
+    { term: "2025 T1", avg: 70.1, pass: 86.0 },
+    { term: "2025 T2", avg: 70.9, pass: 87.4 },
+    { term: "2026 T1", avg: 71.4, pass: 88.7 },
+  ];
+  const topSubjects = [
+    { subject: "Mathematics", pass: 93.1 },
+    { subject: "Computer Science", pass: 91.8 },
+    { subject: "English", pass: 89.6 },
+    { subject: "Physics", pass: 88.2 },
+    { subject: "Chemistry", pass: 86.9 },
+    { subject: "Biology", pass: 85.4 },
+  ];
+  const attendanceWeekly = [
+    { day: "Mon", present: 1612, late: 96, absent: 84, excused: 39 },
+    { day: "Tue", present: 1608, late: 102, absent: 92, excused: 29 },
+    { day: "Wed", present: 1624, late: 88, absent: 76, excused: 43 },
+    { day: "Thu", present: 1615, late: 94, absent: 89, excused: 33 },
+    { day: "Fri", present: 1589, late: 142, absent: 61, excused: 39 },
+  ];
+  const attendanceMonthly = [
+    { week: "Week 1", percent: 94.1 },
+    { week: "Week 2", percent: 93.4 },
+    { week: "Week 3", percent: 92.8 },
+    { week: "Week 4", percent: 93.2 },
+  ];
+
+  // --- finance additions ----------------------------------------------------
+  const latestTransactions = Array.from({ length: 6 }, () => ({
+    receipt: `RCPT-${String(rint(100000, 999999))}`,
+    student: `${pick(FIRST)} ${pick(LAST)}`,
+    amount: rint(8, 70) * 1000,
+    method: pick(METHODS),
+    time: `${rint(1, 55)}m ago`,
+    status: pick(["paid", "pending"]),
+  }));
+
+  // --- academic additions ---------------------------------------------------
+  const upcomingExams = [
+    { title: "Mid-term Examinations", when: "12 – 18 Aug", cls: "All Grades" },
+    { title: "Mathematics Olympiad", when: "24 Aug", cls: "Grade 6 – 8" },
+    { title: "Physics Practicals", when: "2 – 4 Sep", cls: "Grade 7 – 8" },
+  ];
+  const upcomingHolidays = [
+    { title: "Independence Day", when: "14 Aug", type: "National" },
+    { title: "Mid-term Break", when: "19 – 20 Aug", type: "School" },
+    { title: "Teachers' Day", when: "5 Sep", type: "Special" },
+  ];
+  const assignmentsDue = [
+    { title: "Algebra Problem Set 4", cls: "Grade 7 A", due: "Tomorrow", priority: "High" },
+    { title: "Essay: Renewable Energy", cls: "Grade 6 B", due: "In 3 days", priority: "Med" },
+    { title: "Chemistry Lab Report", cls: "Grade 8 C", due: "In 5 days", priority: "Med" },
+    { title: "Reading Comprehension", cls: "Grade 5 A", due: "In 6 days", priority: "Low" },
+  ];
+  const topStudents = [
+    { name: "Hamza Malik", cls: "Grade 7 A", score: 97.4 },
+    { name: "Ayesha Khan", cls: "Grade 6 B", score: 96.8 },
+    { name: "Zara Hussain", cls: "Grade 8 A", score: 96.1 },
+    { name: "Bilal Ahmed", cls: "Grade 5 C", score: 95.6 },
+    { name: "Fatima Noor", cls: "Grade 7 B", score: 95.2 },
+  ];
+  const recentResults = [
+    { student: "Hamza Malik", subject: "Mathematics", score: 94, grade: "A+" },
+    { student: "Ayesha Khan", subject: "English", score: 91, grade: "A+" },
+    { student: "Omar Sheikh", subject: "Physics", score: 88, grade: "A" },
+    { student: "Mariam Iqbal", subject: "Chemistry", score: 86, grade: "A" },
+    { student: "Saad Anwar", subject: "Biology", score: 84, grade: "A" },
+  ];
+
+  // --- people / recent lists ------------------------------------------------
+  const recentTeachers = [
+    { name: "Ms. Fatima Noor", detail: "Mathematics · joined 2 Aug", tone: "sky", icon: "fa-chalkboard-user" },
+    { name: "Mr. Usman Tariq", detail: "Computer Studies · joined 28 Jul", tone: "violet", icon: "fa-chalkboard-user" },
+    { name: "Ms. Iqra Raza", detail: "Sciences · joined 15 Jul", tone: "emerald", icon: "fa-chalkboard-user" },
+    { name: "Mr. Danish Farooq", detail: "Languages · joined 1 Jul", tone: "amber", icon: "fa-chalkboard-user" },
+  ];
+  const recentStaff = [
+    { name: "Sana Tariq", detail: "Accounts Officer · joined 5 Aug", tone: "emerald", icon: "fa-id-badge" },
+    { name: "Waleed Mirza", detail: "Lab Assistant · joined 22 Jul", tone: "sky", icon: "fa-flask" },
+    { name: "Amna Siddiqui", detail: "Librarian · joined 12 Jul", tone: "violet", icon: "fa-book" },
+    { name: "Imran Sheikh", detail: "Transport Officer · joined 30 Jun", tone: "amber", icon: "fa-bus" },
+  ];
+  const recentParents = [
+    { name: "Mrs. Noreen Qureshi", detail: "Parent of Ayesha · Grade 3 A", tone: "rose", icon: "fa-people-roof" },
+    { name: "Mr. Fahad Chaudhry", detail: "Parent of Arham · Grade 5 B", tone: "indigo", icon: "fa-people-roof" },
+    { name: "Ms. Rabia Anwar", detail: "Parent of Mina · Grade 4 C", tone: "sky", icon: "fa-people-roof" },
+    { name: "Mr. Saad Abbasi", detail: "Parent of Eman · Grade 2 A", tone: "amber", icon: "fa-people-roof" },
+  ];
+  const recentEvents = [
+    { name: "Annual Science Fair", detail: "21 Aug · Workshop", tone: "emerald", icon: "fa-flask" },
+    { name: "Summer Sports Gala", detail: "14 Aug · Sports", tone: "sky", icon: "fa-person-running" },
+    { name: "Independence Day", detail: "14 Aug · National", tone: "rose", icon: "fa-flag" },
+    { name: "Parent Teacher Meeting", detail: "7 Aug · PTM", tone: "indigo", icon: "fa-people-arrows" },
+  ];
+  const recentHomework = [
+    { student: "Ali Shah", detail: "Computer Science · 3h ago", tone: "rose", icon: "fa-pen-to-square" },
+    { student: "Noor Malik", detail: "Mathematics · 5h ago", tone: "indigo", icon: "fa-pen-to-square" },
+    { student: "Kashif Butt", detail: "English · Yesterday", tone: "amber", icon: "fa-pen-to-square" },
+  ];
+  const recentAnnouncements = [
+    { title: "School closed on Independence Day", detail: "Posted 13 Aug", tone: "rose", icon: "fa-bullhorn" },
+    { title: "Sports Day rehearsal rescheduled", detail: "Posted 12 Aug", tone: "sky", icon: "fa-bullhorn" },
+    { title: "New computer lab extended hours", detail: "Posted 10 Aug", tone: "emerald", icon: "fa-bullhorn" },
+  ];
+
+  // --- system health --------------------------------------------------------
+  const systemHealth = {
+    uptime: "99.98%",
+    dbStatus: "Connected",
+    storagePct: 62,
+    storageUsed: "186 GB / 300 GB",
+    apiLatency: "42 ms",
+    lastBackup: "Today 03:00",
+    lastLogin: "Today 08:12",
+  };
+
   return {
     kpis,
     enrollmentTrend,
@@ -245,5 +381,25 @@ window.PFData = (() => {
     tasks,
     calendarEvents,
     upcomingEvents,
+    revenueGrowth,
+    libraryUsage,
+    transportUsage,
+    performanceTrends,
+    topSubjects,
+    attendanceWeekly,
+    attendanceMonthly,
+    latestTransactions,
+    upcomingExams,
+    upcomingHolidays,
+    assignmentsDue,
+    topStudents,
+    recentResults,
+    recentTeachers,
+    recentStaff,
+    recentParents,
+    recentEvents,
+    recentHomework,
+    recentAnnouncements,
+    systemHealth,
   };
 })();

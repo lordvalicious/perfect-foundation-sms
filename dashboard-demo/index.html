@@ -164,6 +164,31 @@
           <!-- Finance widgets -->
           <div class="row g-3 mb-3" id="financeWidgets"></div>
 
+          <!-- Operations: attendance + academic + weekly -->
+          <div class="row g-3 mb-3">
+            <div class="col-xl-4">
+              <div class="pf-card">
+                <div class="pf-card-head"><h2>Attendance Today</h2><span class="live-pill"><span class="pulse-dot"></span>Live</span></div>
+                <div id="attendanceOps"></div>
+              </div>
+            </div>
+            <div class="col-xl-4">
+              <div class="pf-card">
+                <div class="pf-card-head"><h2>Weekly Attendance</h2><span class="text-muted small" id="weekAttSummary"></span></div>
+                <div class="card-chart" id="chartWeeklyAttendance"></div>
+              </div>
+            </div>
+            <div class="col-xl-4">
+              <div class="pf-card">
+                <div class="pf-card-head"><h2>Academic Overview</h2><span class="live-pill"><span class="pulse-dot"></span>Session</span></div>
+                <div id="academicOps"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Finance insights: scholarships/discounts/refunds, collection, transactions -->
+          <div class="row g-3 mb-3" id="financeInsights"></div>
+
           <!-- Analytics -->
           <div class="section-head"><h2>Analytics <small class="text-muted">· Live overview</small></h2><span class="live-pill"><span class="pulse-dot"></span>Real-time</span></div>
           <div class="row g-3 mb-3">
@@ -182,6 +207,11 @@
             <div class="col-lg-4"><div class="pf-card chart-card" id="cardTopClasses"><div class="card-chart" id="chartTopClasses"></div></div></div>
             <div class="col-lg-6"><div class="pf-card chart-card" id="cardMonthlyAdmissions"><div class="card-chart" id="chartMonthlyAdmissions"></div></div></div>
             <div class="col-lg-6"><div class="pf-card chart-card" id="cardExpenses"><div class="card-chart" id="chartExpenses"></div></div></div>
+            <div class="col-lg-6"><div class="pf-card chart-card" id="cardRevenueGrowth"><div class="card-chart" id="chartRevenueGrowth"></div></div></div>
+            <div class="col-lg-6"><div class="pf-card chart-card" id="cardLibraryUsage"><div class="card-chart" id="chartLibraryUsage"></div></div></div>
+            <div class="col-lg-6"><div class="pf-card chart-card" id="cardPerformanceTrends"><div class="card-chart" id="chartPerformanceTrends"></div></div></div>
+            <div class="col-lg-3"><div class="pf-card chart-card" id="cardTransportUsage"><div class="card-chart" id="chartTransportUsage"></div></div></div>
+            <div class="col-lg-3"><div class="pf-card chart-card" id="cardTopSubjects"><div class="card-chart" id="chartTopSubjects"></div></div></div>
           </div>
 
           <!-- Calendar + upcoming -->
@@ -227,6 +257,25 @@
               <div class="pf-card">
                 <div class="pf-card-head"><h2>Recent Activity</h2><span class="live-pill"><span class="pulse-dot"></span>Live</span></div>
                 <ul class="activity-list" id="activityList"></ul>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent people / records + academic activity -->
+          <div class="row g-3 mb-3">
+            <div class="col-xl-6">
+              <div class="pf-card">
+                <div class="pf-card-head">
+                  <h2>Recent People &amp; Records</h2>
+                  <div class="kpi-chip-row" id="recentTabs" role="tablist"></div>
+                </div>
+                <ul class="activity-list" id="recentList"></ul>
+              </div>
+            </div>
+            <div class="col-xl-6">
+              <div class="pf-card">
+                <div class="pf-card-head"><h2>Academic Activity</h2><span class="live-pill"><span class="pulse-dot"></span>Live</span></div>
+                <ul class="activity-list" id="academicList"></ul>
               </div>
             </div>
           </div>

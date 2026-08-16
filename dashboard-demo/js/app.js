@@ -113,6 +113,9 @@
         { k: "paidInvoices", label: "Paid Invoices", icon: "fa-circle-check", color: "emerald" },
         { k: "pendingInvoices", label: "Pending Invoices", icon: "fa-clock", color: "amber" },
         { k: "overdueInvoices", label: "Overdue", icon: "fa-triangle-exclamation", color: "rose" },
+        { k: "scholarships", label: "Scholarships", icon: "fa-award", color: "violet", money: true },
+        { k: "discounts", label: "Discounts", icon: "fa-tags", color: "sky", money: true },
+        { k: "refunds", label: "Refunds", icon: "fa-rotate-left", color: "rose", money: true },
       ],
     },
     {
@@ -133,8 +136,26 @@
         { k: "studentTeacherRatio", label: "Student : Teacher", icon: "fa-scale-balanced", color: "indigo" },
         { k: "avgScore", label: "Average Score", icon: "fa-ranking-star", color: "violet", suffix: "%" },
         { k: "passRate", label: "Pass Rate", icon: "fa-medal", color: "emerald", suffix: "%" },
+        { k: "promotionRate", label: "Promotion Rate", icon: "fa-arrow-up-short-wide", color: "sky", suffix: "%" },
+        { k: "graduationRate", label: "Graduation Rate", icon: "fa-graduation-cap", color: "violet", suffix: "%" },
+        { k: "dropoutRate", label: "Dropout Rate", icon: "fa-user-slash", color: "rose", suffix: "%" },
         { k: "assignments", label: "Assignments", icon: "fa-pen-to-square", color: "amber" },
         { k: "examinations", label: "Exams", icon: "fa-file-circle-check", color: "rose" },
+        { k: "systemUsers", label: "System Users", icon: "fa-user-lock", color: "indigo" },
+      ],
+    },
+    {
+      id: "resources",
+      label: "Resources",
+      items: [
+        { k: "sessions", label: "Academic Sessions", icon: "fa-calendar-days", color: "indigo" },
+        { k: "events", label: "Events", icon: "fa-flag", color: "amber" },
+        { k: "announcements", label: "Announcements", icon: "fa-bullhorn", color: "rose" },
+        { k: "libraryBooks", label: "Library Books", icon: "fa-book", color: "sky" },
+        { k: "booksIssued", label: "Books Issued", icon: "fa-book-open", color: "violet" },
+        { k: "vehicles", label: "School Vehicles", icon: "fa-bus", color: "emerald" },
+        { k: "houses", label: "School Houses", icon: "fa-building-shield", color: "amber" },
+        { k: "clubs", label: "Clubs", icon: "fa-people-group", color: "rose" },
       ],
     },
   ];
@@ -146,6 +167,7 @@
     violet: { color: "var(--violet)", soft: "var(--violet-soft)", glow: "rgba(124,58,237,0.15)" },
     amber: { color: "var(--amber)", soft: "var(--warning-soft)", glow: "rgba(245,158,11,0.15)" },
     rose: { color: "var(--rose)", soft: "var(--danger-soft)", glow: "rgba(244,63,94,0.15)" },
+    slate: { color: "var(--muted)", soft: "var(--surface-3)", glow: "rgba(100,116,139,0.12)" },
   };
 
   function kpiCard(item) {
@@ -242,37 +264,75 @@
   }
 
   /* ---------- finance widgets ---------- */
+  const FIN_TONE = {
+    emerald: ["var(--emerald)", "var(--success-soft)"],
+    indigo: ["var(--primary)", "var(--primary-soft)"],
+    sky: ["var(--sky)", "var(--info-soft)"],
+    amber: ["var(--amber)", "var(--warning-soft)"],
+    violet: ["var(--violet)", "var(--violet-soft)"],
+    rose: ["var(--rose)", "var(--danger-soft)"],
+  };
+
+  function finWidget(w) {
+    const tone = FIN_TONE[w.color] || FIN_TONE.indigo;
+    return `<div class="col-xl-3 col-md-6">
+      <div class="fin-widget">
+        <span class="fw-ico" style="color:${tone[0]};background:${tone[1]}"><i class="fa-solid ${w.icon}"></i></span>
+        <div>
+          <small>${w.label}</small>
+          <strong>${w.value}</strong>
+          <div class="fw-sub">${w.sub}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
   function renderFinanceWidgets() {
     const k = D.kpis;
-    const widgets = [
-      { label: "Today's Collection", value: money(k.todayCollection), icon: "fa-hand-holding-dollar", color: "emerald", sub: "+8.4% vs yesterday" },
-      { label: "Monthly Collection", value: money(k.monthlyRevenue), icon: "fa-coins", color: "indigo", sub: "of ₨9.2M target", rate: 92 },
-      { label: "Annual Revenue", value: money(k.yearlyRevenue), icon: "fa-sack-dollar", color: "sky", sub: "+14.2% vs last year" },
-      { label: "Outstanding Fees", value: money(k.outstandingFees), icon: "fa-hourglass-half", color: "amber", sub: "536 invoices open" },
-    ];
-    $("#financeWidgets").innerHTML = widgets
-      .map((w) => {
-        const tone = {
-          emerald: ["var(--emerald)", "var(--success-soft)"],
-          indigo: ["var(--primary)", "var(--primary-soft)"],
-          sky: ["var(--sky)", "var(--info-soft)"],
-          amber: ["var(--amber)", "var(--warning-soft)"],
-        }[w.color];
-        return `
-        <div class="col-xl-3 col-md-6">
-          <div class="fin-widget">
-            <span class="fw-ico" style="color:${tone[0]};background:${tone[1]}"><i class="fa-solid ${w.icon}"></i></span>
-            <div>
-              <small>${w.label}</small>
-              <strong>${w.value}</strong>
-              <div class="fw-sub">${w.sub}</div>
+    $("#financeWidgets").innerHTML =
+      finWidget({ label: "Today's Collection", value: money(k.todayCollection), icon: "fa-hand-holding-dollar", color: "emerald", sub: "+8.4% vs yesterday" }) +
+      finWidget({ label: "Monthly Collection", value: money(k.monthlyRevenue), icon: "fa-coins", color: "indigo", sub: "of ₨9.2M target" }) +
+      finWidget({ label: "Annual Revenue", value: money(k.yearlyRevenue), icon: "fa-sack-dollar", color: "sky", sub: "+14.2% vs last year" }) +
+      finWidget({ label: "Outstanding Fees", value: money(k.outstandingFees), icon: "fa-hourglass-half", color: "amber", sub: `${k.overdueInvoices} invoices overdue` });
+  }
+
+  function renderFinanceInsights() {
+    const k = D.kpis;
+    $("#financeInsights").innerHTML =
+      finWidget({ label: "Scholarships", value: money(k.scholarships), icon: "fa-award", color: "violet", sub: "128 students supported" }) +
+      finWidget({ label: "Discounts Given", value: money(k.discounts), icon: "fa-tags", color: "sky", sub: "Fee concessions applied" }) +
+      finWidget({ label: "Refunds Issued", value: money(k.refunds), icon: "fa-rotate-left", color: "rose", sub: "This month" }) +
+      `<div class="col-xl-3 col-md-6">
+        <div class="pf-card collect-card">
+          <div class="pf-card-head"><h2>Collection Rate</h2></div>
+          <div class="collect-metric">
+            <div class="collect-ring" style="--pct:${k.collectionRate}"><span>${k.collectionRate}%</span></div>
+            <div class="collect-meta">
+              <p><i class="fa-solid fa-chart-line" style="color:var(--emerald)"></i> +2.3% vs last month</p>
+              <small class="text-muted">Target: 92% · ${money(k.yearlyRevenue * 0.846)} collected</small>
             </div>
           </div>
-        </div>`;
-      })
-      .join("") +
-      `
-      <div class="col-xl-4 col-md-6">
+        </div>
+      </div>` +
+      `<div class="col-xl-7">
+        <div class="pf-card">
+          <div class="pf-card-head"><h2>Latest Transactions</h2><span class="live-pill"><span class="pulse-dot"></span>Live</span></div>
+          <div class="table-wrap">
+            <table class="pf-table pf-table-sm" id="txTable">
+              <thead><tr><th>Receipt</th><th>Student</th><th>Amount</th><th>Method</th><th>Time</th><th>Status</th></tr></thead>
+              <tbody>${D.latestTransactions.map((t) => `<tr>
+                <td><strong>${t.receipt}</strong></td>
+                <td>${t.student}</td>
+                <td><strong>${money(t.amount)}</strong></td>
+                <td><span class="pill info">${t.method}</span></td>
+                <td>${t.time}</td>
+                <td>${statusPill(t.status)}</td>
+              </tr>`).join("")}</tbody>
+            </table>
+          </div>
+        </div>
+      </div>` +
+      `<div class="col-xl-5">
         <div class="pf-card">
           <div class="pf-card-head"><h2>Top Fee Defaulters</h2></div>
           <table class="defaulters-table">
@@ -280,6 +340,101 @@
           </table>
         </div>
       </div>`;
+  }
+
+  /* ---------- operations: attendance + academic ---------- */
+  function renderOperations() {
+    const k = D.kpis;
+    const att = D.attendanceStatus;
+    $("#attendanceOps").innerHTML = `
+      <div class="ops-role">
+        ${[
+          { label: "Students", pct: k.studentAttPercent, tone: "var(--emerald)" },
+          { label: "Teachers", pct: k.teacherAttPercent, tone: "var(--sky)" },
+          { label: "Staff", pct: k.staffAttPercent, tone: "var(--violet)" },
+        ].map((r) => `<div class="role-row">
+          <span class="role-label">${r.label}</span>
+          <span class="role-bar"><b style="width:${r.pct}%;background:${r.tone}"></b></span>
+          <span class="role-pct">${r.pct}%</span>
+        </div>`).join("")}
+      </div>
+      <div class="att-chips">
+        <span class="att-chip" style="color:var(--emerald);background:var(--success-soft)"><i class="fa-solid fa-circle-check"></i> Present <b>${att.present.toLocaleString()}</b></span>
+        <span class="att-chip" style="color:var(--amber);background:var(--warning-soft)"><i class="fa-solid fa-clock"></i> Late <b>${att.late}</b></span>
+        <span class="att-chip" style="color:var(--rose);background:var(--danger-soft)"><i class="fa-solid fa-user-xmark"></i> Absent <b>${att.absent}</b></span>
+        <span class="att-chip" style="color:var(--sky);background:var(--info-soft)"><i class="fa-solid fa-umbrella-beach"></i> Excused <b>${att.excused}</b></span>
+      </div>
+      <div class="monthly-bars">
+        ${D.attendanceMonthly.map((m) => `<div class="m-bar"><span class="m-label">${m.week}</span><span class="m-track"><b style="width:${m.percent}%"></b></span><span class="m-pct">${m.percent}%</span></div>`).join("")}
+      </div>`;
+
+    const C = window.PFConfig;
+    $("#academicOps").innerHTML = `
+      <div class="acad-now">
+        <div class="acad-item"><span class="ai-ico" style="color:var(--primary);background:var(--primary-soft)"><i class="fa-solid fa-calendar-days"></i></span><div><small>${C.academic.sessionLabel}</small><strong>${C.academic.session}</strong></div></div>
+        <div class="acad-item"><span class="ai-ico" style="color:var(--violet);background:var(--violet-soft)"><i class="fa-solid fa-layer-group"></i></span><div><small>${C.academic.termLabel}</small><strong>${C.academic.term}</strong></div></div>
+        <div class="acad-item"><span class="ai-ico" style="color:var(--emerald);background:var(--success-soft)"><i class="fa-solid fa-ranking-star"></i></span><div><small>Top student</small><strong>${D.topStudents[0].name} · ${D.topStudents[0].score}%</strong></div></div>
+      </div>
+      <div class="ops-group">
+        <p class="ops-title"><i class="fa-solid fa-file-circle-check"></i> Upcoming Exams</p>
+        ${D.upcomingExams.map((e) => `<div class="ops-line"><span class="ops-dot" style="background:var(--amber)"></span><span class="ops-name">${e.title}</span><span class="ops-when">${e.when}</span></div>`).join("")}
+      </div>
+      <div class="ops-group">
+        <p class="ops-title"><i class="fa-solid fa-umbrella-beach"></i> Upcoming Holidays</p>
+        ${D.upcomingHolidays.map((h) => `<div class="ops-line"><span class="ops-dot" style="background:var(--rose)"></span><span class="ops-name">${h.title} <small class="text-muted">· ${h.type}</small></span><span class="ops-when">${h.when}</span></div>`).join("")}
+      </div>
+      <div class="ops-group">
+        <p class="ops-title"><i class="fa-solid fa-pen-to-square"></i> Assignments Due</p>
+        ${D.assignmentsDue.map((a) => `<div class="ops-line"><span class="ops-dot" style="background:${a.priority === "High" ? "var(--danger)" : a.priority === "Med" ? "var(--amber)" : "var(--emerald)"}"></span><span class="ops-name">${a.title} <small class="text-muted">· ${a.cls}</small></span><span class="ops-when">${a.due}</span></div>`).join("")}
+      </div>`;
+
+    const avg = D.attendanceWeekly.reduce((s, d) => s + d.present, 0) /
+      D.attendanceWeekly.reduce((s, d) => s + d.present + d.absent + d.late + d.excused, 0) * 100;
+    $("#weekAttSummary").textContent = `Mon – Fri · avg ${avg.toFixed(1)}% present`;
+  }
+
+  /* ---------- recent people / records + academic activity ---------- */
+  const RECENT_SOURCES = {
+    students: { label: "Students", icon: "fa-user-graduate", key: "recentStudents", map: (s) => ({ title: s.name, detail: `${s.grade} · Section ${s.section}`, meta: s.admissionDate, tone: "indigo" }) },
+    teachers: { label: "Teachers", icon: "fa-chalkboard-user", key: "recentTeachers", map: (s) => ({ title: s.name, detail: s.detail, meta: "", tone: s.tone, icon: s.icon }) },
+    staff: { label: "Staff", icon: "fa-id-badge", key: "recentStaff", map: (s) => ({ title: s.name, detail: s.detail, meta: "", tone: s.tone, icon: s.icon }) },
+    parents: { label: "Parents", icon: "fa-people-roof", key: "recentParents", map: (s) => ({ title: s.name, detail: s.detail, meta: "", tone: s.tone, icon: s.icon }) },
+    events: { label: "Events", icon: "fa-flag", key: "recentEvents", map: (s) => ({ title: s.name, detail: s.detail, meta: "", tone: s.tone, icon: s.icon }) },
+  };
+
+  function renderRecent(sourceId) {
+    const src = RECENT_SOURCES[sourceId] || RECENT_SOURCES.students;
+    $("#recentTabs").innerHTML = Object.entries(RECENT_SOURCES)
+      .map(([id, s]) => `<button class="kpi-chip ${id === sourceId ? "active" : ""}" data-recent="${id}" role="tab">${s.label}</button>`)
+      .join("");
+    $("#recentList").innerHTML = (D[src.key] || []).map((item) => {
+      const m = src.map(item);
+      const t = TONES[m.tone] || TONES.indigo;
+      return `<li class="activity-item">
+        <span class="a-ico" style="color:${t.color};background:${t.soft}"><i class="fa-solid ${m.icon || src.icon}"></i></span>
+        <div><p><strong>${m.title}</strong>${m.detail ? `<br><small>${m.detail}</small>` : ""}</p>${m.meta ? `<small>${m.meta}</small>` : ""}</div>
+      </li>`;
+    }).join("");
+    $$("#recentTabs [data-recent]").forEach((b) =>
+      b.addEventListener("click", () => renderRecent(b.dataset.recent))
+    );
+  }
+
+  function renderAcademicList() {
+    const rows = [];
+    D.recentResults.slice(0, 3).forEach((r) => rows.push({ title: r.student, detail: `${r.subject} · <strong>${r.score}%</strong> · Grade ${r.grade}`, tone: "emerald", icon: "fa-file-circle-check" }));
+    rows.push({ title: "Recent Homework", detail: "Submissions this week", tone: "slate", icon: "fa-pen-to-square" });
+    D.recentHomework.forEach((h) => rows.push({ title: h.student, detail: h.detail, tone: h.tone, icon: h.icon }));
+    rows.push({ title: "Announcements", detail: "Latest circulars", tone: "slate", icon: "fa-bullhorn" });
+    D.recentAnnouncements.forEach((a) => rows.push({ title: a.title, detail: a.detail, tone: a.tone, icon: a.icon }));
+
+    $("#academicList").innerHTML = rows.map((r) => {
+      const t = TONES[r.tone] || TONES.slate;
+      return `<li class="activity-item">
+        <span class="a-ico" style="color:${t.color};background:${t.soft}"><i class="fa-solid ${r.icon}"></i></span>
+        <div><p><strong>${r.title}</strong>${r.detail ? `<br><small>${r.detail}</small>` : ""}</p></div>
+      </li>`;
+    }).join("");
   }
 
   /* ---------- tables ---------- */
@@ -585,6 +740,8 @@
     renderKpis();
     bindCounters();
     renderFinanceWidgets();
+    renderFinanceInsights();
+    renderOperations();
     tick();
 
     const modal = bootstrap.Modal.getInstance($("#configModal"));
@@ -609,14 +766,27 @@
     renderKpis();
     bindCounters();
     renderFinanceWidgets();
+    renderFinanceInsights();
+    renderOperations();
     renderTables();
     bindTableSearch();
     renderActivity();
     renderMenus();
     renderCalendar();
     renderUpcoming();
+    renderRecent("students");
+    renderAcademicList();
     renderQuickActions();
     fillConfigModal();
+
+    // Footer system health
+    const sh = D.systemHealth;
+    $("#lastBackup").textContent = sh.lastBackup;
+    $("#lastLogin").textContent = sh.lastLogin;
+    const sb = $("#storageBar");
+    if (sb) { sb.style.width = `${sh.storagePct}%`; }
+    const sp = $("#storagePct");
+    if (sp) { sp.textContent = `${sh.storagePct}% · ${sh.storageUsed}`; }
 
     if (window.PFCharts) window.PFCharts.init();
 
