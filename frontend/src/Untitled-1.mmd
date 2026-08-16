@@ -30,7 +30,7 @@ references:
   - "File: /frontend/src/auth.jsx"
   - "File: /frontend/src/pages/AssignmentsPage.jsx"
   - "File: /frontend/src/pages/ProfilePage.jsx"
-generationTime: 2026-08-12T08:06:25.737Z
+generationTime: 2026-08-16T15:36:51.550Z
 ---
 flowchart TD
     subgraph FE["Frontend"]
@@ -44,6 +44,7 @@ flowchart TD
         P["ProfileModal for viewing profiles"]
         Q["StaffPage loads staff data"]
         T["ParentPortalPage for parent access"]
+        AE["MessagesPage for messaging"]
     end
 
     subgraph BE["Backend"]
@@ -78,10 +79,12 @@ flowchart TD
     E --> G
     E --> Q
     E --> T
+    E --> AE
     F --> H
     G --> H
     Q --> H
     T --> H
+    AE --> H
     H --> I
     H --> K
     I -->|role check| K
