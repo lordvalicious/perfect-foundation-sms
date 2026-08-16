@@ -94,6 +94,43 @@ function authHeaders(extra = {}) {
 const SEARCH_URL = "/api/search/";
 const NOTIFICATIONS_URL = "/api/communication/notifications/";
 
+function useCountUp(value) {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (value === null || value === undefined) {
+      setDisplay(0);
+      return undefined;
+    }
+
+    const duration = 900;
+    const start = performance.now();
+    let frame;
+
+    const tick = (now) => {
+      const progress = Math.min(1, (now - start) / duration);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(value * eased));
+
+      if (progress < 1) {
+        frame = requestAnimationFrame(tick);
+      }
+    };
+
+    frame = requestAnimationFrame(tick);
+
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return display;
+}
+
+function CountUp({ value }) {
+  const display = useCountUp(value);
+
+  return <strong>{display.toLocaleString()}</strong>;
+}
+
 function GlobalSearch() {
   const navigate = useNavigate();
 
@@ -676,7 +713,7 @@ function Dashboard() {
 
                 <div className="stat-info">
                   <span>{label}</span>
-                  <strong>{value.toLocaleString()}</strong>
+                  <CountUp value={value} />
                 </div>
               </div>
             ))}
