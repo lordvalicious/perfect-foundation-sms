@@ -3,6 +3,11 @@ from django.urls import path
 from .views import (
     AnnouncementDetailView,
     AnnouncementListView,
+    MessageDetailView,
+    MessageListView,
+    MessageRecipientsView,
+    MessageThreadView,
+    MessageUnreadCountView,
     NotificationListView,
     NotificationMarkAllReadView,
     NotificationMarkReadView,
@@ -34,5 +39,30 @@ urlpatterns = [
         "notifications/<int:pk>/read/",
         NotificationMarkReadView.as_view(),
         name="notification-read",
+    ),
+    path(
+        "messages/",
+        MessageListView.as_view(),
+        name="message-list",
+    ),
+    path(
+        "messages/recipients/",
+        MessageRecipientsView.as_view(),
+        name="message-recipients",
+    ),
+    path(
+        "messages/unread-count/",
+        MessageUnreadCountView.as_view(),
+        name="message-unread-count",
+    ),
+    path(
+        "messages/<int:pk>/",
+        MessageDetailView.as_view(),
+        name="message-detail",
+    ),
+    path(
+        "messages/<int:pk>/thread/",
+        MessageThreadView.as_view(),
+        name="message-thread",
     ),
 ]

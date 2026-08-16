@@ -5,6 +5,73 @@ from django.utils import timezone
 from apps.schools.models import Campus, Class, Section
 
 
+class Message(models.Model):
+    """A direct message between two users, with reply threading.
+
+    ``parent`` links a reply to its root message. Deletes are soft per
+    side (``sender_deleted`` / ``recipient_deleted``) so the other party
+    keeps their copy of the conversation.
+    """
+
+    sender = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="sent_messages",
+    )
+
+    recipient = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="received_messages",
+    )
+
+    subject = models.CharField(max_length=200)
+
+    body = models.TextField(blank=True)
+
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="replies",
+    )
+
+    is_read = models.BooleanField(default=False)
+
+    read_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    sent_at = models.DateTimeField(default=timezone.now)
+
+    sender_deleted = models.BooleanField(default=False)
+
+    recipient_deleted = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-sent_at"]
+
+        indexes = [
+            models.Index(
+                fields=["recipient", "recipient_deleted", "is_read"],
+                name="msg_recipient_box_idx",
+            ),
+            models.Index(
+                fields=["sender", "sender_deleted"],
+                name="msg_sender_box_idx",
+            ),
+            models.Index(
+                fields=["parent"],
+                name="msg_parent_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.sender_id} -> {self.recipient_id}: {self.subject}"
+
+
 class Announcement(models.Model):
     """A notice or announcement targeted at a specific audience.
 

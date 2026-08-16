@@ -42,6 +42,7 @@ import {
   BarChart3,
   Megaphone,
   CheckCheck,
+  Mail,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -66,6 +67,7 @@ import InventoryPage from "./pages/InventoryPage";
 import PayrollPage from "./pages/PayrollPage";
 import ReportsPage from "./pages/ReportsPage";
 import AnnouncementsPage from "./pages/AnnouncementsPage";
+import MessagesPage from "./pages/MessagesPage";
 
 const API_URL = "/api/dashboard/overview/";
 
@@ -371,6 +373,7 @@ const navigation = [
   { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Announcements", path: "/announcements", icon: Megaphone, roles: [] },
+  { label: "Messages", path: "/messages", icon: Mail, roles: [] },
   { label: "Library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Transport", path: "/transport", icon: Bus, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Inventory", path: "/inventory", icon: Boxes, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
@@ -3336,6 +3339,15 @@ function Shell() {
           element={
             <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
               <AnnouncementsPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/messages"
+          element={
+            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
+              <MessagesPage />
             </RequireRoles>
           }
         />
