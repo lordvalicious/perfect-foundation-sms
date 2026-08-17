@@ -484,13 +484,13 @@ export default function ProfileModal({ type, id, onClose }) {
                     Class Teacher
                   </h4>
 
-                  {profile.class_teacher_classes.length === 0 ? (
+                  {(profile.class_teacher_classes?.length ?? 0) === 0 ? (
                     <p className="profile-empty">
                       Not assigned as a class teacher.
                     </p>
                   ) : (
                     <div className="profile-list">
-                      {profile.class_teacher_classes.map((item) => (
+                        {(profile.class_teacher_classes || []).map((item) => (
                         <div key={item.id} className="profile-list-item">
                           <span className="profile-list-title">
                             {item.class_name} — {item.section_name}
@@ -560,13 +560,13 @@ export default function ProfileModal({ type, id, onClose }) {
                       Enrollment History
                     </h4>
 
-                    {profile.enrollments.length === 0 ? (
+                    {(profile.enrollments?.length ?? 0) === 0 ? (
                       <p className="profile-empty">
                         No enrollments on record.
                       </p>
                     ) : (
                       <div className="profile-list">
-                        {profile.enrollments.map((item) => (
+                        {(profile.enrollments || []).map((item) => (
                           <div
                             key={item.id}
                             className="profile-list-item"
@@ -595,13 +595,13 @@ export default function ProfileModal({ type, id, onClose }) {
                     Memberships
                   </h4>
 
-                  {account.memberships.length === 0 ? (
+                  {(account.memberships?.length ?? 0) === 0 ? (
                     <p className="profile-empty">
                       Not a member of any institution yet.
                     </p>
                   ) : (
                     <div className="profile-list">
-                      {account.memberships.map((membership) => (
+                      {(account.memberships || []).map((membership) => (
                         <div
                           key={membership.id}
                           className="profile-list-item"
@@ -617,7 +617,7 @@ export default function ProfileModal({ type, id, onClose }) {
                           <StatusBadge status={membership.status} />
 
                           <div className="profile-list-roles">
-                            {membership.roles.map((role) => (
+                            {(membership.roles || []).map((role) => (
                               <span
                                 key={role.role}
                                 className="role-chip"

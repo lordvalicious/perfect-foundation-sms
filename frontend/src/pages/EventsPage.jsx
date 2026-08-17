@@ -27,6 +27,15 @@ const EMPTY_FORM = {
   audience_type: "everyone",
 };
 
+function getCookie(name) {
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    return parts.pop().split(";").shift();
+  }
+  return null;
+}
+
 function formatDateTime(value) {
   if (!value) return "—";
 
@@ -104,6 +113,7 @@ export default function EventsPage() {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
+          "X-CSRFToken": getCookie("csrftoken") || "",
         },
         body: JSON.stringify({
           title: form.title,
@@ -152,6 +162,7 @@ export default function EventsPage() {
       credentials: "include",
       headers: {
         "Content-Type": "application/json",
+        "X-CSRFToken": getCookie("csrftoken") || "",
       },
       body: JSON.stringify({ response }),
     });

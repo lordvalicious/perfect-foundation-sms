@@ -195,6 +195,10 @@ def dashboard_attendance(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def dashboard_finance(request):
+    invoices = Invoice.objects.prefetch_related(
+        "items", "payments"
+    ).all()
+
     payments_total = (
         Payment.objects.filter(
             status="completed"
@@ -203,8 +207,6 @@ def dashboard_finance(request):
         )["total"]
         or 0
     )
-
-    invoices = Invoice.objects.all()
 
     total_billed = Decimal("0.00")
     outstanding_total = Decimal("0.00")
@@ -244,7 +246,7 @@ def dashboard_finance_breakdown(request):
     invoices = Invoice.objects.select_related(
         "enrollment__campus",
         "student",
-    ).prefetch_related("payments")
+    ).prefetch_related("items", "payments").all()
 
     campus_totals = {}
     method_totals = {}
