@@ -342,6 +342,7 @@ class Payment(models.Model):
         ("jazzcash", "JazzCash"),
         ("easypaisa", "EasyPaisa"),
         ("card", "Card"),
+        ("stripe", "Stripe (Online)"),
         ("other", "Other"),
     ]
 
@@ -387,6 +388,13 @@ class Payment(models.Model):
     )
 
     notes = models.TextField(blank=True)
+
+    stripe_session_id = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="Stripe Checkout Session ID for online payments.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

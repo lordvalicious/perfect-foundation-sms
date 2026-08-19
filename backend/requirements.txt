@@ -12,3 +12,4 @@ django-cors-headers==4.9.0
 Pillow==11.3.0
 reportlab==5.0.0
 twilio==9.4.5
+stripe==11.3.0

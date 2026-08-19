@@ -13,6 +13,7 @@ from .views import (
     PaymentReceiptHTMLView,
     PaymentReceiptPDFView,
 )
+from .stripe_views import StripeCheckoutView, stripe_webhook
 
 
 urlpatterns = [
@@ -47,6 +48,16 @@ urlpatterns = [
         "payments/<int:pk>/receipt.pdf/",
         PaymentReceiptPDFView.as_view(),
         name="payment-receipt-pdf",
+    ),
+    path(
+        "stripe/checkout/",
+        StripeCheckoutView.as_view(),
+        name="stripe-checkout",
+    ),
+    path(
+        "stripe/webhook/",
+        stripe_webhook,
+        name="stripe-webhook",
     ),
     path(
         "categories/",

@@ -1042,6 +1042,32 @@ export default function FinancePage() {
                           >
                             Record Payment
                           </button>
+                          {Number(invoice.balance) > 0 && (
+                            <button
+                              className="table-action"
+                              style={{ marginLeft: 6 }}
+                              onClick={async () => {
+                                try {
+                                  const res = await fetch("/api/finance/stripe/checkout/", {
+                                    method: "POST",
+                                    credentials: "include",
+                                    headers: jsonHeaders(),
+                                    body: JSON.stringify({ invoice_id: invoice.id }),
+                                  });
+                                  const data = await res.json();
+                                  if (res.ok && data.session_url) {
+                                    window.location.href = data.session_url;
+                                  } else {
+                                    alert(data.detail || "Could not start payment.");
+                                  }
+                                } catch {
+                                  alert("Payment gateway error.");
+                                }
+                              }}
+                            >
+                              Pay Online
+                            </button>
+                          )}
                         </td>
                       </tr>
                     ))}
