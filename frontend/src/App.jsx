@@ -43,6 +43,7 @@ import {
   Megaphone,
   CheckCheck,
   Mail,
+  MessageSquare,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -68,6 +69,7 @@ import PayrollPage from "./pages/PayrollPage";
 import ReportsPage from "./pages/ReportsPage";
 import AnnouncementsPage from "./pages/AnnouncementsPage";
 import MessagesPage from "./pages/MessagesPage";
+import SMSPage from "./pages/SMSPage";
 
 const API_URL = "/api/dashboard/overview/";
 
@@ -374,6 +376,7 @@ const navigation = [
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Announcements", path: "/announcements", icon: Megaphone, roles: [] },
   { label: "Messages", path: "/messages", icon: Mail, roles: [] },
+  { label: "SMS", path: "/sms", icon: MessageSquare, roles: ["super_admin", "admin"] },
   { label: "Library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Transport", path: "/transport", icon: Bus, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Inventory", path: "/inventory", icon: Boxes, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
@@ -3348,6 +3351,15 @@ function Shell() {
           element={
             <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
               <MessagesPage />
+            </RequireRoles>
+          }
+        />
+
+        <Route
+          path="/sms"
+          element={
+            <RequireRoles roles={["super_admin", "admin"]}>
+              <SMSPage />
             </RequireRoles>
           }
         />

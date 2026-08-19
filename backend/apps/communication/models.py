@@ -303,8 +303,8 @@ class Announcement(models.Model):
         )
 
     def notify(self):
-        """Create an in-app notification for every target user."""
-        from .models import Notification
+        """Create in-app notifications and send SMS to target users."""
+        from .models import Notification, NotificationPreference
 
         user_ids = self.target_user_ids()
 
@@ -332,6 +332,26 @@ class Announcement(models.Model):
                 for user_id in new_ids
             ]
         )
+
+        sms_users = User.objects.filter(
+            id__in=user_ids,
+            notification_preferences__sms_enabled=True,
+            notification_preferences__announcement_sms=True,
+        ).values_list("id", "phone")
+
+        from .sms import send_sms as _send_sms
+
+        for uid, phone in sms_users:
+            if phone and phone.strip():
+                ok, err = _send_sms(phone, f"{self.title}\n\n{self.message}")
+                SMSLog.objects.create(
+                    recipient_id=uid,
+                    phone_number=phone.strip(),
+                    message=f"{self.title}\n\n{self.message}",
+                    status="sent" if ok else "failed",
+                    error=err or "",
+                    announcement=self,
+                )
 
         return len(new_ids)
 
@@ -391,3 +411,119 @@ class Notification(models.Model):
 
     def __str__(self):
         return f"{self.recipient.username} - {self.title}"
+
+
+class SMSLog(models.Model):
+    """Log of every SMS sent through the system."""
+
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("sent", "Sent"),
+        ("failed", "Failed"),
+    ]
+
+    recipient = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sms_logs",
+    )
+
+    phone_number = models.CharField(max_length=20)
+
+    message = models.TextField()
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="queued",
+    )
+
+    error = models.TextField(blank=True)
+
+    sent_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_sms_logs",
+    )
+
+    announcement = models.ForeignKey(
+        Announcement,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sms_logs",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+        indexes = [
+            models.Index(
+                fields=["status"],
+                name="sms_status_idx",
+            ),
+            models.Index(
+                fields=["recipient"],
+                name="sms_recipient_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return f"SMS to {self.phone_number}: {self.message[:40]}"
+
+
+class NotificationPreference(models.Model):
+    """Per-user notification channel preferences."""
+
+    user = models.OneToOneField(
+        "accounts.User",
+        on_delete=models.CASCADE,
+        related_name="notification_preferences",
+    )
+
+    sms_enabled = models.BooleanField(
+        default=True,
+        help_text="Receive SMS notifications.",
+    )
+
+    email_enabled = models.BooleanField(
+        default=False,
+        help_text="Receive email notifications.",
+    )
+
+    push_enabled = models.BooleanField(
+        default=True,
+        help_text="Receive in-app push notifications.",
+    )
+
+    attendance_alerts = models.BooleanField(
+        default=True,
+        help_text="SMS on attendance absence.",
+    )
+
+    payment_reminders = models.BooleanField(
+        default=True,
+        help_text="SMS on fee payment reminders.",
+    )
+
+    result_notifications = models.BooleanField(
+        default=True,
+        help_text="SMS when exam results are published.",
+    )
+
+    announcement_sms = models.BooleanField(
+        default=True,
+        help_text="SMS for important announcements.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Notification prefs for {self.user.username}"

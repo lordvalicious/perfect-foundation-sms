@@ -12,6 +12,11 @@ from .views import (
     NotificationMarkAllReadView,
     NotificationMarkReadView,
 )
+from .sms_views import (
+    NotificationPreferenceView,
+    SMSBroadcastView,
+    SMSLogListView,
+)
 
 
 urlpatterns = [
@@ -64,5 +69,20 @@ urlpatterns = [
         "messages/<int:pk>/thread/",
         MessageThreadView.as_view(),
         name="message-thread",
+    ),
+    path(
+        "sms/send/",
+        SMSBroadcastView.as_view(),
+        name="sms-send",
+    ),
+    path(
+        "sms/logs/",
+        SMSLogListView.as_view(),
+        name="sms-logs",
+    ),
+    path(
+        "notification-preferences/",
+        NotificationPreferenceView.as_view(),
+        name="notification-preferences",
     ),
 ]
