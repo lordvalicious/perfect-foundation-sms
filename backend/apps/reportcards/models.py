@@ -110,10 +110,14 @@ class ReportCard(models.Model):
     def results(self):
         """
         Return this student's results for this exam.
+        Caches on the instance to avoid N+1 in serializers.
         """
+        if hasattr(self, "_cached_results"):
+            return self._cached_results
+
         from apps.exams.models import StudentResult
 
-        return (
+        self._cached_results = list(
             StudentResult.objects
             .filter(
                 exam=self.exam,
@@ -127,9 +131,11 @@ class ReportCard(models.Model):
             )
         )
 
+        return self._cached_results
+
     @property
     def subject_count(self):
-        return self.results.count()
+        return len(self.results)
 
     @property
     def total_marks(self):
@@ -215,10 +221,7 @@ class ReportCard(models.Model):
         from apps.exams.models import ExamSubject
 
         subject_ids = set(
-            self.results.values_list(
-                "exam_subject_id",
-                flat=True,
-            )
+            r.exam_subject_id for r in self.results
         )
 
         return (

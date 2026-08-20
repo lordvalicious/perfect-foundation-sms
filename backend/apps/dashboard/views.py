@@ -1,6 +1,7 @@
 from decimal import Decimal
 
-from django.db.models import Sum
+from django.db.models import Count, Sum, Subquery, OuterRef
+from django.db.models.functions import Coalesce
 from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
@@ -195,9 +196,25 @@ def dashboard_attendance(request):
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def dashboard_finance(request):
-    invoices = Invoice.objects.prefetch_related(
-        "items", "payments"
-    ).all()
+    from apps.finance.models import InvoiceItem
+
+    item_totals = InvoiceItem.objects.filter(
+        invoice=OuterRef("pk")
+    ).values("invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
+    paid_totals = Payment.objects.filter(
+        invoice=OuterRef("pk"),
+        status="completed",
+    ).values("invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
+    invoices = Invoice.objects.annotate(
+        items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
+        paid=Coalesce(Subquery(paid_totals), Decimal("0.00")),
+    )
 
     payments_total = (
         Payment.objects.filter(
@@ -208,20 +225,25 @@ def dashboard_finance(request):
         or 0
     )
 
+    counts = {}
+    for row in invoices.values("status").annotate(c=Count("id")):
+        counts[row["status"]] = row["c"]
+
     total_billed = Decimal("0.00")
     outstanding_total = Decimal("0.00")
 
-    for invoice in invoices:
-        total_billed += invoice.total_amount
-        outstanding_total += invoice.balance
+    for inv in invoices:
+        billed = max(inv.items_total - inv.discount, Decimal("0.00"))
+        total_billed += billed
+        outstanding_total += max(billed - inv.paid, Decimal("0.00"))
 
     data = {
         "invoices": invoices.count(),
-        "paid": invoices.filter(status="paid").count(),
-        "partial": invoices.filter(status="partial").count(),
-        "issued": invoices.filter(status="issued").count(),
-        "overdue": invoices.filter(status="overdue").count(),
-        "cancelled": invoices.filter(status="cancelled").count(),
+        "paid": counts.get("paid", 0),
+        "partial": counts.get("partial", 0),
+        "issued": counts.get("issued", 0),
+        "overdue": counts.get("overdue", 0),
+        "cancelled": counts.get("cancelled", 0),
         "total_billed": str(total_billed),
         "payments_collected": str(payments_total),
         "outstanding": str(outstanding_total),
@@ -243,30 +265,62 @@ def dashboard_finance_breakdown(request):
             status=403,
         )
 
+    from apps.finance.models import InvoiceItem
+
+    item_totals = InvoiceItem.objects.filter(
+        invoice=OuterRef("pk")
+    ).values("invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
+    paid_totals_sub = Payment.objects.filter(
+        invoice=OuterRef("pk"),
+        status="completed",
+    ).values("invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
     invoices = Invoice.objects.select_related(
         "enrollment__campus",
         "student",
-    ).prefetch_related("items", "payments").all()
+    ).annotate(
+        items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
+        paid=Coalesce(Subquery(paid_totals_sub), Decimal("0.00")),
+    )
 
     campus_totals = {}
-    method_totals = {}
-    monthly_totals = {}
+    outstanding_rows = []
 
     for invoice in invoices:
         campus_name = invoice.enrollment.campus.name
-
-        paid = invoice.paid_amount
+        billed = max(invoice.items_total - invoice.discount, Decimal("0.00"))
+        balance = max(billed - invoice.paid, Decimal("0.00"))
 
         entry = campus_totals.setdefault(
             campus_name,
             {"billed": Decimal("0.00"), "collected": Decimal("0.00")},
         )
-        entry["billed"] += invoice.total_amount
-        entry["collected"] += paid
+        entry["billed"] += billed
+        entry["collected"] += invoice.paid
+
+        if balance > 0:
+            outstanding_rows.append(
+                {
+                    "student_id": invoice.student_id,
+                    "student_name": invoice.student.full_name,
+                    "admission_number": invoice.student.admission_number,
+                    "campus": campus_name,
+                    "invoice_number": invoice.invoice_number,
+                    "balance": str(balance),
+                }
+            )
 
     completed_payments = Payment.objects.filter(
         status="completed"
     ).select_related("invoice__enrollment__campus")
+
+    method_totals = {}
+    monthly_totals = {}
 
     for payment in completed_payments:
         method = payment.get_payment_method_display()
@@ -280,23 +334,6 @@ def dashboard_finance_breakdown(request):
             monthly_totals.get(month_key, Decimal("0.00"))
             + payment.amount
         )
-
-    outstanding_rows = []
-
-    for invoice in invoices:
-        balance = invoice.balance
-
-        if balance > 0:
-            outstanding_rows.append(
-                {
-                    "student_id": invoice.student_id,
-                    "student_name": invoice.student.full_name,
-                    "admission_number": invoice.student.admission_number,
-                    "campus": invoice.enrollment.campus.name,
-                    "invoice_number": invoice.invoice_number,
-                    "balance": str(balance),
-                }
-            )
 
     outstanding_rows.sort(
         key=lambda row: Decimal(row["balance"]),
