@@ -31,8 +31,8 @@ import {
   UserRound,
   HeartHandshake,
   Menu,
-  PanelLeftClose,
-  PanelLeftOpen,
+  X,
+  ChevronDown,
   LibraryBig,
   Bus,
   Boxes,
@@ -74,21 +74,13 @@ import TeachersPage from "./pages/TeachersPage";
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
-
-  if (parts.length === 2) {
-    return parts.pop().split(";").shift();
-  }
-
+  if (parts.length === 2) return parts.pop().split(";").shift();
   return null;
 }
 
 function authHeaders(extra = {}) {
   const csrfToken = getCookie("csrftoken");
-
-  return {
-    ...extra,
-    ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
-  };
+  return { ...extra, ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}) };
 }
 
 const SEARCH_URL = "/api/search/";
@@ -96,7 +88,6 @@ const NOTIFICATIONS_URL = "/api/communication/notifications/";
 
 function GlobalSearch() {
   const navigate = useNavigate();
-
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
   const [open, setOpen] = useState(false);
@@ -104,83 +95,48 @@ function GlobalSearch() {
 
   useEffect(() => {
     const value = query.trim();
-
-    if (value.length < 2) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets dependent search state
-      setResults([]);
-      setOpen(false);
-      return;
-    }
-
+    if (value.length < 2) { setResults([]); setOpen(false); return; }
     setLoading(true);
-
     const timer = setTimeout(() => {
-      fetch(`${SEARCH_URL}?q=${encodeURIComponent(value)}`, {
-        credentials: "include",
-      })
-        .then((response) => (response.ok ? response.json() : { results: [] }))
-        .then((data) => {
-          setResults(data.results || []);
-          setOpen(true);
-          setLoading(false);
-        })
-        .catch(() => {
-          setResults([]);
-          setLoading(false);
-        });
+      fetch(`${SEARCH_URL}?q=${encodeURIComponent(value)}`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : { results: [] }))
+        .then((data) => { setResults(data.results || []); setOpen(true); setLoading(false); })
+        .catch(() => { setResults([]); setLoading(false); });
     }, 300);
-
     return () => clearTimeout(timer);
   }, [query]);
 
   return (
     <div className="global-search">
       <div className="search">
-        <Search size={18} />
-
+        <Search size={15} />
         <input
           type="text"
-          placeholder="Search students, teachers..."
+          placeholder="Search..."
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onFocus={() => {
-            if (results.length) {
-              setOpen(true);
-            }
-          }}
+          onChange={(e) => setQuery(e.target.value)}
+          onFocus={() => { if (results.length) setOpen(true); }}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
         />
       </div>
-
       {open && (
         <div className="search-dropdown">
           {loading && <div className="search-loading">Searching...</div>}
-
-          {!loading && results.length === 0 && (
-            <div className="search-loading">No results found.</div>
-          )}
-
-          {!loading &&
-            results.map((result, index) => (
-              <button
-                key={`${result.type}-${result.id}-${index}`}
-                type="button"
-                className="search-result"
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  setOpen(false);
-                  setQuery("");
-                  navigate(result.link);
-                }}
-              >
-                <span className="search-result-type">{result.type}</span>
-
-                <span>
-                  <strong>{result.name}</strong>
-                  <small>{result.subtitle || result.class_name || ""}</small>
-                </span>
-              </button>
-            ))}
+          {!loading && results.length === 0 && <div className="search-loading">No results found.</div>}
+          {!loading && results.map((result, i) => (
+            <button
+              key={`${result.type}-${result.id}-${i}`}
+              type="button"
+              className="search-result"
+              onMouseDown={(e) => { e.preventDefault(); setOpen(false); setQuery(""); navigate(result.link); }}
+            >
+              <span className="search-result-type">{result.type}</span>
+              <span>
+                <strong>{result.name}</strong>
+                <small>{result.subtitle || result.class_name || ""}</small>
+              </span>
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -191,133 +147,66 @@ function NotificationsBell() {
   const [notifications, setNotifications] = useState(null);
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
-
-  const unread = notifications
-    ? notifications.filter((item) => !item.is_read).length
-    : 0;
-
-  const load = () => {
-    fetch(NOTIFICATIONS_URL, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : []))
-      .then((data) => {
-        setNotifications(Array.isArray(data) ? data : data.results || []);
-        setLoaded(true);
-      })
-      .catch(() => {
-        setNotifications([]);
-        setLoaded(true);
-      });
-  };
+  const unread = notifications ? notifications.filter((n) => !n.is_read).length : 0;
 
   useEffect(() => {
-    if (!open || notifications !== null) {
-      return;
-    }
-
-    load();
+    if (!open || notifications !== null) return;
+    fetch(NOTIFICATIONS_URL, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => { setNotifications(Array.isArray(data) ? data : data.results || []); setLoaded(true); })
+      .catch(() => { setNotifications([]); setLoaded(true); });
   }, [open, notifications]);
 
   const markAllRead = () => {
-    fetch(`${NOTIFICATIONS_URL}read-all/`, {
-      method: "POST",
-      credentials: "include",
-      headers: authHeaders(),
-    })
-      .then((response) => {
-        if (response.ok) {
-          setNotifications((items) =>
-            (items || []).map((item) => ({ ...item, is_read: true }))
-          );
-        }
-      })
+    fetch(`${NOTIFICATIONS_URL}read-all/`, { method: "POST", credentials: "include", headers: authHeaders() })
+      .then((r) => { if (r.ok) setNotifications((items) => (items || []).map((n) => ({ ...n, is_read: true }))); })
       .catch(() => {});
   };
 
-  const markRead = (notification) => {
-    if (!notification.is_read) {
-      fetch(`${NOTIFICATIONS_URL}${notification.id}/read/`, {
-        method: "POST",
-        credentials: "include",
-        headers: authHeaders(),
-      })
-        .then((response) => {
-          if (response.ok) {
-            setNotifications((items) =>
-              (items || []).map((item) =>
-                item.id === notification.id
-                  ? { ...item, is_read: true }
-                  : item
-              )
-            );
-          }
-        })
+  const markRead = (n) => {
+    if (!n.is_read) {
+      fetch(`${NOTIFICATIONS_URL}${n.id}/read/`, { method: "POST", credentials: "include", headers: authHeaders() })
+        .then((r) => { if (r.ok) setNotifications((items) => (items || []).map((x) => x.id === n.id ? { ...x, is_read: true } : x)); })
         .catch(() => {});
     }
   };
 
   return (
     <div className="notifications-wrap">
-      <button
-        className="icon-button"
-        title="Notifications"
-        onClick={() => setOpen((value) => !value)}
-      >
-        <Bell size={20} />
-
+      <button className="icon-button" title="Notifications" onClick={() => setOpen((v) => !v)}>
+        <Bell size={18} />
         {unread > 0 && <span className="notification-dot">{unread}</span>}
       </button>
-
       {open && (
         <div className="notifications-dropdown">
           <div className="notifications-header">
             <strong>Notifications</strong>
-
             {unread > 0 && (
-              <button
-                type="button"
-                className="text-button"
-                onClick={markAllRead}
-              >
-                <CheckCheck size={14} />
-                Mark all read
+              <button type="button" className="text-button" onClick={markAllRead}>
+                <CheckCheck size={13} /> Mark all read
               </button>
             )}
           </div>
-
           <div className="notifications-list">
             {!loaded && <div className="search-loading">Loading...</div>}
-
-            {loaded && notifications.length === 0 && (
-              <div className="search-loading">No notifications.</div>
-            )}
-
-            {loaded &&
-              notifications.slice(0, 15).map((notification) => (
-                <button
-                  key={notification.id}
-                  type="button"
-                  className={`notification-item ${
-                    notification.is_read ? "read" : ""
-                  }`}
-                  onClick={() => markRead(notification)}
-                >
-                  <strong>{notification.title}</strong>
-
-                  {notification.message && (
-                    <span>{notification.message}</span>
-                  )}
-
-                  <small>
-                    {notification.notification_type_display || "System"}
-                  </small>
-                </button>
-              ))}
+            {loaded && notifications.length === 0 && <div className="search-loading">No notifications.</div>}
+            {loaded && notifications.slice(0, 15).map((n) => (
+              <button key={n.id} type="button" className={`notification-item ${n.is_read ? "read" : ""}`} onClick={() => markRead(n)}>
+                <strong>{n.title}</strong>
+                {n.message && <span>{n.message}</span>}
+                <small>{n.notification_type_display || "System"}</small>
+              </button>
+            ))}
           </div>
         </div>
       )}
     </div>
   );
 }
+
+/* =========================
+   NAVIGATION
+   ========================= */
 
 const navigation = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, roles: [] },
@@ -349,224 +238,249 @@ const systemNavigation = [
   { label: "Audit Logs", path: "/audit-logs", icon: ScrollText, roles: ["super_admin", "admin"] },
 ];
 
-function Layout({ children }) {
-  const { user, logout, hasRole } = useAuth();
+function findNav(path) {
+  return navigation.find((n) => n.path === path);
+}
 
-  const [collapsed, setCollapsed] = useState(
-    () => localStorage.getItem("sidebar-collapsed") === "1"
-  );
-  const [mobileOpen, setMobileOpen] = useState(false);
+function findSysNav(path) {
+  return systemNavigation.find((n) => n.path === path);
+}
 
-  const toggleSidebar = () => {
-    if (window.matchMedia("(max-width: 960px)").matches) {
-      setMobileOpen((open) => !open);
-    } else {
-      setCollapsed((value) => {
-        const next = !value;
-        localStorage.setItem("sidebar-collapsed", next ? "1" : "0");
-        return next;
-      });
-    }
-  };
+const navGroups = [
+  {
+    label: "People",
+    items: ["/students", "/teachers", "/staff", "/parent-portal", "/profile"]
+      .map(findNav)
+      .filter(Boolean),
+  },
+  {
+    label: "Academics",
+    items: ["/attendance", "/exams", "/report-cards", "/timetable", "/assignments"]
+      .map(findNav)
+      .filter(Boolean),
+  },
+  {
+    label: "Finance",
+    items: ["/finance", "/payroll", "/reports"]
+      .map(findNav)
+      .filter(Boolean),
+  },
+  {
+    label: "Resources",
+    items: ["/library", "/transport", "/inventory", "/campuses"]
+      .map(findNav)
+      .filter(Boolean),
+  },
+  {
+    label: "Communication",
+    items: ["/messages", "/sms", "/announcements", "/events"]
+      .map(findNav)
+      .filter(Boolean),
+  },
+  {
+    label: "System",
+    items: [...systemNavigation.filter((n) => n.roles.length === 0 || /* hasRole check done below */ true)],
+  },
+];
 
-  const closeMobileDrawer = () => {
-    if (window.matchMedia("(max-width: 960px)").matches) {
-      setMobileOpen(false);
-    }
-  };
+/* =========================
+   LAYOUT — Top navigation
+   ========================= */
+
+function Layout({ children, hasRole }) {
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   const visibleNavigation = navigation.filter(
-    (item) =>
-      item.roles.length === 0 || hasRole(item.roles)
+    (item) => item.roles.length === 0 || hasRole(item.roles)
   );
-
   const visibleSystemNavigation = systemNavigation.filter(
-    (item) =>
-      item.roles.length === 0 || hasRole(item.roles)
+    (item) => item.roles.length === 0 || hasRole(item.roles)
   );
 
-  const displayName =
-    user?.first_name || user?.username || "User";
+  const visibleNavGroups = navGroups.map((group) => ({
+    ...group,
+    items: group.items.filter(
+      (item) => item.roles.length === 0 || hasRole(item.roles)
+    ),
+  })).filter((group) => group.items.length > 0);
 
-  const initials = displayName
-    .split(" ")
-    .map((part) => part.charAt(0))
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
+  const visibleSystemGroup = visibleNavGroups.find((g) => g.label === "System");
+  if (visibleSystemGroup) {
+    visibleSystemGroup.items = visibleSystemNavigation;
+  }
 
-  const roleLabel = user?.primary_role
-    ? user.primary_role
-        .replace("_", " ")
-        .replace(/\b\w/g, (letter) =>
-          letter.toUpperCase()
-        )
-    : "";
-
-  const sidebarClass = [
-    "sidebar",
-    collapsed ? "collapsed" : "",
-    mobileOpen ? "mobile-open" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  const dashItem = findNav("/");
 
   return (
     <div className="app">
-      <aside className={sidebarClass}>
-        <div className="sidebar-brand">
+      <header className="topbar">
+        <div className="topbar-left">
           <div className="brand-logo">PF</div>
-
-          <div className="sidebar-brand-text">
-            <strong>Perfect Foundation</strong>
-            <span>School Management System</span>
-          </div>
+          <nav className="topbar-nav">
+            {dashItem && (
+              <NavLink
+                to={dashItem.path}
+                end={dashItem.path === "/"}
+                className={({ isActive }) => `topbar-link ${isActive ? "active" : ""}`}
+              >
+                <dashItem.icon size={15} />
+                <span>Dashboard</span>
+              </NavLink>
+            )}
+            {visibleNavGroups.filter((g) => g.label !== "System").map((group) => (
+              <div className="nav-group" key={group.label}>
+                <button className="nav-group-trigger">
+                  {group.label}
+                  <ChevronDown className="chevron" size={14} />
+                </button>
+                <div className="nav-dropdown">
+                  {group.items.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      end={item.path === "/"}
+                      className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
+                    >
+                      <item.icon size={14} />
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            ))}
+            {visibleSystemGroup && visibleSystemGroup.items.length > 0 && (
+              <div className="nav-group">
+                <button className="nav-group-trigger">
+                  System
+                  <ChevronDown className="chevron" size={14} />
+                </button>
+                <div className="nav-dropdown">
+                  {visibleSystemGroup.items.map((item) => (
+                    <NavLink
+                      key={item.path}
+                      to={item.path}
+                      className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
+                    >
+                      <item.icon size={14} />
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
+              </div>
+            )}
+          </nav>
         </div>
 
-        <nav className="sidebar-nav">
-          <span className="sidebar-section-label">Main</span>
+        <div className="topbar-right">
+          <GlobalSearch />
+          <NotificationsBell />
 
-          {visibleNavigation.map(
-            ({ label, path, icon: Icon }) => (
-              <NavLink
-                key={label}
-                to={path}
-                end={path === "/"}
-                title={label}
-                onClick={closeMobileDrawer}
-                className={({ isActive }) =>
-                  `sidebar-link ${isActive ? "active" : ""}`
-                }
-              >
-                <Icon size={18} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          )}
+          <TopbarProfile hasRole={hasRole} />
 
-          <span className="sidebar-section-label">
-            System
-          </span>
-
-          {visibleSystemNavigation.map(
-            ({ label, path, icon: Icon }) => (
-              <NavLink
-                key={label}
-                to={path}
-                title={label}
-                onClick={closeMobileDrawer}
-                className={({ isActive }) =>
-                  `sidebar-link ${isActive ? "active" : ""}`
-                }
-              >
-                <Icon size={18} />
-                <span>{label}</span>
-              </NavLink>
-            )
-          )}
-        </nav>
-
-        <div className="sidebar-footer">
           <button
-            className="sidebar-collapse"
-            onClick={toggleSidebar}
-            title={
-              collapsed ? "Expand sidebar" : "Collapse sidebar"
-            }
+            className="mobile-nav-toggle"
+            onClick={() => setMobileNavOpen((v) => !v)}
+            title="Menu"
           >
-            {collapsed ? (
-              <PanelLeftOpen size={18} />
-            ) : (
-              <PanelLeftClose size={18} />
-            )}
+            {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
-      </aside>
+      </header>
 
-      {mobileOpen && (
-        <div
-          className="sidebar-backdrop"
-          onClick={toggleSidebar}
-        />
+      <main className="main">{children}</main>
+
+      {mobileNavOpen && (
+        <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} />
       )}
 
-      <div className="app-body">
-        <header className="topbar">
-          <button
-            className="icon-button sidebar-toggle"
-            onClick={toggleSidebar}
-            title="Toggle navigation"
-          >
-            <Menu size={20} />
-          </button>
+      {mobileNavOpen && (
+        <nav className="mobile-nav">
+          <MobileNavSection
+            label="Main"
+            items={visibleNavigation}
+            onNavigate={() => setMobileNavOpen(false)}
+          />
+          <MobileNavSection
+            label="System"
+            items={visibleSystemNavigation}
+            onNavigate={() => setMobileNavOpen(false)}
+          />
+        </nav>
+      )}
+    </div>
+  );
+}
 
-          <GlobalSearch />
+function TopbarProfile({ hasRole }) {
+  const { user, logout } = useAuth();
+  const displayName = user?.first_name || user?.username || "User";
+  const initials = displayName.split(" ").map((p) => p.charAt(0)).join("").slice(0, 2).toUpperCase();
+  const roleLabel = user?.primary_role
+    ? user.primary_role.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())
+    : "";
 
-          <div className="topbar-actions">
-            <NotificationsBell />
-
-            <div className="profile">
-              {user?.photo_url ? (
-                <img
-                  className="avatar avatar-photo"
-                  src={user.photo_url}
-                  alt={displayName}
-                />
-              ) : (
-                <div className="avatar">{initials}</div>
-              )}
-
-              <div>
-                <strong>{displayName}</strong>
-                <span>{roleLabel || "Member"}</span>
-              </div>
-
-              <button
-                className="logout-button"
-                title="Sign out"
-                onClick={logout}
-              >
-                <LogOut size={18} />
-              </button>
-            </div>
-          </div>
-        </header>
-
-        <main className="main">{children}</main>
+  return (
+    <>
+      <div className="profile">
+        {user?.photo_url ? (
+          <img className="avatar avatar-photo" src={user.photo_url} alt={displayName} />
+        ) : (
+          <div className="avatar">{initials}</div>
+        )}
+        <div>
+          <strong>{displayName}</strong>
+          <span>{roleLabel || "Member"}</span>
+        </div>
       </div>
+      <button className="logout-button" title="Sign out" onClick={logout}>
+        <LogOut size={16} />
+      </button>
+    </>
+  );
+}
+
+function MobileNavSection({ label, items, onNavigate }) {
+  return (
+    <div className="mobile-nav-section">
+      <div className="mobile-nav-label">{label}</div>
+      {items.map(({ label: itemLabel, path, icon: Icon }) => (
+        <NavLink
+          key={path}
+          to={path}
+          end={path === "/"}
+          onClick={onNavigate}
+          className={({ isActive }) => `mobile-nav-link ${isActive ? "active" : ""}`}
+        >
+          <Icon size={17} />
+          {itemLabel}
+        </NavLink>
+      ))}
     </div>
   );
 }
 
 function RequireRoles({ roles, children }) {
   const { user, hasRole } = useAuth();
-
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
+  if (!user) return <Navigate to="/login" replace />;
   if (roles.length > 0 && !hasRole(roles)) {
     return (
       <section className="content">
         <div className="state-card error">
           <strong>Access denied.</strong>
-          <span>
-            Your role does not have permission to view this page.
-          </span>
+          <span>Your role does not have permission to view this page.</span>
         </div>
       </section>
     );
   }
-
   return children;
 }
 
 /* =========================
    APP ROUTES
-========================= */
+   ========================= */
 
 function Shell() {
-  const { user, loading } = useAuth();
+  const { user, loading, hasRole } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -578,226 +492,146 @@ function Shell() {
     );
   }
 
-  if (!user) {
-    return <LoginPage />;
-  }
+  if (!user) return <LoginPage />;
 
   return (
-    <Layout>
+    <Layout hasRole={hasRole}>
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
-
         <Route path="/" element={<Dashboard />} />
 
-        <Route
-          path="/profile"
-          element={<ProfilePage key={location.pathname} />}
-        />
-        <Route
-          path="/profile/teacher/:id"
-          element={<ProfilePage key={location.pathname} />}
-        />
-        <Route
-          path="/profile/student/:id"
-          element={<ProfilePage key={location.pathname} />}
-        />
-        <Route
-          path="/profile/staff/:id"
-          element={<ProfilePage key={location.pathname} />}
-        />
+        <Route path="/profile" element={<ProfilePage key={location.pathname} />} />
+        <Route path="/profile/teacher/:id" element={<ProfilePage key={location.pathname} />} />
+        <Route path="/profile/student/:id" element={<ProfilePage key={location.pathname} />} />
+        <Route path="/profile/staff/:id" element={<ProfilePage key={location.pathname} />} />
 
-        <Route
-          path="/students"
-          element={
-            <RequireRoles
-              roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"]}
-            >
-              <StudentsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/students" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"]}>
+            <StudentsPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/parent-portal"
-          element={
-            <RequireRoles roles={["parent"]}>
-              <ParentPortalPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/parent-portal" element={
+          <RequireRoles roles={["parent"]}>
+            <ParentPortalPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/teachers"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
-              <TeachersPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/teachers" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <TeachersPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/staff"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
-              <StaffPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/staff" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <StaffPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/assignments"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
-              <AssignmentsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/assignments" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <AssignmentsPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/attendance"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
-              <AttendancePage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/attendance" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
+            <AttendancePage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/finance"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant"]}>
-              <FinancePage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/finance" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant"]}>
+            <FinancePage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/exams"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
-              <ExamsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/exams" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
+            <ExamsPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/report-cards"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
-              <ReportCardsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/report-cards" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher"]}>
+            <ReportCardsPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/timetable"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"]}>
-              <TimetablePage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/timetable" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"]}>
+            <TimetablePage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/campuses"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
-              <CampusesPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/campuses" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <CampusesPage />
+          </RequireRoles>
+        } />
 
         <Route path="/events" element={<EventsPage />} />
 
-        <Route
-          path="/announcements"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
-              <AnnouncementsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/announcements" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
+            <AnnouncementsPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/messages"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
-              <MessagesPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/messages" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
+            <MessagesPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/sms"
-          element={
-            <RequireRoles roles={["super_admin", "admin"]}>
-              <SMSPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/sms" element={
+          <RequireRoles roles={["super_admin", "admin"]}>
+            <SMSPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/library"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
-              <LibraryPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/library" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+            <LibraryPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/transport"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
-              <TransportPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/transport" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+            <TransportPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/inventory"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
-              <InventoryPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/inventory" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+            <InventoryPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/payroll"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
-              <PayrollPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/payroll" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+            <PayrollPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/reports"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
-              <ReportsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/reports" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+            <ReportsPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/settings"
-          element={
-            <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
-              <SettingsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/settings" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <SettingsPage />
+          </RequireRoles>
+        } />
 
-        <Route
-          path="/audit-logs"
-          element={
-            <RequireRoles roles={["super_admin", "admin"]}>
-              <AuditLogsPage />
-            </RequireRoles>
-          }
-        />
+        <Route path="/audit-logs" element={
+          <RequireRoles roles={["super_admin", "admin"]}>
+            <AuditLogsPage />
+          </RequireRoles>
+        } />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
