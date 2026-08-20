@@ -52,11 +52,17 @@
 
   --success: #059669;
   --success-soft: rgba(5, 150, 105, 0.08);
+  --success-border: rgba(5, 150, 105, 0.15);
   --danger: #dc2626;
   --danger-soft: rgba(220, 38, 38, 0.08);
+  --danger-border: rgba(220, 38, 38, 0.15);
   --warning: #d97706;
   --warning-soft: rgba(217, 119, 6, 0.08);
   --info-soft: rgba(2, 132, 199, 0.08);
+
+  --text-on-primary: #ffffff;
+  --input-bg: #ffffff;
+  --input-border: #e0ded9;
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -92,14 +98,31 @@
   --sidebar-hover: #2d2a24;
   --topbar-bg: rgba(20, 18, 16, 0.92);
   --row-hover: #232119;
+  --chart-grid: #2d2a24;
+
+  --gold: #fbbf24;
+  --gold-soft: rgba(251, 191, 36, 0.1);
+  --violet: #a78bfa;
+  --violet-soft: rgba(167, 139, 250, 0.1);
+  --cyan: #22d3ee;
+  --sky: #38bdf8;
+  --emerald: #34d399;
+  --amber: #fbbf24;
+  --rose: #fb7185;
 
   --success: #34d399;
   --success-soft: rgba(52, 211, 153, 0.1);
+  --success-border: rgba(52, 211, 153, 0.2);
   --danger: #f87171;
   --danger-soft: rgba(248, 113, 113, 0.1);
+  --danger-border: rgba(248, 113, 113, 0.2);
   --warning: #fbbf24;
   --warning-soft: rgba(251, 191, 36, 0.1);
   --info-soft: rgba(56, 189, 248, 0.1);
+
+  --text-on-primary: #1c1a17;
+  --input-bg: #1c1a17;
+  --input-border: #2d2a24;
 
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.25), 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -890,7 +913,7 @@ body.nav-open .mobile-nav {
 
 .primary-button {
   background: var(--primary);
-  color: #fff;
+  color: var(--text-on-primary);
 }
 
 .primary-button:hover {
@@ -2594,7 +2617,7 @@ select {
   justify-content: center;
   border-radius: 12px;
   background: var(--primary);
-  color: #fff;
+  color: var(--text-on-primary);
 }
 
 .login-card h1 {
@@ -3024,7 +3047,7 @@ select {
 }
 
 .state-card.success {
-  border-color: rgba(5, 150, 105, 0.2);
+  border-color: var(--success-border);
   background: var(--success-soft);
   color: var(--success);
 }
@@ -3092,7 +3115,7 @@ select {
 .msg-tab.active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--text-on-primary);
 }
 
 .msg-tab-count {
@@ -3104,7 +3127,7 @@ select {
   justify-content: center;
   border-radius: 999px;
   background: var(--danger);
-  color: #fff;
+  color: var(--text-on-primary);
   font-size: 9.5px;
   font-weight: 700;
 }
@@ -3390,13 +3413,13 @@ select {
 
 .alert-success {
   background: var(--success-soft);
-  border: 1px solid rgba(5, 150, 105, 0.15);
+  border: 1px solid var(--success-border);
   color: var(--success);
 }
 
 .alert-error {
   background: var(--danger-soft);
-  border: 1px solid rgba(220, 38, 38, 0.15);
+  border: 1px solid var(--danger-border);
   color: var(--danger);
 }
 
@@ -3500,6 +3523,47 @@ select {
 .sidebar { display: none; }
 .sidebar-backdrop { display: none; }
 .sidebar-toggle { display: none; }
+
+/* ==========================================================================
+   THEME TOGGLE
+   ========================================================================== */
+
+.theme-toggle {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.2s;
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text);
+  transform: scale(1.08);
+}
+
+.theme-toggle:active {
+  transform: scale(0.92);
+}
+
+/* ==========================================================================
+   THEME TRANSITION — applied briefly on toggle
+   ========================================================================== */
+
+@media (prefers-reduced-motion: no-preference) {
+  .theme-transitioning,
+  .theme-transitioning * {
+    transition: background-color 0.25s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease !important;
+  }
+}
 
 /* ==========================================================================
    PRINT

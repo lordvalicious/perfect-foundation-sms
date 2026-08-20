@@ -42,6 +42,9 @@ import {
   CheckCheck,
   Mail,
   MessageSquare,
+  Sun,
+  Moon,
+  Monitor,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -201,6 +204,52 @@ function NotificationsBell() {
         </div>
       )}
     </div>
+  );
+}
+
+const THEME_KEY = "pf-theme";
+
+function getInitialTheme() {
+  const stored = localStorage.getItem(THEME_KEY);
+  if (stored === "light" || stored === "dark") return stored;
+  return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute("data-theme", theme);
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState(getInitialTheme);
+
+  useEffect(() => {
+    applyTheme(theme);
+    localStorage.setItem(THEME_KEY, theme);
+  }, [theme]);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = (e) => {
+      if (!localStorage.getItem(THEME_KEY)) {
+        const next = e.matches ? "dark" : "light";
+        setTheme(next);
+        applyTheme(next);
+      }
+    };
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+
+  const toggle = () => {
+    document.documentElement.classList.add("theme-transitioning");
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+    setTimeout(() => document.documentElement.classList.remove("theme-transitioning"), 350);
+  };
+
+  return (
+    <button className="theme-toggle" onClick={toggle} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
+      {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+    </button>
   );
 }
 
@@ -374,6 +423,7 @@ function Layout({ children, hasRole }) {
         <div className="topbar-right">
           <GlobalSearch />
           <NotificationsBell />
+          <ThemeToggle />
 
           <TopbarProfile hasRole={hasRole} />
 
