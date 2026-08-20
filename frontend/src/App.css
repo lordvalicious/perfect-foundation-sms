@@ -1169,6 +1169,18 @@ body.nav-open .mobile-nav {
    PANELS / GRIDS
    ========================================================================== */
 
+.students-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1.5fr 1fr;
@@ -1405,6 +1417,16 @@ body.nav-open .mobile-nav {
 .table-action:hover {
   background: var(--primary);
   border-color: var(--primary);
+  color: #fff;
+}
+
+.table-action.danger {
+  color: var(--danger);
+}
+
+.table-action.danger:hover {
+  background: var(--danger);
+  border-color: var(--danger);
   color: #fff;
 }
 
@@ -1731,7 +1753,8 @@ select {
   animation: fade-in 0.12s var(--ease) both;
 }
 
-.modal {
+.modal,
+.teacher-modal {
   width: 100%;
   max-width: 520px;
   max-height: 88vh;
@@ -1745,7 +1768,8 @@ select {
   animation: modal-pop 0.2s var(--ease) both;
 }
 
-.modal.large { max-width: 720px; }
+.modal.large,
+.teacher-modal.large { max-width: 720px; }
 
 .modal-header {
   display: flex;
@@ -1896,6 +1920,23 @@ select {
 .campus-count strong { color: var(--primary); font-size: 13px; }
 
 .campus-student-lists { display: flex; flex-direction: column; gap: 18px; }
+
+.campus-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  margin-bottom: 20px;
+}
+
+.campus-card-button {
+  margin-top: 10px;
+}
+
+.campus-student-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
 
 /* ==========================================================================
    STAFF GRID
@@ -2082,6 +2123,36 @@ select {
   font-size: 12px;
 }
 
+.staff-add-button {
+  margin-left: auto;
+}
+
+.staff-card-body {
+  padding: 12px 14px;
+}
+
+.staff-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.staff-card-action.danger {
+  color: var(--danger);
+}
+
+.staff-card-action.danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: var(--danger-soft);
+}
+
 /* Teacher filter panel */
 .teacher-filter-panel {
   padding: 12px 14px;
@@ -2109,6 +2180,16 @@ select {
 .teacher-list-header h3 { margin: 0; color: var(--text); font-size: 14.5px; }
 .teacher-list-header p { margin: 3px 0 0; color: var(--text-muted); font-size: 11.5px; }
 
+.teacher-list-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.add-teacher-button {
+  margin-left: auto;
+}
+
 .teacher-avatar {
   width: 30px;
   height: 30px;
@@ -2127,6 +2208,102 @@ select {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px 14px;
+}
+
+.student-modal .modal-body,
+.event-modal .modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* SMS / Generic form helpers */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.form-label {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.form-input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  transition: border-color 0.12s var(--ease);
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary-soft);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.12s var(--ease);
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+.btn-primary:hover {
+  background: var(--primary-strong);
+  border-color: var(--primary-strong);
+}
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+
+.table th,
+.table td {
+  padding: 9px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.table tbody tr:hover {
+  background: var(--surface-2);
 }
 
 /* ==========================================================================
@@ -2458,6 +2635,10 @@ select {
   line-height: 1.7;
 }
 
+.login-button {
+  width: 100%;
+}
+
 .auth-loading {
   min-height: 100vh;
   display: flex;
@@ -2471,6 +2652,38 @@ select {
 /* ==========================================================================
    PROFILE
    ========================================================================== */
+
+.profile-hero-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.profile-section {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.profile-card {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+}
 
 .profile-grid {
   display: grid;
@@ -2704,6 +2917,20 @@ select {
   background: var(--surface);
 }
 
+.portal-child {
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+
+.portal-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
 .portal-child-header {
   display: flex;
   align-items: center;
@@ -2794,6 +3021,12 @@ select {
   border-color: var(--danger-soft);
   background: var(--danger-soft);
   color: var(--danger);
+}
+
+.state-card.success {
+  border-color: rgba(5, 150, 105, 0.2);
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .state-card code {
@@ -3237,7 +3470,7 @@ select {
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .bar { grid-template-columns: 90px 1fr 55px; }
-  .modal { max-height: 92vh; margin: 0 6px; }
+  .modal, .teacher-modal { max-height: 92vh; margin: 0 6px; }
   .teacher-modal .modal-body { grid-template-columns: 1fr; }
   .fin-widgets { grid-template-columns: 1fr; }
   .teacher-filter-panel { flex-direction: column; }

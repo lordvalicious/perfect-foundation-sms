@@ -215,7 +215,7 @@ export default function SMSPage() {
                 placeholder="Type your SMS message here..."
                 required
               />
-              <small style={{ color: "var(--muted)" }}>
+              <small style={{ color: "var(--text-muted)" }}>
                 {message.length}/160 characters
                 {message.length > 160 && " (will be sent as multiple SMS)"}
               </small>
@@ -334,7 +334,7 @@ export default function SMSPage() {
                 onChange={(v) => handlePrefChange("announcement_sms", v)}
               />
               {prefsSaving && (
-                <small style={{ color: "var(--muted)" }}>Saving...</small>
+                <small style={{ color: "var(--text-muted)" }}>Saving...</small>
               )}
             </div>
           ) : (
@@ -359,7 +359,7 @@ function PrefToggle({ label, desc, value, onChange }) {
     >
       <div>
         <div style={{ fontWeight: 500 }}>{label}</div>
-        <div style={{ fontSize: 13, color: "var(--muted)" }}>{desc}</div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)" }}>{desc}</div>
       </div>
       <label className="toggle">
         <input

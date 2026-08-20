@@ -893,7 +893,7 @@ function StudentsPage() {
                       </div>
                     ) : (
                       <div className="students-table-wrapper">
-                        <table className="students-table">
+                        <table className="data-table">
                           <thead>
                             <tr>
                               <th>Student</th>
