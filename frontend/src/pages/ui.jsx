@@ -3,9 +3,7 @@ export function PageHeader({ crumb, title, subtitle }) {
     <div className="page-header">
       <div>
         <div className="breadcrumb">{crumb}</div>
-
         <h2>{title}</h2>
-
         <p className="subtitle">{subtitle}</p>
       </div>
     </div>
@@ -17,14 +15,12 @@ export function PanelHeader({ title, subtitle, count, action }) {
     <div className="teacher-list-header">
       <div>
         <h3>{title}</h3>
-
         <p>
           {count !== null && count !== undefined
             ? `${count.toLocaleString()} ${subtitle}`
             : subtitle}
         </p>
       </div>
-
       {action}
     </div>
   );
@@ -47,16 +43,10 @@ export function StateArea({
     return (
       <div className="state-card error">
         <strong>{errorTitle}</strong>
-
         <span>{errorText}</span>
-
         <code>{error}</code>
-
         {onRetry && (
-          <button
-            className="secondary-button"
-            onClick={onRetry}
-          >
+          <button className="secondary-button" onClick={onRetry}>
             Try Again
           </button>
         )}
@@ -70,12 +60,9 @@ export function StateArea({
 export function EmptyState({ icon: Icon, title, message, action }) {
   return (
     <div className="empty-state">
-      {Icon && <Icon size={42} />}
-
+      {Icon && <Icon size={42} strokeWidth={1.5} />}
       <h3>{title}</h3>
-
       <p>{message}</p>
-
       {action}
     </div>
   );
@@ -93,28 +80,17 @@ export function Pagination({
     return null;
   }
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(count / pageSize)
-  );
+  const totalPages = Math.max(1, Math.ceil(count / pageSize));
 
   return (
     <div className="pagination">
-      <button
-        disabled={!previous}
-        onClick={() => onPage(page - 1)}
-      >
+      <button disabled={!previous} onClick={() => onPage(page - 1)}>
         Previous
       </button>
-
       <span>
         Page {page} of {totalPages}
       </span>
-
-      <button
-        disabled={!next}
-        onClick={() => onPage(page + 1)}
-      >
+      <button disabled={!next} onClick={() => onPage(page + 1)}>
         Next
       </button>
     </div>
@@ -125,20 +101,12 @@ export function StatusBadge({ status, label }) {
   const safe = (status || "").toLowerCase();
 
   const tone = [
-    "active",
-    "present",
-    "paid",
-    "completed",
-    "pass",
-    "scheduled",
-    "cancelled",
+    "active", "present", "paid", "completed", "pass", "scheduled", "cancelled",
   ].includes(safe)
     ? safe === "cancelled"
       ? "inactive"
       : "active"
-    : ["inactive", "absent", "fail", "overdue"].includes(
-        safe
-      )
+    : ["inactive", "absent", "fail", "overdue"].includes(safe)
     ? "inactive"
     : ["late", "pending", "partial"].includes(safe)
     ? "warn"
@@ -146,7 +114,7 @@ export function StatusBadge({ status, label }) {
 
   return (
     <span className={`status-badge ${tone}`}>
-      {label || (status ? status.charAt(0).toUpperCase() + status.slice(1) : "—")}
+      {label || (status ? status.charAt(0).toUpperCase() + status.slice(1) : "\u2014")}
     </span>
   );
 }
