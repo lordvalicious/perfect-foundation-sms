@@ -44,7 +44,6 @@ import {
   MessageSquare,
   Sun,
   Moon,
-  Monitor,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -98,7 +97,7 @@ function GlobalSearch() {
 
   useEffect(() => {
     const value = query.trim();
-    if (value.length < 2) { setResults([]); setOpen(false); return; }
+    if (value.length < 2) { setResults([]); setOpen(false); return; } // eslint-disable-line react-hooks/set-state-in-effect
     setLoading(true);
     const timer = setTimeout(() => {
       fetch(`${SEARCH_URL}?q=${encodeURIComponent(value)}`, { credentials: "include" })
@@ -291,10 +290,6 @@ function findNav(path) {
   return navigation.find((n) => n.path === path);
 }
 
-function findSysNav(path) {
-  return systemNavigation.find((n) => n.path === path);
-}
-
 const navGroups = [
   {
     label: "People",
@@ -425,7 +420,7 @@ function Layout({ children, hasRole }) {
           <NotificationsBell />
           <ThemeToggle />
 
-          <TopbarProfile hasRole={hasRole} />
+          <TopbarProfile />
 
           <button
             className="mobile-nav-toggle"
@@ -461,7 +456,7 @@ function Layout({ children, hasRole }) {
   );
 }
 
-function TopbarProfile({ hasRole }) {
+function TopbarProfile() {
   const { user, logout } = useAuth();
   const displayName = user?.first_name || user?.username || "User";
   const initials = displayName.split(" ").map((p) => p.charAt(0)).join("").slice(0, 2).toUpperCase();

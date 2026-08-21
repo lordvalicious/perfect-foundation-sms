@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { MessageSquare, Send, Settings2, Filter, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { useEffect, useState } from "react";
+import { MessageSquare, Send, Settings2, AlertCircle, CheckCircle, XCircle } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 
 const API_BASE = "/api/communication";
@@ -123,7 +123,7 @@ export default function SMSPage() {
         headers: authHeaders(),
         body: JSON.stringify({ [field]: value }),
       });
-    } catch (err) {
+    } catch {
       setPrefs({ ...prefs });
     } finally {
       setPrefsSaving(false);
