@@ -30,7 +30,7 @@ references:
   - "File: /frontend/src/auth.jsx"
   - "File: /frontend/src/pages/AssignmentsPage.jsx"
   - "File: /frontend/src/pages/ProfilePage.jsx"
-generationTime: 2026-08-17T14:47:46.915Z
+generationTime: 2026-08-22T13:24:06.212Z
 ---
 flowchart TD
     subgraph FE["Frontend"]
@@ -45,6 +45,8 @@ flowchart TD
         Q["StaffPage loads staff data"]
         T["ParentPortalPage for parent access"]
         AE["MessagesPage for messaging"]
+        AF["HRPage for human resources"]
+        AG["AdmissionsPage for student admissions"]
     end
 
     subgraph BE["Backend"]
@@ -68,6 +70,10 @@ flowchart TD
         AB["dashboard_finance_breakdown for finance data"]
         AC["PracticalResultListCreateView for practical results"]
         AD["PracticalResultDetailView for practical result details"]
+        AE["StudentGuardian model for linking students and guardians"]
+        AF["AdmissionApplication model for student admissions"]
+        AG["StudentLifecycleEvent model for tracking student events"]
+        AH["StudentLeaveRequest model for student leave requests"]
     end
 
     A --> B
@@ -80,11 +86,15 @@ flowchart TD
     E --> Q
     E --> T
     E --> AE
+    E --> AF
+    E --> AG
     F --> H
     G --> H
     Q --> H
     T --> H
     AE --> H
+    AF --> H
+    AG --> H
     H --> I
     H --> K
     I -->|role check| K
@@ -100,6 +110,10 @@ flowchart TD
     N --> V
     N --> W
     N --> X
+    N --> AE
+    N --> AF
+    N --> AG
+    N --> AH
     O --> N
     F --> P
     G --> P
