@@ -9,8 +9,12 @@ import {
   Wallet,
   FileText,
   Download,
+  CalendarDays,
+  Megaphone,
+  Receipt,
+  Send,
 } from "lucide-react";
-import { PageHeader, StateArea, EmptyState } from "./ui";
+import { PageHeader, StateArea, EmptyState, StatusBadge } from "./ui";
 import { formatDate, formatCurrency } from "./format";
 
 async function fetchJson(url, fallback) {
@@ -42,7 +46,7 @@ async function fetchAllPages(url) {
       "Unable to load portal data."
     );
 
-    results.push(...(data.results || []));
+    results.push(...(Array.isArray(data) ? data : data.results || []));
 
     next = Boolean(data.next);
     page += 1;
@@ -66,6 +70,14 @@ export default function ParentPortalPage() {
   const [attendance, setAttendance] = useState([]);
   const [reportCards, setReportCards] = useState([]);
   const [invoices, setInvoices] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [timetable, setTimetable] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [selectedChildId, setSelectedChildId] = useState("");
+  const [leaveForm, setLeaveForm] = useState({ start_date: "", end_date: "", reason: "" });
+  const [leaveSaving, setLeaveSaving] = useState(false);
+  const [leaveNotice, setLeaveNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -79,6 +91,10 @@ export default function ParentPortalPage() {
       fetchAllPages("/api/attendance/").catch(() => []),
       fetchAllPages("/api/report-cards/").catch(() => []),
       fetchAllPages("/api/finance/invoices/").catch(() => []),
+      fetchAllPages("/api/finance/payments/").catch(() => []),
+      fetchAllPages("/api/timetable/entries/").catch(() => []),
+      fetchAllPages("/api/communication/announcements/").catch(() => []),
+      fetchAllPages("/api/students/leave/").catch(() => []),
     ])
       .then(
         ([
@@ -87,12 +103,20 @@ export default function ParentPortalPage() {
           attendanceData,
           cards,
           invoiceData,
+          paymentData,
+          timetableData,
+          announcementData,
+          leaveData,
         ]) => {
           setGuardian(guardianData);
           setChildren(students);
           setAttendance(attendanceData);
           setReportCards(cards);
           setInvoices(invoiceData);
+          setPayments(paymentData);
+          setTimetable(timetableData);
+          setAnnouncements(announcementData);
+          setLeaveRequests(leaveData);
           setError("");
         }
       )
@@ -103,6 +127,39 @@ export default function ParentPortalPage() {
         setLoading(false);
       });
   }, []);
+
+  const selectedChild = children.find(
+    (child) => String(child.id) === String(selectedChildId)
+  ) || children[0];
+
+  const visibleChildren = selectedChild ? [selectedChild] : [];
+
+  const submitLeave = async (event) => {
+    event.preventDefault();
+    if (!selectedChild) return;
+    setLeaveSaving(true);
+    setLeaveNotice("");
+    try {
+      const response = await fetch("/api/students/leave/", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRFToken": document.cookie.split("csrftoken=")[1]?.split(";")[0] || "",
+        },
+        body: JSON.stringify({ student: selectedChild.id, ...leaveForm }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit leave request.");
+      setLeaveRequests((current) => [data, ...current]);
+      setLeaveForm({ start_date: "", end_date: "", reason: "" });
+      setLeaveNotice("Leave request submitted for school review.");
+    } catch (requestError) {
+      setLeaveNotice(requestError.message);
+    } finally {
+      setLeaveSaving(false);
+    }
+  };
 
   const stats = useMemo(() => {
     const totalAttendance = attendance.length;
@@ -195,6 +252,27 @@ export default function ParentPortalPage() {
 
         {children.length > 0 && (
           <>
+            <div className="panel students-filters">
+              <div className="filter-row">
+                <label>
+                  Viewing child
+                  <select
+                    value={selectedChild?.id || ""}
+                    onChange={(event) => setSelectedChildId(event.target.value)}
+                  >
+                    {children.map((child) => (
+                      <option key={child.id} value={child.id}>
+                        {child.full_name} · {child.admission_number}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <a className="secondary-button" href="/messages">
+                  <Send size={15} /> Message school
+                </a>
+              </div>
+            </div>
+
             <div className="portal-hero">
               <div className="portal-hero-info">
                 <span className="portal-hero-label">
@@ -268,13 +346,22 @@ export default function ParentPortalPage() {
               </div>
             </div>
 
-            {children.map((child) => {
+            {visibleChildren.map((child) => {
               const childAttendance =
                 attendanceByStudent[child.id] || [];
               const childCards =
                 reportCardsByStudent[child.id] || [];
               const childInvoices =
                 invoicesByStudent[child.id] || [];
+              const childPayments = payments.filter(
+                (payment) => payment.invoice && childInvoices.some((invoice) => invoice.id === payment.invoice)
+              );
+              const childLeaves = leaveRequests.filter(
+                (leave) => leave.student === child.id
+              );
+              const childTimetable = timetable.filter(
+                (entry) => entry.section === child.current_enrollment?.section_id
+              );
 
               const present = childAttendance.filter(
                 (record) =>
@@ -400,6 +487,52 @@ export default function ParentPortalPage() {
                     <div className="portal-section">
                       <div className="panel-header">
                         <div>
+                          <h4>Leave requests</h4>
+                          <p>Request and track absence approval</p>
+                        </div>
+                      </div>
+                      <form onSubmit={submitLeave}>
+                        <div className="form-grid">
+                          <label>From<input type="date" value={leaveForm.start_date} onChange={(event) => setLeaveForm({ ...leaveForm, start_date: event.target.value })} required /></label>
+                          <label>To<input type="date" value={leaveForm.end_date} onChange={(event) => setLeaveForm({ ...leaveForm, end_date: event.target.value })} required /></label>
+                          <label>Reason<textarea value={leaveForm.reason} onChange={(event) => setLeaveForm({ ...leaveForm, reason: event.target.value })} required /></label>
+                        </div>
+                        <button className="primary-button" type="submit" disabled={leaveSaving}>
+                          <Send size={15} /> {leaveSaving ? "Submitting..." : "Submit leave request"}
+                        </button>
+                      </form>
+                      {leaveNotice && <div className="state-card">{leaveNotice}</div>}
+                      {childLeaves.length > 0 && (
+                        <div className="overview-list">
+                          {childLeaves.slice(0, 5).map((leave) => (
+                            <div key={leave.id}><span>{formatDate(leave.start_date)} - {formatDate(leave.end_date)}</span><StatusBadge status={leave.status} label={leave.status_display} /></div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="portal-section">
+                      <div className="panel-header"><div><h4>Payments and receipts</h4><p>Payment history for this child</p></div></div>
+                      {childPayments.length === 0 ? <div className="state-card">No payments recorded yet.</div> : (
+                        <div className="table-wrapper"><table className="data-table"><thead><tr><th>RECEIPT</th><th>DATE</th><th>METHOD</th><th>AMOUNT</th><th></th></tr></thead><tbody>
+                          {childPayments.slice(0, 10).map((payment) => <tr key={payment.id}><td><strong>{payment.receipt_number}</strong></td><td>{formatDate(payment.payment_date)}</td><td>{payment.payment_method_display}</td><td>{formatCurrency(payment.net_amount || payment.amount)}</td><td><a className="table-action" href={`/api/finance/payments/${payment.id}/receipt/`} target="_blank" rel="noreferrer"><Receipt size={15} /> View receipt</a><a className="table-action" href={`/api/finance/payments/${payment.id}/receipt.pdf/`} target="_blank" rel="noreferrer"><Download size={15} /> PDF</a></td></tr>)}
+                        </tbody></table></div>
+                      )}
+                    </div>
+
+                    <div className="portal-section">
+                      <div className="panel-header"><div><h4>Class timetable</h4><p>Current schedule for this child</p></div><CalendarDays size={20} /></div>
+                      {childTimetable.length === 0 ? <div className="state-card">No timetable entries found.</div> : <div className="overview-list">{childTimetable.slice(0, 10).map((entry) => <div key={entry.id}><span>{entry.day_display || entry.day} · {entry.subject_name || entry.subject}</span><strong>{entry.start_time || ""} {entry.room ? `· ${entry.room}` : ""}</strong></div>)}</div>}
+                    </div>
+
+                    <div className="portal-section">
+                      <div className="panel-header"><div><h4>School announcements</h4><p>Published notices for your family</p></div><Megaphone size={20} /></div>
+                      {announcements.length === 0 ? <div className="state-card">No announcements available.</div> : <div className="overview-list">{announcements.slice(0, 5).map((announcement) => <div key={announcement.id}><span><strong>{announcement.title}</strong><br />{announcement.message}</span><small>{formatDate(announcement.published_at || announcement.created_at)}</small></div>)}</div>}
+                    </div>
+
+                    <div className="portal-section">
+                      <div className="panel-header">
+                        <div>
                           <h4>Report Cards</h4>
                           <p>Latest published results</p>
                         </div>
@@ -466,6 +599,7 @@ export default function ParentPortalPage() {
                                         ? "Pass"
                                         : "Fail"}
                                     </span>
+                                    <a className="table-action" href={`/api/report-cards/${card.id}/pdf/`} target="_blank" rel="noreferrer"><Download size={14} /> PDF</a>
                                   </td>
                                 </tr>
                               ))}

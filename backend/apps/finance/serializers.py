@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.db import transaction
 from rest_framework import serializers
 
 from .models import (
@@ -9,6 +10,12 @@ from .models import (
     InvoiceItem,
     Payment,
     PaymentReversal,
+    Account,
+    JournalEntry,
+    JournalLine,
+    Expense,
+    Concession,
+    PaymentRefund,
 )
 from .services import next_invoice_number, next_receipt_number
 
@@ -52,6 +59,7 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
 
         return items
 
+    @transaction.atomic
     def create(self, validated_data):
         from django.core.exceptions import ValidationError as ModelValidationError
 
@@ -110,9 +118,17 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
 
         return attrs
 
+    @transaction.atomic
     def create(self, validated_data):
         from django.core.exceptions import ValidationError as ModelValidationError
 
+        invoice = validated_data["invoice"]
+        locked_invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+        if validated_data["amount"] > locked_invoice.balance:
+            raise serializers.ValidationError(
+                {"amount": "Payment cannot be greater than the current invoice balance."}
+            )
+        validated_data["invoice"] = locked_invoice
         validated_data["receipt_number"] = next_receipt_number()
 
         try:
@@ -342,4 +358,84 @@ class PaymentReversalSerializer(serializers.ModelSerializer):
     class Meta:
         model = PaymentReversal
         fields = ["id", "payment", "amount", "reversal_date", "reason", "status", "created_by", "created_at"]
+        read_only_fields = ["id", "created_by", "created_at"]
+
+
+class AccountSerializer(serializers.ModelSerializer):
+    account_type_display = serializers.CharField(source="get_account_type_display", read_only=True)
+
+    class Meta:
+        model = Account
+        fields = [
+            "id", "institution", "parent", "code", "name", "account_type",
+            "account_type_display", "is_active", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "institution", "created_at", "updated_at"]
+
+
+class JournalLineSerializer(serializers.ModelSerializer):
+    account_code = serializers.CharField(source="account.code", read_only=True)
+    account_name = serializers.CharField(source="account.name", read_only=True)
+
+    class Meta:
+        model = JournalLine
+        fields = ["id", "account", "account_code", "account_name", "debit", "credit", "memo"]
+        read_only_fields = ["id"]
+
+
+class JournalEntrySerializer(serializers.ModelSerializer):
+    lines = JournalLineSerializer(many=True, read_only=True)
+    total_debit = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    total_credit = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    is_balanced = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = JournalEntry
+        fields = [
+            "id", "institution", "campus", "posting_date", "description",
+            "source_type", "source_id", "status", "created_by", "created_at",
+            "lines", "total_debit", "total_credit", "is_balanced",
+        ]
+        read_only_fields = ["id", "institution", "created_by", "created_at"]
+
+
+class ExpenseSerializer(serializers.ModelSerializer):
+    expense_account_name = serializers.CharField(source="expense_account.name", read_only=True)
+    payment_account_name = serializers.CharField(source="payment_account.name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = Expense
+        fields = [
+            "id", "institution", "campus", "expense_account", "expense_account_name",
+            "payment_account", "payment_account_name", "vendor", "expense_date", "amount",
+            "status", "status_display", "reference", "notes", "journal_entry",
+            "created_by", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "institution", "journal_entry", "created_by", "created_at", "updated_at"]
+
+
+class ConcessionSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
+
+    class Meta:
+        model = Concession
+        fields = [
+            "id", "invoice", "invoice_number", "amount", "reason", "status",
+            "status_display", "approved_by", "approved_at", "created_at",
+        ]
+        read_only_fields = ["id", "approved_by", "approved_at", "created_at"]
+
+
+class PaymentRefundSerializer(serializers.ModelSerializer):
+    receipt_number = serializers.CharField(source="payment.receipt_number", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = PaymentRefund
+        fields = [
+            "id", "payment", "receipt_number", "amount", "refund_date", "refund_method",
+            "reason", "status", "status_display", "created_by", "created_at",
+        ]
         read_only_fields = ["id", "created_by", "created_at"]

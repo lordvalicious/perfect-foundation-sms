@@ -5,7 +5,7 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.schools.models import AcademicYear, Campus, Class
+from apps.schools.models import AcademicYear, Campus, Class, School
 from apps.students.models import Enrollment, Student
 
 
@@ -214,7 +214,14 @@ class Invoice(models.Model):
 
     @property
     def total_amount(self):
-        total = self.subtotal - self.discount
+        concession_total = sum(
+            (
+                concession.amount
+                for concession in self.concessions.filter(status="approved")
+            ),
+            Decimal("0.00"),
+        )
+        total = self.subtotal - self.discount - concession_total
         return max(total, Decimal("0.00"))
 
     @property
@@ -429,7 +436,14 @@ class Payment(models.Model):
 
     @property
     def net_amount(self):
-        return max(self.amount - self.reversed_amount, Decimal("0.00"))
+        refunded = sum(
+            (refund.amount for refund in self.refunds.filter(status="completed")),
+            Decimal("0.00"),
+        )
+        return max(
+            self.amount - self.reversed_amount - refunded,
+            Decimal("0.00"),
+        )
 
     def __str__(self):
         return (
@@ -460,6 +474,221 @@ class PaymentReversal(models.Model):
             prior -= self.amount
         if self.amount + prior > self.payment.amount:
             raise ValidationError({"amount": "Reversal cannot exceed the original payment."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+        self.payment.invoice.refresh_status()
+
+
+class Account(models.Model):
+    ACCOUNT_TYPES = [
+        ("asset", "Asset"),
+        ("liability", "Liability"),
+        ("equity", "Equity"),
+        ("income", "Income"),
+        ("expense", "Expense"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="finance_accounts",
+    )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="children",
+    )
+    code = models.CharField(max_length=30)
+    name = models.CharField(max_length=150)
+    account_type = models.CharField(max_length=20, choices=ACCOUNT_TYPES)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["code"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "code"],
+                name="unique_account_code_per_institution",
+            )
+        ]
+
+    def clean(self):
+        if self.parent_id and self.parent.institution_id != self.institution_id:
+            raise ValidationError({"parent": "Parent account must belong to the same institution."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.code} - {self.name}"
+
+
+class JournalEntry(models.Model):
+    STATUS_CHOICES = [("posted", "Posted"), ("void", "Void")]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="journal_entries",
+    )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="journal_entries",
+    )
+    posting_date = models.DateField(default=date.today)
+    description = models.CharField(max_length=255)
+    source_type = models.CharField(max_length=50, blank=True)
+    source_id = models.CharField(max_length=50, blank=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="posted")
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_journal_entries",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if self.campus_id and self.campus.school_id != self.institution_id:
+            raise ValidationError({"campus": "Campus must belong to the institution."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def total_debit(self):
+        return sum((line.debit for line in self.lines.all()), Decimal("0.00"))
+
+    @property
+    def total_credit(self):
+        return sum((line.credit for line in self.lines.all()), Decimal("0.00"))
+
+    @property
+    def is_balanced(self):
+        return self.total_debit == self.total_credit
+
+
+class JournalLine(models.Model):
+    entry = models.ForeignKey(JournalEntry, on_delete=models.CASCADE, related_name="lines")
+    account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="journal_lines")
+    debit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    credit = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    memo = models.CharField(max_length=255, blank=True)
+
+    def clean(self):
+        errors = {}
+        if self.account_id and self.entry_id and self.account.institution_id != self.entry.institution_id:
+            errors["account"] = "Account must belong to the journal institution."
+        if self.debit < 0 or self.credit < 0:
+            errors["debit"] = "Amounts cannot be negative."
+        if self.debit and self.credit:
+            errors["debit"] = "A journal line cannot contain both debit and credit."
+        if not self.debit and not self.credit:
+            errors["debit"] = "A journal line must contain a debit or credit amount."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class Expense(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("approved", "Approved"),
+        ("paid", "Paid"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    institution = models.ForeignKey(School, on_delete=models.CASCADE, related_name="expenses")
+    campus = models.ForeignKey(Campus, on_delete=models.PROTECT, null=True, blank=True, related_name="expenses")
+    expense_account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="expenses")
+    payment_account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="paid_expenses")
+    vendor = models.CharField(max_length=200, blank=True)
+    expense_date = models.DateField(default=date.today)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    reference = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    journal_entry = models.OneToOneField(JournalEntry, on_delete=models.PROTECT, null=True, blank=True, related_name="expense")
+    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_expenses")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        errors = {}
+        if self.campus_id and self.campus.school_id != self.institution_id:
+            errors["campus"] = "Campus must belong to the institution."
+        for field in ("expense_account", "payment_account"):
+            account = getattr(self, f"{field}_id", None) and getattr(self, field, None)
+            if account and account.institution_id != self.institution_id:
+                errors[field] = "Account must belong to the institution."
+        if self.amount <= 0:
+            errors["amount"] = "Expense amount must be greater than zero."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class Concession(models.Model):
+    STATUS_CHOICES = [("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")]
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="concessions")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    approved_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="approved_concessions")
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if self.amount <= 0:
+            raise ValidationError({"amount": "Concession amount must be greater than zero."})
+        if self.invoice_id and self.amount > self.invoice.subtotal:
+            raise ValidationError({"amount": "Concession cannot exceed the invoice subtotal."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+
+class PaymentRefund(models.Model):
+    STATUS_CHOICES = [("completed", "Completed"), ("cancelled", "Cancelled")]
+
+    payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    refund_date = models.DateField(default=date.today)
+    refund_method = models.CharField(max_length=20, choices=Payment.PAYMENT_METHOD_CHOICES, default="cash")
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="completed")
+    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="payment_refunds")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if self.amount <= 0:
+            raise ValidationError({"amount": "Refund amount must be greater than zero."})
+        prior = sum((refund.amount for refund in self.payment.refunds.filter(status="completed")), Decimal("0.00"))
+        if self.pk:
+            prior -= self.amount
+        available = self.payment.amount - self.payment.reversed_amount - prior
+        if self.amount > available:
+            raise ValidationError({"amount": "Refund cannot exceed the effective payment amount."})
 
     def save(self, *args, **kwargs):
         self.full_clean()

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.transport",
     "apps.inventory",
     "apps.payroll",
+    "apps.hr",
     "apps.reports",
     "apps.search",
 

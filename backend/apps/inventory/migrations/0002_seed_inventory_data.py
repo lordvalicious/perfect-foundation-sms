@@ -60,7 +60,8 @@ def seed_inventory(apps, schema_editor):
     ]
 
     created_assets = []
-    for a in assets_data:
+    for index, a in enumerate(assets_data, start=1):
+        a["code"] = f"ASSET-{index:04d}"
         asset = Asset.objects.create(**a)
         created_assets.append(asset)
 

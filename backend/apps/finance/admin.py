@@ -7,7 +7,62 @@ from .models import (
     Invoice,
     InvoiceItem,
     Payment,
+    PaymentReversal,
+    Account,
+    JournalEntry,
+    JournalLine,
+    Expense,
+    Concession,
+    PaymentRefund,
 )
+
+
+@admin.register(Account)
+class AccountAdmin(admin.ModelAdmin):
+    list_display = ("institution", "code", "name", "account_type", "is_active")
+    list_filter = ("institution", "account_type", "is_active")
+    search_fields = ("code", "name")
+
+
+class JournalLineInline(admin.TabularInline):
+    model = JournalLine
+    extra = 2
+
+
+@admin.register(JournalEntry)
+class JournalEntryAdmin(admin.ModelAdmin):
+    list_display = ("posting_date", "institution", "campus", "description", "status")
+    list_filter = ("institution", "campus", "status", "posting_date")
+    search_fields = ("description", "source_type", "source_id")
+    inlines = [JournalLineInline]
+
+
+@admin.register(Expense)
+class ExpenseAdmin(admin.ModelAdmin):
+    list_display = ("expense_date", "institution", "campus", "vendor", "amount", "status")
+    list_filter = ("institution", "campus", "status", "expense_date")
+    search_fields = ("vendor", "reference", "notes")
+
+
+@admin.register(Concession)
+class ConcessionAdmin(admin.ModelAdmin):
+    list_display = ("invoice", "amount", "status", "approved_by", "created_at")
+    list_filter = ("status", "created_at")
+    search_fields = ("invoice__invoice_number", "reason")
+
+
+@admin.register(PaymentRefund)
+class PaymentRefundAdmin(admin.ModelAdmin):
+    list_display = ("payment", "amount", "refund_date", "refund_method", "status")
+    list_filter = ("refund_method", "status", "refund_date")
+    search_fields = ("payment__receipt_number", "reason")
+
+
+@admin.register(PaymentReversal)
+class PaymentReversalAdmin(admin.ModelAdmin):
+    list_display = ("payment", "amount", "reversal_date", "status", "created_by")
+    list_filter = ("status", "reversal_date")
+    search_fields = ("payment__receipt_number", "reason")
 
 
 @admin.register(FeeCategory)

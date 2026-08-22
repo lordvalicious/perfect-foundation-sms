@@ -12,11 +12,32 @@ from .views import (
     PaymentListView,
     PaymentReceiptHTMLView,
     PaymentReceiptPDFView,
+    PaymentReversalCreateView,
+    AccountListCreateView,
+    JournalEntryListView,
+    ExpenseListCreateView,
+    ExpensePostView,
+    ConcessionListCreateView,
+    ConcessionApproveView,
+    PaymentRefundCreateView,
+    TrialBalanceReportView,
+    IncomeExpenseReportView,
+    ReceivablesReportView,
 )
 from .stripe_views import StripeCheckoutView, stripe_webhook
 
 
 urlpatterns = [
+    path("accounts/", AccountListCreateView.as_view(), name="account-list"),
+    path("journal/", JournalEntryListView.as_view(), name="journal-list"),
+    path("expenses/", ExpenseListCreateView.as_view(), name="expense-list"),
+    path("expenses/<int:pk>/post/", ExpensePostView.as_view(), name="expense-post"),
+    path("concessions/", ConcessionListCreateView.as_view(), name="concession-list"),
+    path("concessions/<int:pk>/approve/", ConcessionApproveView.as_view(), name="concession-approve"),
+    path("refunds/", PaymentRefundCreateView.as_view(), name="refund-create"),
+    path("reports/trial-balance/", TrialBalanceReportView.as_view(), name="trial-balance"),
+    path("reports/income-expense/", IncomeExpenseReportView.as_view(), name="income-expense"),
+    path("reports/receivables/", ReceivablesReportView.as_view(), name="receivables"),
     path("invoices/", InvoiceListView.as_view(), name="invoice-list"),
     path(
         "invoices/create/",
@@ -48,6 +69,11 @@ urlpatterns = [
         "payments/<int:pk>/receipt.pdf/",
         PaymentReceiptPDFView.as_view(),
         name="payment-receipt-pdf",
+    ),
+    path(
+        "payments/reversals/",
+        PaymentReversalCreateView.as_view(),
+        name="payment-reversal-create",
     ),
     path(
         "stripe/checkout/",

@@ -5,6 +5,10 @@ from rest_framework import serializers
 from .models import (
     Guardian,
     Student,
+    StudentGuardian,
+    AdmissionApplication,
+    StudentLifecycleEvent,
+    StudentLeaveRequest,
     Enrollment,
     StudentDocument,
 )
@@ -24,6 +28,140 @@ class GuardianSerializer(serializers.ModelSerializer):
             "address",
         ]
         read_only_fields = ["id"]
+
+
+class StudentGuardianSerializer(serializers.ModelSerializer):
+    guardian_name = serializers.CharField(source="guardian.name", read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+
+    class Meta:
+        model = StudentGuardian
+        fields = [
+            "id",
+            "student",
+            "student_name",
+            "guardian",
+            "guardian_name",
+            "relationship",
+            "is_primary",
+            "can_pick_up",
+            "is_emergency_contact",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class AdmissionApplicationSerializer(serializers.ModelSerializer):
+    applicant_name = serializers.ReadOnlyField()
+    campus_name = serializers.CharField(source="campus.name", read_only=True)
+    academic_year_name = serializers.CharField(source="academic_year.name", read_only=True)
+    class_name = serializers.CharField(source="class_obj.name", read_only=True)
+    section_name = serializers.CharField(source="section.name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = AdmissionApplication
+        fields = [
+            "id",
+            "application_number",
+            "first_name",
+            "middle_name",
+            "last_name",
+            "applicant_name",
+            "date_of_birth",
+            "gender",
+            "phone",
+            "address",
+            "guardian",
+            "campus",
+            "campus_name",
+            "academic_year",
+            "academic_year_name",
+            "class_obj",
+            "class_name",
+            "section",
+            "section_name",
+            "status",
+            "status_display",
+            "submitted_at",
+            "reviewed_at",
+            "reviewed_by",
+            "review_notes",
+            "student",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "applicant_name",
+            "submitted_at",
+            "reviewed_at",
+            "reviewed_by",
+            "student",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class StudentLifecycleEventSerializer(serializers.ModelSerializer):
+    event_type_display = serializers.CharField(source="get_event_type_display", read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+
+    class Meta:
+        model = StudentLifecycleEvent
+        fields = [
+            "id",
+            "student",
+            "student_name",
+            "event_type",
+            "event_type_display",
+            "effective_date",
+            "reason",
+            "from_campus",
+            "to_campus",
+            "from_enrollment",
+            "to_enrollment",
+            "recorded_by",
+            "created_at",
+        ]
+        read_only_fields = [
+            "id",
+            "student",
+            "from_campus",
+            "to_campus",
+            "from_enrollment",
+            "to_enrollment",
+            "recorded_by",
+            "created_at",
+        ]
+
+
+class PromotionSerializer(serializers.Serializer):
+    from_academic_year = serializers.IntegerField()
+    to_academic_year = serializers.IntegerField()
+    campus = serializers.IntegerField(required=False)
+    students = serializers.ListField(
+        child=serializers.DictField(),
+        allow_empty=False,
+    )
+
+
+class StudentLeaveRequestSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = StudentLeaveRequest
+        fields = [
+            "id", "student", "student_name", "start_date", "end_date", "reason",
+            "status", "status_display", "requested_by", "reviewed_by", "reviewed_at",
+            "review_notes", "created_at", "updated_at",
+        ]
+        read_only_fields = [
+            "id", "student_name", "status", "requested_by", "reviewed_by",
+            "reviewed_at", "review_notes", "created_at", "updated_at",
+        ]
 
 
 class GuardianCreateSerializer(serializers.ModelSerializer):
@@ -311,6 +449,11 @@ class StudentSerializer(serializers.ModelSerializer):
         read_only=True,
     )
 
+    guardian_links = StudentGuardianSerializer(
+        many=True,
+        read_only=True,
+    )
+
     current_enrollment = serializers.SerializerMethodField()
 
     guardian_name = serializers.CharField(
@@ -368,6 +511,7 @@ class StudentSerializer(serializers.ModelSerializer):
             "guardian_alternate_phone",
             "guardian_email",
             "guardian_address",
+            "guardian_links",
             "phone",
             "address",
             "status",

@@ -2,7 +2,43 @@
 from django import forms
 from django.contrib import admin
 
-from .models import Enrollment, Guardian, Student
+from .models import (
+    AdmissionApplication,
+    Enrollment,
+    Guardian,
+    Student,
+    StudentGuardian,
+    StudentLifecycleEvent,
+)
+
+
+@admin.register(AdmissionApplication)
+class AdmissionApplicationAdmin(admin.ModelAdmin):
+    list_display = (
+        "application_number",
+        "applicant_name",
+        "campus",
+        "academic_year",
+        "status",
+        "created_at",
+    )
+    list_filter = ("status", "campus", "academic_year")
+    search_fields = ("application_number", "first_name", "last_name", "phone")
+
+
+@admin.register(StudentGuardian)
+class StudentGuardianAdmin(admin.ModelAdmin):
+    list_display = ("student", "guardian", "relationship", "is_primary", "can_pick_up")
+    list_filter = ("is_primary", "can_pick_up", "is_emergency_contact")
+    search_fields = ("student__admission_number", "student__first_name", "guardian__name")
+
+
+@admin.register(StudentLifecycleEvent)
+class StudentLifecycleEventAdmin(admin.ModelAdmin):
+    list_display = ("student", "event_type", "effective_date", "recorded_by")
+    list_filter = ("event_type", "effective_date")
+    search_fields = ("student__admission_number", "student__first_name", "reason")
+    readonly_fields = ("created_at",)
 
 
 @admin.register(Guardian)

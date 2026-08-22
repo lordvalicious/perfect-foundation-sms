@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsAnnouncementRole
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.scopes import (
     MANAGER_ROLES,
     get_guardian_profile,
@@ -40,6 +41,13 @@ def _message_recipient_users(user):
         .filter(is_active=True)
         .exclude(pk=user.pk)
     )
+    institution_ids = user.memberships.filter(
+        status="active"
+    ).values_list("institution_id", flat=True)
+    base = base.filter(
+        memberships__institution_id__in=institution_ids,
+        memberships__status="active",
+    ).distinct()
 
     if is_manager(user):
         return base.order_by("first_name", "last_name")
@@ -152,49 +160,52 @@ def _message_recipient_users(user):
     )
 
 
+def scoped_announcement_queryset(request):
+    queryset = Announcement.objects.select_related(
+        "campus",
+        "class_obj",
+        "section",
+    )
+    user = request.user
+
+    institution = getattr(request, "institution", None)
+    queryset = queryset.filter(
+        Q(campus__school=institution)
+        | Q(class_obj__unit__campus__school=institution)
+        | Q(campus__isnull=True, class_obj__isnull=True)
+    )
+
+    if is_manager(user):
+        return queryset
+
+    queryset = queryset.filter(status="published")
+    if is_teacher(user):
+        role = "teacher"
+        class_ids = teacher_class_ids(user)
+    elif is_parent(user):
+        role = "parent"
+        class_ids = parent_student_class_ids(user)
+    elif is_student(user):
+        role = "student"
+        class_ids = student_class_ids(user)
+    else:
+        return queryset.none()
+
+    queryset = queryset.filter(
+        Q(audience_roles=[]) | Q(audience_roles__contains=[role])
+    )
+    queryset = queryset.filter(
+        Q(class_obj__isnull=True) | Q(class_obj_id__in=class_ids)
+    )
+    return apply_campus_scope(queryset, request, "campus_id")
+
+
 class AnnouncementListView(generics.ListCreateAPIView):
     serializer_class = AnnouncementSerializer
     permission_classes = [IsAnnouncementRole]
 
     def get_queryset(self):
-        queryset = Announcement.objects.select_related(
-            "campus",
-            "class_obj",
-            "section",
-        )
-
-        user = self.request.user
-
-        if not is_manager(user):
-            queryset = queryset.filter(status="published")
-
-            q = Q()
-
-            if is_teacher(user):
-                class_ids = teacher_class_ids(user)
-
-                if class_ids:
-                    q |= Q(class_obj_id__in=class_ids)
-
-                q |= Q(class_obj__isnull=True)
-            elif is_parent(user):
-                class_ids = parent_student_class_ids(user)
-
-                if class_ids:
-                    q |= Q(class_obj_id__in=class_ids)
-
-                q |= Q(class_obj__isnull=True)
-            elif is_student(user):
-                class_ids = student_class_ids(user)
-
-                if class_ids:
-                    q |= Q(class_obj_id__in=class_ids)
-
-                q |= Q(class_obj__isnull=True)
-            else:
-                q = Q()
-
-            queryset = queryset.filter(q)
+        queryset = scoped_announcement_queryset(self.request)
 
         status_filter = self.request.query_params.get("status")
 
@@ -209,6 +220,15 @@ class AnnouncementListView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        validated = serializer.validated_data
+        campus = validated.get("campus")
+        class_obj = validated.get("class_obj")
+        if campus and campus.school_id != self.request.institution.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Campus is outside the active institution.")
+        if class_obj and class_obj.unit.campus.school_id != self.request.institution.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Class is outside the active institution.")
         instance = serializer.save()
 
         record_audit(
@@ -226,9 +246,18 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAnnouncementRole]
 
     def get_queryset(self):
-        return Announcement.objects.all()
+        return scoped_announcement_queryset(self.request)
 
     def perform_update(self, serializer):
+        validated = serializer.validated_data
+        campus = validated.get("campus", serializer.instance.campus)
+        class_obj = validated.get("class_obj", serializer.instance.class_obj)
+        if campus and campus.school_id != self.request.institution.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Campus is outside the active institution.")
+        if class_obj and class_obj.unit.campus.school_id != self.request.institution.id:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Class is outside the active institution.")
         instance = serializer.save()
 
         record_audit(
@@ -351,6 +380,12 @@ class MessageListView(generics.ListCreateAPIView):
         ).order_by("-sent_at")
 
     def perform_create(self, serializer):
+        recipient = serializer.validated_data["recipient"]
+        if not _message_recipient_users(self.request.user).filter(
+            pk=recipient.pk
+        ).exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("This recipient is not available to you.")
         instance = serializer.save()
 
         record_audit(

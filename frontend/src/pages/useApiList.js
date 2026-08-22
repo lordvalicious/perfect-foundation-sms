@@ -11,7 +11,7 @@ export function useApiList(url) {
 
   const load = useCallback(
     (params) => {
-      return fetch(`${url}?${params.toString()}`)
+      return fetch(`${url}?${params.toString()}`, { credentials: "include" })
         .then((response) => {
           if (!response.ok) {
             throw new Error("Failed to load data.");

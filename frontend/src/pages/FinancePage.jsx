@@ -883,6 +883,56 @@ function FeeStructureSection({ categories }) {
   );
 }
 
+function AccountingOverview() {
+  const [accounts, setAccounts] = useState([]);
+  const [report, setReport] = useState(null);
+  const [receivables, setReceivables] = useState(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/finance/accounts/", { credentials: "include" }),
+      fetch("/api/finance/reports/income-expense/", { credentials: "include" }),
+      fetch("/api/finance/reports/receivables/", { credentials: "include" }),
+    ])
+      .then(async ([accountsResponse, reportResponse, receivablesResponse]) => {
+        if (!accountsResponse.ok || !reportResponse.ok || !receivablesResponse.ok) {
+          throw new Error("Accounting data is unavailable for this account.");
+        }
+        const [accountData, reportData, receivablesData] = await Promise.all([
+          accountsResponse.json(),
+          reportResponse.json(),
+          receivablesResponse.json(),
+        ]);
+        setAccounts(Array.isArray(accountData) ? accountData : accountData.results || []);
+        setReport(reportData);
+        setReceivables(receivablesData);
+      })
+      .catch((requestError) => setError(requestError.message));
+  }, []);
+
+  if (error) return null;
+
+  return (
+    <div className="panel">
+      <PanelHeader title="Accounting overview" subtitle="ledger accounts and balances" count={accounts.length} />
+      <div className="stats-grid">
+        <div className="stat-card"><div className="stat-icon"><Wallet size={20} /></div><div className="stat-info"><span>Income</span><strong>{formatCurrency(report?.income || 0)}</strong></div></div>
+        <div className="stat-card"><div className="stat-icon"><Receipt size={20} /></div><div className="stat-info"><span>Expenses</span><strong>{formatCurrency(report?.expense || 0)}</strong></div></div>
+        <div className="stat-card"><div className="stat-icon"><Wallet size={20} /></div><div className="stat-info"><span>Net result</span><strong>{formatCurrency(report?.net || 0)}</strong></div></div>
+        <div className="stat-card"><div className="stat-icon"><Receipt size={20} /></div><div className="stat-info"><span>Receivables</span><strong>{formatCurrency(receivables?.total || 0)}</strong></div></div>
+      </div>
+      {accounts.length > 0 && (
+        <div className="overview-list">
+          {accounts.slice(0, 8).map((account) => (
+            <div key={account.id}><span>{account.code} · {account.name}</span><StatusBadge status={account.is_active ? "active" : "inactive"} label={account.account_type_display} /></div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FinancePage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
@@ -949,6 +999,8 @@ export default function FinancePage() {
       <DashboardCards data={dashboard} />
 
       <BreakdownCharts data={breakdown} />
+
+      <AccountingOverview />
 
       <Filters
         search={search}

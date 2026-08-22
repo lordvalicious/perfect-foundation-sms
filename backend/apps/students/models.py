@@ -28,6 +28,186 @@ class Guardian(models.Model):
         return f"{self.name} ({self.relationship})"
 
 
+class StudentGuardian(models.Model):
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="guardian_links",
+    )
+    guardian = models.ForeignKey(
+        Guardian,
+        on_delete=models.CASCADE,
+        related_name="guardian_links",
+    )
+    relationship = models.CharField(max_length=50)
+    is_primary = models.BooleanField(default=False)
+    can_pick_up = models.BooleanField(default=False)
+    is_emergency_contact = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "guardian"],
+                name="unique_student_guardian_link",
+            )
+        ]
+        ordering = ["-is_primary", "guardian__name"]
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.guardian.name}"
+
+
+class AdmissionApplication(models.Model):
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("submitted", "Submitted"),
+        ("under_review", "Under review"),
+        ("accepted", "Accepted"),
+        ("rejected", "Rejected"),
+        ("withdrawn", "Withdrawn"),
+    ]
+
+    application_number = models.CharField(max_length=50, unique=True)
+    first_name = models.CharField(max_length=100)
+    middle_name = models.CharField(max_length=100, blank=True)
+    last_name = models.CharField(max_length=100, blank=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(
+        max_length=10,
+        choices=[
+            ("male", "Male"),
+            ("female", "Female"),
+        ],
+    )
+    phone = models.CharField(max_length=30, blank=True)
+    address = models.TextField(blank=True)
+    guardian = models.ForeignKey(
+        Guardian,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="admission_applications",
+    )
+    campus = models.ForeignKey(Campus, on_delete=models.PROTECT)
+    academic_year = models.ForeignKey(AcademicYear, on_delete=models.PROTECT)
+    class_obj = models.ForeignKey(Class, on_delete=models.PROTECT)
+    section = models.ForeignKey(
+        Section,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="draft",
+    )
+    submitted_at = models.DateTimeField(null=True, blank=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_admission_applications",
+    )
+    review_notes = models.TextField(blank=True)
+    student = models.OneToOneField(
+        "Student",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="admission_application",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        errors = {}
+        if self.class_obj_id and self.campus_id:
+            if self.class_obj.unit.campus_id != self.campus_id:
+                errors["class_obj"] = "The selected class does not belong to the selected campus."
+        if self.section_id and self.class_obj_id:
+            if self.section.class_obj_id != self.class_obj_id:
+                errors["section"] = "The selected section does not belong to the selected class."
+        if self.academic_year_id and self.campus_id:
+            if self.academic_year.school_id != self.campus.school_id:
+                errors["academic_year"] = "The academic year does not belong to the selected school."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def applicant_name(self):
+        return " ".join(part for part in [self.first_name, self.middle_name, self.last_name] if part)
+
+
+class StudentLifecycleEvent(models.Model):
+    EVENT_CHOICES = [
+        ("activated", "Activated"),
+        ("inactive", "Marked inactive"),
+        ("withdrawn", "Withdrawn"),
+        ("transferred", "Transferred"),
+        ("graduated", "Graduated"),
+    ]
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="lifecycle_events",
+    )
+    event_type = models.CharField(max_length=20, choices=EVENT_CHOICES)
+    effective_date = models.DateField()
+    reason = models.TextField(blank=True)
+    from_campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lifecycle_events_from",
+    )
+    to_campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lifecycle_events_to",
+    )
+    from_enrollment = models.ForeignKey(
+        "Enrollment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lifecycle_events_from",
+    )
+    to_enrollment = models.ForeignKey(
+        "Enrollment",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="lifecycle_events_to",
+    )
+    recorded_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="recorded_student_lifecycle_events",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-effective_date", "-created_at"]
+
+
 class Student(models.Model):
     admission_number = models.CharField(
         max_length=50,
@@ -281,4 +461,56 @@ class StudentDocument(models.Model):
 
     def __str__(self):
         return f"{self.student.admission_number} - {self.title}"
+
+
+class StudentLeaveRequest(models.Model):
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="leave_requests",
+    )
+    start_date = models.DateField()
+    end_date = models.DateField()
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    requested_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="requested_student_leave",
+    )
+    reviewed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_student_leave",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        errors = {}
+        if self.end_date < self.start_date:
+            errors["end_date"] = "End date must be on or after the start date."
+        if not self.reason.strip():
+            errors["reason"] = "A reason is required."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 

@@ -1,20 +1,75 @@
 from django.urls import path
 
 from .views import (
+    AdmissionApplicationAcceptView,
+    AdmissionApplicationDetailView,
+    AdmissionApplicationListCreateView,
+    AdmissionApplicationReviewView,
     GuardianListCreateView,
     GuardianDetailView,
     GuardianMyView,
     StudentListCreateView,
     StudentDetailView,
+    StudentGuardianListCreateView,
+    StudentLifecycleActionView,
+    StudentLifecycleListView,
+    StudentLeaveRequestActionView,
+    StudentLeaveRequestListCreateView,
     StudentMyView,
     StudentDocumentListCreateView,
     StudentDocumentDetailView,
     EnrollmentListCreateView,
     EnrollmentDetailView,
+    PromotionView,
 )
 
 
 urlpatterns = [
+    path(
+        "admissions/",
+        AdmissionApplicationListCreateView.as_view(),
+        name="admission-list",
+    ),
+    path(
+        "admissions/<int:pk>/",
+        AdmissionApplicationDetailView.as_view(),
+        name="admission-detail",
+    ),
+    path(
+        "admissions/<int:pk>/review/",
+        AdmissionApplicationReviewView.as_view(),
+        name="admission-review",
+    ),
+    path(
+        "admissions/<int:pk>/accept/",
+        AdmissionApplicationAcceptView.as_view(),
+        name="admission-accept",
+    ),
+    path(
+        "guardian-links/",
+        StudentGuardianListCreateView.as_view(),
+        name="student-guardian-list",
+    ),
+    path(
+        "lifecycle/",
+        StudentLifecycleListView.as_view(),
+        name="student-lifecycle-list",
+    ),
+    path(
+        "leave/",
+        StudentLeaveRequestListCreateView.as_view(),
+        name="student-leave-list",
+    ),
+    path(
+        "leave/<int:pk>/action/",
+        StudentLeaveRequestActionView.as_view(),
+        name="student-leave-action",
+    ),
+    path(
+        "promotions/",
+        PromotionView.as_view(),
+        name="student-promotion",
+    ),
     path(
         "",
         StudentListCreateView.as_view(),
@@ -67,6 +122,12 @@ urlpatterns = [
         "enrollments/<int:pk>/",
         EnrollmentDetailView.as_view(),
         name="enrollment-detail",
+    ),
+
+    path(
+        "<int:pk>/lifecycle/",
+        StudentLifecycleActionView.as_view(),
+        name="student-lifecycle-action",
     ),
 
     path(

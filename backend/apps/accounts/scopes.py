@@ -170,19 +170,21 @@ def teacher_scope_filter(user):
 
 
 def parent_student_ids(user):
-    """Student ids whose guardian is linked to the logged-in user."""
+    """Student ids linked to the logged-in parent's guardian profile."""
     profile = get_guardian_profile(user)
 
     if profile is None:
         return []
 
-    from apps.students.models import Student
+    from apps.students.models import Student, StudentGuardian
 
+    linked_ids = StudentGuardian.objects.filter(
+        guardian=profile,
+    ).values_list("student_id", flat=True)
     return list(
-        Student.objects.filter(guardian=profile).values_list(
-            "id",
-            flat=True,
-        )
+        Student.objects.filter(
+            Q(guardian=profile) | Q(id__in=linked_ids),
+        ).values_list("id", flat=True)
     )
 
 

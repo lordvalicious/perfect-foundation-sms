@@ -105,6 +105,11 @@ urlpatterns = [
     ),
 
     path(
+        "api/hr/",
+        include("apps.hr.urls"),
+    ),
+
+    path(
         "api/reports/",
         include("apps.reports.urls"),
     ),

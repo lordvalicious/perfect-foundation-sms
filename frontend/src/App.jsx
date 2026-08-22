@@ -44,6 +44,8 @@ import {
   MessageSquare,
   Sun,
   Moon,
+  FilePlus2,
+  Briefcase,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -72,6 +74,8 @@ import SMSPage from "./pages/SMSPage";
 import Dashboard from "./pages/Dashboard";
 import StudentsPage from "./pages/StudentsPage";
 import TeachersPage from "./pages/TeachersPage";
+import HRPage from "./pages/HRPage";
+import AdmissionsPage from "./pages/AdmissionsPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -261,8 +265,10 @@ const navigation = [
   { label: "My Profile", path: "/profile", icon: UserRound, roles: [] },
   { label: "Parent Portal", path: "/parent-portal", icon: HeartHandshake, roles: ["parent"] },
   { label: "Students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
+  { label: "Admissions", path: "/admissions", icon: FilePlus2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
-  { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "vice_principal", "campus_admin", "hr"] },
+  { label: "Human Resources", path: "/hr", icon: Briefcase, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr", "accountant"] },
   { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
@@ -293,7 +299,7 @@ function findNav(path) {
 const navGroups = [
   {
     label: "People",
-    items: ["/students", "/teachers", "/staff", "/parent-portal", "/profile"]
+    items: ["/students", "/admissions", "/teachers", "/staff", "/hr", "/parent-portal", "/profile"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -556,6 +562,12 @@ function Shell() {
           </RequireRoles>
         } />
 
+        <Route path="/admissions" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <AdmissionsPage />
+          </RequireRoles>
+        } />
+
         <Route path="/parent-portal" element={
           <RequireRoles roles={["parent"]}>
             <ParentPortalPage />
@@ -569,8 +581,14 @@ function Shell() {
         } />
 
         <Route path="/staff" element={
-          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "vice_principal", "campus_admin", "hr"]}>
             <StaffPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/hr" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr", "accountant"]}>
+            <HRPage />
           </RequireRoles>
         } />
 
