@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.access import apply_campus_scope
-from apps.accounts.permissions import IsAdminRole
+from apps.accounts.permissions import IsAccountantRole
 from apps.hr.models import EmployeeDocument
 from apps.students.models import StudentDocument
 
@@ -113,7 +113,7 @@ class DocumentListView(APIView):
 
 
 class DocumentUploadView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, IsAccountantRole]
 
     def post(self, request):
         entity_type = request.data.get("entity_type")

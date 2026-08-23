@@ -94,11 +94,17 @@ class SMSBroadcastView(APIView):
                 )
 
         elif role:
-            users_qs = User.objects.filter(
-                memberships__status="active"
-            ).distinct()
+            if role == "all":
+                users_qs = User.objects.filter(
+                    memberships__status="active"
+                ).distinct()
+                phone_numbers.update(_collect_phones(users_qs.values_list("id", flat=True)))
+                student_ids = Student.objects.filter(
+                    enrollment__status="active",
+                ).values_list("id", flat=True)
+                phone_numbers.update(_parent_phones_for_students(student_ids))
 
-            if role == "parent":
+            elif role == "parent":
                 users_qs = User.objects.filter(
                     guardian_profile_id__isnull=False
                 )
@@ -120,9 +126,10 @@ class SMSBroadcastView(APIView):
                 )
 
             elif role == "student":
-                users_qs = users_qs.filter(
-                    student_profile_id__isnull=False
-                )
+                users_qs = User.objects.filter(
+                    memberships__status="active",
+                    student_profile_id__isnull=False,
+                ).distinct()
                 if campus_id:
                     users_qs = users_qs.filter(
                         student_profile__enrollment__campus_id=campus_id,
@@ -131,9 +138,10 @@ class SMSBroadcastView(APIView):
                 phone_numbers.update(_collect_phones(users_qs.values_list("id", flat=True)))
 
             elif role == "teacher":
-                users_qs = users_qs.filter(
-                    teacher_profile_id__isnull=False
-                )
+                users_qs = User.objects.filter(
+                    memberships__status="active",
+                    teacher_profile_id__isnull=False,
+                ).distinct()
                 if campus_id:
                     users_qs = users_qs.filter(
                         teacher_profile__primary_campus_id=campus_id,

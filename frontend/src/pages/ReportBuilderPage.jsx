@@ -57,6 +57,18 @@ const FILTER_OPTIONS = {
   fee_categories: [],
 };
 
+const REPORT_TYPE_SLUGS = {
+  enrollment: "enrollment",
+  attendance: "attendance",
+  results: "results",
+  fees: "fees",
+  staff: "staff",
+  subjects: "subjects",
+  payments: "payments",
+  student_status: "student-status",
+  fee_categories: "fee-categories",
+};
+
 function TemplateFormModal({ template, onClose, onSaved }) {
   const [form, setForm] = useState({
     name: template?.name || "",
@@ -203,7 +215,8 @@ function ReportPreviewModal({ reportType, filters, onClose }) {
 
   const handleExportCSV = () => {
     const params = new URLSearchParams(filters);
-    window.open(`/api/reports/${reportType}/?${params}&format=csv`, "_blank");
+    const slug = REPORT_TYPE_SLUGS[reportType] || reportType;
+    window.open(`/api/reports/${slug}/?${params}&format=csv`, "_blank");
   };
 
   return (

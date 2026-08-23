@@ -6,7 +6,8 @@ import { PageHeader, PanelHeader, StateArea, StatusBadge, EmptyState } from "./u
 import { formatDate } from "./format";
 
 const DOCUMENTS_URL = "/api/documents/";
-const STUDENTS_API = "/api/students/students/";
+const DOCUMENTS_UPLOAD_URL = "/api/documents/upload/";
+const STUDENTS_API = "/api/students/";
 const EMPLOYEES_API = "/api/hr/employees/";
 const CAMPUSES_URL = "/api/schools/campuses/";
 
@@ -88,7 +89,7 @@ function UploadDocumentModal({ onClose, onDone }) {
         .find((c) => c.startsWith("csrftoken="))
         ?.split("=")[1] || "";
 
-      const response = await fetch(DOCUMENTS_URL, {
+      const response = await fetch(DOCUMENTS_UPLOAD_URL, {
         method: "POST",
         headers: { "X-CSRFToken": csrfToken },
         credentials: "include",

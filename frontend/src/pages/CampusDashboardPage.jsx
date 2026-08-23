@@ -37,11 +37,11 @@ export default function CampusDashboardPage() {
     fetchData();
   }, [fetchData]);
 
-  const totalStudents = campuses.reduce((sum, c) => sum + (c.student_count || 0), 0);
-  const totalClasses = campuses.reduce((sum, c) => sum + (c.class_count || 0), 0);
-  const totalSections = campuses.reduce((sum, c) => sum + (c.section_count || 0), 0);
-  const totalCollected = finance?.by_campus?.reduce((sum, c) => sum + (c.collected || 0), 0) || 0;
-  const totalOutstanding = finance?.by_campus?.reduce((sum, c) => sum + (c.outstanding || 0), 0) || 0;
+  const totalStudents = campuses.reduce((sum, c) => sum + Number(c.student_count || 0), 0);
+  const totalClasses = campuses.reduce((sum, c) => sum + Number(c.class_count || 0), 0);
+  const totalSections = campuses.reduce((sum, c) => sum + Number(c.section_count || 0), 0);
+  const totalCollected = finance?.by_campus?.reduce((sum, c) => sum + Number(c.collected || 0), 0) || 0;
+  const totalOutstanding = finance?.by_campus?.reduce((sum, c) => sum + Number(c.outstanding || 0), 0) || 0;
 
   const campusFinanceMap = {};
   if (finance?.by_campus) {

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { Fragment } from "react";
 import { Download, Filter, ScrollText, ChevronDown, ChevronUp } from "lucide-react";
 import { apiFetch, apiDownload } from "../api";
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
@@ -201,7 +202,7 @@ export default function AuditLogsPage() {
                   </thead>
                   <tbody>
                     {logs.map((log) => (
-                      <>
+                      <Fragment key={log.id}>
                         <tr
                           key={log.id}
                           style={{ cursor: log.details && Object.keys(log.details).length > 0 ? "pointer" : "default" }}
@@ -246,7 +247,7 @@ export default function AuditLogsPage() {
                             </td>
                           </tr>
                         )}
-                      </>
+                      </Fragment>
                     ))}
                   </tbody>
                 </table>
