@@ -82,6 +82,7 @@ import DocumentsPage from "./pages/DocumentsPage";
 import ReportBuilderPage from "./pages/ReportBuilderPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import BrandingPage from "./pages/BrandingPage";
+import CampusDashboardPage from "./pages/CampusDashboardPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -283,6 +284,7 @@ const navigation = [
   { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Campus Dashboard", path: "/campus-dashboard", icon: Building2, roles: ["super_admin", "admin", "principal"] },
   { label: "Announcements", path: "/announcements", icon: Megaphone, roles: [] },
   { label: "Messages", path: "/messages", icon: Mail, roles: [] },
   { label: "SMS", path: "/sms", icon: MessageSquare, roles: ["super_admin", "admin"] },
@@ -328,7 +330,7 @@ const navGroups = [
   },
   {
     label: "Resources",
-    items: ["/library", "/transport", "/inventory", "/documents", "/campuses"]
+    items: ["/library", "/transport", "/inventory", "/documents", "/campuses", "/campus-dashboard"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -648,6 +650,12 @@ function Shell() {
         <Route path="/campuses" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
             <CampusesPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/campus-dashboard" element={
+          <RequireRoles roles={["super_admin", "admin", "principal"]}>
+            <CampusDashboardPage />
           </RequireRoles>
         } />
 
