@@ -19,6 +19,7 @@ from .export_views import (
     DataExportListView,
     DataExportView,
 )
+from .health_views import SystemHealthView
 
 
 urlpatterns = [
@@ -96,5 +97,10 @@ urlpatterns = [
         "backup/",
         DataBackupView.as_view(),
         name="data-backup",
+    ),
+    path(
+        "health/",
+        SystemHealthView.as_view(),
+        name="system-health",
     ),
 ]
