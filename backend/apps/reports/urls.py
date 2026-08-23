@@ -6,6 +6,9 @@ from .views import (
     FeeCategoryReportView,
     FeesReportView,
     PaymentMethodsReportView,
+    ReportGenerateView,
+    ReportTemplateDetailView,
+    ReportTemplateListView,
     ResultsReportView,
     StaffReportView,
     StudentStatusReportView,
@@ -58,5 +61,20 @@ urlpatterns = [
         "fee-categories/",
         FeeCategoryReportView.as_view(),
         name="report-fee-categories",
+    ),
+    path(
+        "templates/",
+        ReportTemplateListView.as_view(),
+        name="report-template-list",
+    ),
+    path(
+        "templates/<int:pk>/",
+        ReportTemplateDetailView.as_view(),
+        name="report-template-detail",
+    ),
+    path(
+        "generate/",
+        ReportGenerateView.as_view(),
+        name="report-generate",
     ),
 ]

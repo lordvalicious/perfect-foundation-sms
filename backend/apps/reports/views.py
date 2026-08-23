@@ -1249,3 +1249,162 @@ class StaffReportView(APIView):
             *args,
             **kwargs,
         )
+
+class ReportTemplateListView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    def get(self, request):
+        from .models import ReportTemplate
+
+        templates = ReportTemplate.objects.filter(created_by=request.user)
+        data = []
+        for t in templates:
+            data.append({
+                ""id"": t.id,
+                ""name"": t.name,
+                ""description"": t.description,
+                ""report_type"": t.report_type,
+                ""report_type_display"": t.get_report_type_display(),
+                ""filters"": t.filters,
+                ""columns"": t.columns,
+                ""is_default"": t.is_default,
+                ""created_at"": t.created_at.isoformat(),
+            })
+        return Response(data)
+
+    def post(self, request):
+        from .models import ReportTemplate
+
+        name = request.data.get(""name"", """").strip()
+        report_type = request.data.get(""report_type"", """")
+
+        if not name or not report_type:
+            return Response(
+                {""detail"": ""name and report_type are required.""},
+                status=400,
+            )
+
+        valid_types = [c[0] for c in ReportTemplate.REPORT_TYPE_CHOICES]
+        if report_type not in valid_types:
+            return Response(
+                {""detail"": f""Invalid report_type. Must be one of: {', '.join(valid_types)}""},
+                status=400,
+            )
+
+        template = ReportTemplate.objects.create(
+            name=name,
+            description=request.data.get(""description"", """"),
+            report_type=report_type,
+            filters=request.data.get(""filters"", {}),
+            columns=request.data.get(""columns"", []),
+            created_by=request.user,
+        )
+
+        return Response({
+            ""id"": template.id,
+            ""name"": template.name,
+            ""report_type"": template.report_type,
+            ""detail"": ""Template created."",
+        }, status=201)
+
+
+class ReportTemplateDetailView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    def get_object(self, pk):
+        from .models import ReportTemplate
+
+        try:
+            return ReportTemplate.objects.get(pk=pk, created_by=self.request.user)
+        except ReportTemplate.DoesNotExist:
+            return None
+
+    def get(self, request, pk):
+        template = self.get_object(pk)
+        if not template:
+            return Response({""detail"": ""Not found.""}, status=404)
+
+        return Response({
+            ""id"": template.id,
+            ""name"": template.name,
+            ""description"": template.description,
+            ""report_type"": template.report_type,
+            ""report_type_display"": template.get_report_type_display(),
+            ""filters"": template.filters,
+            ""columns"": template.columns,
+            ""is_default"": template.is_default,
+            ""created_at"": template.created_at.isoformat(),
+        })
+
+    def put(self, request, pk):
+        template = self.get_object(pk)
+        if not template:
+            return Response({""detail"": ""Not found.""}, status=404)
+
+        template.name = request.data.get(""name"", template.name)
+        template.description = request.data.get(""description"", template.description)
+        template.filters = request.data.get(""filters"", template.filters)
+        template.columns = request.data.get(""columns"", template.columns)
+        template.is_default = request.data.get(""is_default"", template.is_default)
+        template.save()
+
+        return Response({""detail"": ""Template updated.""})
+
+    def delete(self, request, pk):
+        template = self.get_object(pk)
+        if not template:
+            return Response({""detail"": ""Not found.""}, status=404)
+
+        template.delete()
+        return Response({""detail"": ""Template deleted.""})
+
+
+REPORT_VIEW_MAP = {
+    ""enrollment"": ""apps.reports.views.EnrollmentReportView"",
+    ""attendance"": ""apps.reports.views.AttendanceReportView"",
+    ""results"": ""apps.reports.views.ResultsReportView"",
+    ""fees"": ""apps.reports.views.FeesReportView"",
+    ""staff"": ""apps.reports.views.StaffReportView"",
+    ""subjects"": ""apps.reports.views.SubjectPerformanceReportView"",
+    ""payments"": ""apps.reports.views.PaymentMethodsReportView"",
+    ""student_status"": ""apps.reports.views.StudentStatusReportView"",
+    ""fee_categories"": ""apps.reports.views.FeeCategoryReportView"",
+}
+
+
+class ReportGenerateView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    def post(self, request):
+        from django.utils.module_loading import import_string
+
+        report_type = request.data.get(""report_type"")
+        filters = request.data.get(""filters"", {})
+
+        if report_type not in REPORT_VIEW_MAP:
+            return Response(
+                {""detail"": f""Invalid report_type: {report_type}""},
+                status=400,
+            )
+
+        view_class = import_string(REPORT_VIEW_MAP[report_type])
+        view_instance = view_class()
+
+        from django.test import RequestFactory
+
+        factory = RequestFactory()
+        query_string = ""&"".join(f""{k}={v}"" for k, v in filters.items() if v)
+        url = f""/api/reports/{report_type}/?{query_string}""
+
+        req = factory.get(url)
+        req.user = request.user
+
+        try:
+            data = view_instance._data(req)
+        except Exception as e:
+            return Response(
+                {""detail"": f""Report generation failed: {str(e)}""},
+                status=500,
+            )
+
+        return Response(data)
