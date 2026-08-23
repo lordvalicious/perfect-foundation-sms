@@ -3,6 +3,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.scopes import (
     get_student_profile,
     is_manager,
@@ -160,12 +161,19 @@ class GlobalSearchView(APIView):
                 Q(first_name__icontains=query)
                 | Q(last_name__icontains=query)
                 | Q(middle_name__icontains=query)
-                | Q(admission_number__icontains=query)
+                | Q(admission_number__icontains=query),
+                enrollments__academic_year__school=self.request.institution,
             )
         )
 
         if student_ids is not None:
             queryset = queryset.filter(pk__in=student_ids)
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "enrollments__campus_id",
+        )
 
         return [
             _serialize_student(student)
@@ -175,33 +183,41 @@ class GlobalSearchView(APIView):
     def _search_guardians(self, query):
         from apps.students.models import Guardian
 
+        queryset = Guardian.objects.filter(
+            Q(name__icontains=query)
+            | Q(phone__icontains=query),
+            guardian_links__student__enrollments__academic_year__school=self.request.institution,
+        )
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "guardian_links__student__enrollments__campus_id",
+        ).distinct()
+
         return [
             _serialize_guardian(guardian)
-            for guardian in (
-                Guardian.objects
-                .filter(
-                    Q(name__icontains=query)
-                    | Q(phone__icontains=query)
-                )
-                [:10]
-            )
+            for guardian in queryset[:10]
         ]
 
     def _search_teachers(self, query):
         from apps.teachers.models import Teacher
 
+        queryset = Teacher.objects.filter(
+            Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+            | Q(employee_number__icontains=query)
+            | Q(designation__icontains=query),
+            membership__institution=self.request.institution,
+        )
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "primary_campus_id",
+        )
+
         return [
             _serialize_teacher(teacher)
-            for teacher in (
-                Teacher.objects
-                .filter(
-                    Q(first_name__icontains=query)
-                    | Q(last_name__icontains=query)
-                    | Q(employee_number__icontains=query)
-                    | Q(designation__icontains=query)
-                )
-                [:10]
-            )
+            for teacher in queryset[:10]
         ]
 
     def _search_classes(self, query, teacher=False):
@@ -218,7 +234,13 @@ class GlobalSearchView(APIView):
             )
         else:
             queryset = SchoolClass.objects.filter(
+                unit__campus__school=self.request.institution,
                 name__icontains=query,
+            )
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "unit__campus_id",
             )
 
         return [
@@ -251,7 +273,8 @@ class GlobalSearchView(APIView):
             queryset = Subject.objects.filter(
                 Q(name__icontains=query)
                 | Q(code__icontains=query),
-            )
+                offerings__class_obj__unit__campus__school=self.request.institution,
+            ).distinct()
 
         return [
             _serialize_subject(subject)
@@ -272,7 +295,13 @@ class GlobalSearchView(APIView):
             )
         else:
             queryset = Exam.objects.filter(
+                class_obj__unit__campus__school=self.request.institution,
                 name__icontains=query,
+            )
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "class_obj__unit__campus_id",
             )
 
         return [
@@ -283,18 +312,17 @@ class GlobalSearchView(APIView):
     def _search_invoices(self, query):
         from apps.finance.models import Invoice
 
+        from apps.finance.views import scoped_invoice_queryset
+
+        queryset = scoped_invoice_queryset(self.request).filter(
+            Q(invoice_number__icontains=query)
+            | Q(student__first_name__icontains=query)
+            | Q(student__last_name__icontains=query)
+        ).select_related("student")
+
         return [
             _serialize_invoice(invoice)
-            for invoice in (
-                Invoice.objects
-                .filter(
-                    Q(invoice_number__icontains=query)
-                    | Q(student__first_name__icontains=query)
-                    | Q(student__last_name__icontains=query)
-                )
-                .select_related("student")
-                [:10]
-            )
+            for invoice in queryset[:10]
         ]
 
     def _search_users(self, query):
@@ -306,9 +334,10 @@ class GlobalSearchView(APIView):
                 Q(first_name__icontains=query)
                 | Q(last_name__icontains=query)
                 | Q(username__icontains=query)
-                | Q(email__icontains=query)
+                | Q(email__icontains=query),
+                memberships__institution=self.request.institution,
             )
-            [:10]
+            .distinct()[:10]
         )
 
         results = []
