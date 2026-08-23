@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.schools.models import Campus
+
 
 class Vehicle(models.Model):
     STATUS_CHOICES = [
@@ -12,6 +14,13 @@ class Vehicle(models.Model):
     plate_number = models.CharField(
         max_length=32,
         unique=True,
+    )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="vehicles",
     )
     model = models.CharField(max_length=100)
     capacity = models.PositiveIntegerField(default=30)
@@ -35,6 +44,13 @@ class Driver(models.Model):
     last_name = models.CharField(max_length=100, blank=True)
     license_number = models.CharField(max_length=64)
     phone = models.CharField(max_length=20, blank=True)
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="drivers",
+    )
     status = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -52,6 +68,13 @@ class Driver(models.Model):
 class Route(models.Model):
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=255, blank=True)
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="transport_routes",
+    )
     vehicle = models.ForeignKey(
         Vehicle,
         on_delete=models.SET_NULL,
@@ -73,6 +96,21 @@ class Route(models.Model):
 
     class Meta:
         ordering = ["name"]
+
+    def clean(self):
+        errors = {}
+        if self.vehicle_id and self.vehicle.campus_id and self.campus_id:
+            if self.vehicle.campus_id != self.campus_id:
+                errors["vehicle"] = (
+                    "The vehicle must belong to the selected campus."
+                )
+        if self.driver_id and self.driver.campus_id and self.campus_id:
+            if self.driver.campus_id != self.campus_id:
+                errors["driver"] = (
+                    "The driver must belong to the selected campus."
+                )
+        if errors:
+            raise ValidationError(errors)
 
     def __str__(self):
         return self.name

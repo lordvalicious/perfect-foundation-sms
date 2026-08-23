@@ -14,6 +14,7 @@ class VehicleSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "plate_number",
+            "campus",
             "model",
             "capacity",
             "status",
@@ -34,6 +35,7 @@ class DriverSerializer(serializers.ModelSerializer):
             "full_name",
             "license_number",
             "phone",
+            "campus",
             "status",
         ]
 
@@ -63,6 +65,7 @@ class RouteSerializer(serializers.ModelSerializer):
             "id",
             "name",
             "description",
+            "campus",
             "vehicle",
             "vehicle_plate",
             "driver",
