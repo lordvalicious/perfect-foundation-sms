@@ -19,8 +19,12 @@ class AuditLog(models.Model):
         ("grade_amendment", "Grade Amendment"),
         ("payment", "Payment"),
         ("payment_reversal", "Payment Reversal"),
+        ("payment_refund", "Payment Refund"),
         ("invoice", "Invoice"),
-        ("export", "Export"),
+        ("expense_posted", "Expense Posted"),
+        ("concession_approved", "Concession Approved"),
+        ("staff_leave_approved", "Staff Leave Approved"),
+        ("staff_leave_rejected", "Staff Leave Rejected"),
         ("other", "Other"),
     ]
 
