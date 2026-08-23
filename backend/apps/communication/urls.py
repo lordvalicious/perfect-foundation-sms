@@ -17,6 +17,11 @@ from .sms_views import (
     SMSBroadcastView,
     SMSLogListView,
 )
+from .template_views import (
+    MessageTemplateDetailView,
+    MessageTemplateListView,
+    MessageTemplatePreviewView,
+)
 
 
 urlpatterns = [
@@ -84,5 +89,20 @@ urlpatterns = [
         "notification-preferences/",
         NotificationPreferenceView.as_view(),
         name="notification-preferences",
+    ),
+    path(
+        "templates/",
+        MessageTemplateListView.as_view(),
+        name="message-template-list",
+    ),
+    path(
+        "templates/<int:pk>/",
+        MessageTemplateDetailView.as_view(),
+        name="message-template-detail",
+    ),
+    path(
+        "templates/<int:pk>/preview/",
+        MessageTemplatePreviewView.as_view(),
+        name="message-template-preview",
     ),
 ]

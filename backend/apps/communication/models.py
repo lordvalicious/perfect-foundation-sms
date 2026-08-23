@@ -527,3 +527,40 @@ class NotificationPreference(models.Model):
 
     def __str__(self):
         return f"Notification prefs for {self.user.username}"
+
+
+class MessageTemplate(models.Model):
+    CHANNEL_CHOICES = [
+        ("sms", "SMS"),
+        ("email", "Email"),
+        ("both", "Both"),
+    ]
+
+    name = models.CharField(max_length=200)
+    channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, default="sms")
+    subject = models.CharField(max_length=200, blank=True)
+    body = models.TextField()
+    variables = models.JSONField(default=list, blank=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="message_templates",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.get_channel_display()})"
+
+    def render(self, context=None):
+        text = self.body
+        if context:
+            for key, value in context.items():
+                text = text.replace("{" + key + "}", str(value))
+        return text
