@@ -309,3 +309,23 @@ class SubjectOffering(models.Model):
             f"{self.subject.name}"
         )
 
+
+
+class SchoolSettings(models.Model):
+    school = models.OneToOneField(School, on_delete=models.CASCADE, related_name="settings")
+    logo = models.ImageField(upload_to="school/branding/", blank=True, null=True)
+    favicon = models.ImageField(upload_to="school/branding/", blank=True, null=True)
+    primary_color = models.CharField(max_length=7, default="#1a73e8")
+    secondary_color = models.CharField(max_length=7, default="#34a853")
+    accent_color = models.CharField(max_length=7, default="#fbbc04")
+    motto = models.CharField(max_length=300, blank=True)
+    contact_email = models.EmailField(blank=True)
+    contact_phone = models.CharField(max_length=20, blank=True)
+    contact_website = models.URLField(blank=True)
+    address_line = models.TextField(blank=True)
+    footer_text = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Settings for {self.school.name}"

@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .branding_views import SchoolBrandingView
 from .views import (
     AcademicUnitListView,
     AcademicYearListView,
@@ -23,4 +24,5 @@ urlpatterns = [
     path("terms/", TermListView.as_view(), name="term-list"),
     path("subjects/", SubjectListView.as_view(), name="subject-list"),
     path("offerings/", SubjectOfferingListView.as_view(), name="subject-offering-list"),
+    path("branding/", SchoolBrandingView.as_view(), name="school-branding"),
 ]

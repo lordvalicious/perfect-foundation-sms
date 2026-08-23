@@ -46,6 +46,7 @@ import {
   Moon,
   FilePlus2,
   Briefcase,
+  Palette,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -80,6 +81,7 @@ import BulkFinancePage from "./pages/BulkFinancePage";
 import DocumentsPage from "./pages/DocumentsPage";
 import ReportBuilderPage from "./pages/ReportBuilderPage";
 import TemplatesPage from "./pages/TemplatesPage";
+import BrandingPage from "./pages/BrandingPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -297,6 +299,7 @@ const navigation = [
 
 const systemNavigation = [
   { label: "Settings", path: "/settings", icon: Settings, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Branding", path: "/branding", icon: Palette, roles: ["super_admin", "admin"] },
   { label: "Audit Logs", path: "/audit-logs", icon: ScrollText, roles: ["super_admin", "admin"] },
 ];
 
@@ -719,6 +722,12 @@ function Shell() {
         <Route path="/settings" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
             <SettingsPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/branding" element={
+          <RequireRoles roles={["super_admin", "admin"]}>
+            <BrandingPage />
           </RequireRoles>
         } />
 
