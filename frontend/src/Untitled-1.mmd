@@ -30,7 +30,7 @@ references:
   - "File: /frontend/src/auth.jsx"
   - "File: /frontend/src/pages/AssignmentsPage.jsx"
   - "File: /frontend/src/pages/ProfilePage.jsx"
-generationTime: 2026-08-22T13:24:06.212Z
+generationTime: 2026-08-23T17:22:20.639Z
 ---
 flowchart TD
     subgraph FE["Frontend"]
@@ -47,6 +47,7 @@ flowchart TD
         AE["MessagesPage for messaging"]
         AF["HRPage for human resources"]
         AG["AdmissionsPage for student admissions"]
+        AH["HealthPage for system health"]
     end
 
     subgraph BE["Backend"]
@@ -88,6 +89,7 @@ flowchart TD
     E --> AE
     E --> AF
     E --> AG
+    E --> AH
     F --> H
     G --> H
     Q --> H
@@ -95,6 +97,7 @@ flowchart TD
     AE --> H
     AF --> H
     AG --> H
+    AH --> H
     H --> I
     H --> K
     I -->|role check| K
