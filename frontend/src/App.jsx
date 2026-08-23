@@ -77,6 +77,7 @@ import TeachersPage from "./pages/TeachersPage";
 import HRPage from "./pages/HRPage";
 import AdmissionsPage from "./pages/AdmissionsPage";
 import BulkFinancePage from "./pages/BulkFinancePage";
+import DocumentsPage from "./pages/DocumentsPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -284,6 +285,7 @@ const navigation = [
   { label: "Library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Transport", path: "/transport", icon: Bus, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Inventory", path: "/inventory", icon: Boxes, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Documents", path: "/documents", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Payroll", path: "/payroll", icon: Banknote, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Reports", path: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
@@ -319,7 +321,7 @@ const navGroups = [
   },
   {
     label: "Resources",
-    items: ["/library", "/transport", "/inventory", "/campuses"]
+    items: ["/library", "/transport", "/inventory", "/documents", "/campuses"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -677,6 +679,12 @@ function Shell() {
         <Route path="/inventory" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
             <InventoryPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/documents" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+            <DocumentsPage />
           </RequireRoles>
         } />
 

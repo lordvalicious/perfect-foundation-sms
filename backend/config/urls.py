@@ -118,6 +118,11 @@ urlpatterns = [
         "api/search/",
         include("apps.search.urls"),
     ),
+
+    path(
+        "api/documents/",
+        include("apps.documents.urls"),
+    ),
 ]
 
 urlpatterns += static(

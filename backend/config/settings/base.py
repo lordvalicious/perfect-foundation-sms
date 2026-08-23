@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     "apps.hr",
     "apps.reports",
     "apps.search",
+    "apps.documents",
 
     "corsheaders",
     "rest_framework",
