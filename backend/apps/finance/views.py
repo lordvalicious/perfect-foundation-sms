@@ -797,3 +797,260 @@ class PaymentReceiptPDFView(APIView):
         ] = f'attachment; filename="receipt-{payment.receipt_number}.pdf"'
 
         return response
+
+
+class BulkInvoiceCreateView(APIView):
+    """Create invoices for all active enrollments matching the given filters.
+
+    POST body:
+        academic_year (int, required)
+        campus (int, required)
+        class_obj (int, required)
+        category (int, required)  — fee category id
+        due_date (str, optional)  — defaults to today
+        notes (str, optional)
+        skip_existing (bool, optional, default true) — skip enrollments that already
+            have an issued/partial/paid invoice for this category in the same year
+    """
+
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request):
+        from datetime import date as _date
+        from django.core.exceptions import ValidationError as ModelValidationError
+        from apps.students.models import Enrollment
+        from apps.accounts.access import assert_campus_allowed
+        from .services import next_invoice_number
+
+        academic_year_id = request.data.get("academic_year")
+        campus_id = request.data.get("campus")
+        class_obj_id = request.data.get("class_obj")
+        category_id = request.data.get("category")
+        due_date_str = request.data.get("due_date")
+        notes = request.data.get("notes", "")
+        skip_existing = request.data.get("skip_existing", True)
+
+        if not all([academic_year_id, campus_id, class_obj_id, category_id]):
+            return Response(
+                {"detail": "academic_year, campus, class_obj, and category are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assert_campus_allowed(request.user, campus_id)
+
+        try:
+            fee_structure = FeeStructure.objects.get(
+                academic_year_id=academic_year_id,
+                campus_id=campus_id,
+                class_obj_id=class_obj_id,
+                category_id=category_id,
+                status="active",
+            )
+        except FeeStructure.DoesNotExist:
+            return Response(
+                {"detail": "No active fee structure found for the selected filters."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        due_date = _date.today()
+        if due_date_str:
+            from datetime import date as _parse_date
+            try:
+                due_date = _parse_date.fromisoformat(due_date_str)
+            except ValueError:
+                return Response(
+                    {"detail": "Invalid due_date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        enrollments = Enrollment.objects.filter(
+            academic_year_id=academic_year_id,
+            campus_id=campus_id,
+            class_obj_id=class_obj_id,
+            status="active",
+        ).select_related("student", "academic_year", "campus", "class_obj", "section")
+
+        if skip_existing:
+            enrolled_with_invoice = set(
+                InvoiceItem.objects.filter(
+                    category_id=category_id,
+                    invoice__academic_year_id=academic_year_id,
+                    invoice__status__in=("issued", "partial", "paid"),
+                    invoice__enrollment__campus_id=campus_id,
+                    invoice__enrollment__class_obj_id=class_obj_id,
+                ).values_list("invoice__enrollment_id", flat=True)
+            )
+            enrollments = enrollments.exclude(pk__in=enrolled_with_invoice)
+
+        created = []
+        skipped = []
+
+        for enrollment in enrollments:
+            try:
+                invoice = Invoice.objects.create(
+                    invoice_number=next_invoice_number(),
+                    enrollment=enrollment,
+                    student=enrollment.student,
+                    academic_year=enrollment.academic_year,
+                    issue_date=_date.today(),
+                    due_date=due_date,
+                    status="issued",
+                    notes=notes,
+                )
+                InvoiceItem.objects.create(
+                    invoice=invoice,
+                    category=fee_structure.category,
+                    description=fee_structure.category.name,
+                    amount=fee_structure.amount,
+                )
+                created.append(invoice.pk)
+            except (ModelValidationError, Exception) as exc:
+                skipped.append({
+                    "enrollment": enrollment.pk,
+                    "student": str(enrollment.student),
+                    "reason": str(exc),
+                })
+
+        record_audit(
+            request=request,
+            action="create",
+            model_name="Invoice",
+            object_id="bulk",
+            object_repr=f"Bulk invoice creation for class {class_obj_id}",
+            details={
+                "created": len(created),
+                "skipped": len(skipped),
+                "category": category_id,
+            },
+        )
+
+        return Response(
+            {
+                "created": len(created),
+                "skipped": len(skipped),
+                "skipped_details": skipped,
+                "invoice_ids": created,
+            },
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class BulkPaymentCreateView(APIView):
+    """Record payments for multiple invoices at once.
+
+    POST body:
+        payments: [
+            { invoice (int), amount (decimal), payment_method (str), reference (str, optional), notes (str, optional) }
+        ]
+        payment_date (str, optional) — defaults to today, applied to all
+    """
+
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request):
+        from datetime import date as _date
+        from django.core.exceptions import ValidationError as ModelValidationError
+        from apps.accounts.access import assert_campus_allowed
+        from .services import next_receipt_number
+
+        payments_data = request.data.get("payments", [])
+        payment_date_str = request.data.get("payment_date")
+
+        if not payments_data:
+            return Response(
+                {"detail": "A list of payments is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payment_date = _date.today()
+        if payment_date_str:
+            try:
+                payment_date = _date.fromisoformat(payment_date_str)
+            except ValueError:
+                return Response(
+                    {"detail": "Invalid payment_date format. Use YYYY-MM-DD."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        created = []
+        errors = []
+
+        for idx, item in enumerate(payments_data):
+            invoice_id = item.get("invoice")
+            amount = item.get("amount")
+            payment_method = item.get("payment_method", "cash")
+            reference = item.get("reference", "")
+            notes = item.get("notes", "")
+
+            if not invoice_id or not amount:
+                errors.append({"index": idx, "reason": "invoice and amount are required."})
+                continue
+
+            try:
+                invoice = Invoice.objects.select_for_update().get(pk=invoice_id)
+            except Invoice.DoesNotExist:
+                errors.append({"index": idx, "reason": f"Invoice {invoice_id} not found."})
+                continue
+
+            if invoice.academic_year.school_id != request.institution.id:
+                errors.append({"index": idx, "reason": "Invoice belongs to a different institution."})
+                continue
+
+            assert_campus_allowed(request.user, invoice.enrollment.campus_id)
+
+            if invoice.status in ("cancelled", "draft"):
+                errors.append({"index": idx, "reason": f"Invoice {invoice.invoice_number} is {invoice.status}."})
+                continue
+
+            if amount <= 0:
+                errors.append({"index": idx, "reason": "Amount must be greater than zero."})
+                continue
+
+            locked_invoice = Invoice.objects.select_for_update().get(pk=invoice.pk)
+            if amount > locked_invoice.balance:
+                errors.append({
+                    "index": idx,
+                    "reason": f"Amount {amount} exceeds balance {locked_invoice.balance} for {locked_invoice.invoice_number}.",
+                })
+                continue
+
+            try:
+                payment = Payment.objects.create(
+                    receipt_number=next_receipt_number(),
+                    invoice=locked_invoice,
+                    amount=amount,
+                    payment_date=payment_date,
+                    payment_method=payment_method,
+                    status="completed",
+                    reference=reference,
+                    notes=notes,
+                )
+                created.append({
+                    "payment_id": payment.pk,
+                    "receipt_number": payment.receipt_number,
+                    "invoice_number": locked_invoice.invoice_number,
+                    "amount": str(payment.amount),
+                })
+            except (ModelValidationError, Exception) as exc:
+                errors.append({"index": idx, "reason": str(exc)})
+
+        record_audit(
+            request=request,
+            action="payment",
+            model_name="Payment",
+            object_id="bulk",
+            object_repr=f"Bulk payment: {len(created)} payments",
+            details={"created": len(created), "errors": len(errors)},
+        )
+
+        return Response(
+            {
+                "created": len(created),
+                "errors": len(errors),
+                "payments": created,
+                "error_details": errors,
+            },
+            status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST,
+        )

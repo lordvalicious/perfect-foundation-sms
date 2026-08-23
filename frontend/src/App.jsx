@@ -76,6 +76,7 @@ import StudentsPage from "./pages/StudentsPage";
 import TeachersPage from "./pages/TeachersPage";
 import HRPage from "./pages/HRPage";
 import AdmissionsPage from "./pages/AdmissionsPage";
+import BulkFinancePage from "./pages/BulkFinancePage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -272,6 +273,7 @@ const navigation = [
   { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
+  { label: "Bulk Finance", path: "/finance/bulk", icon: Layers, roles: ["super_admin", "admin", "accountant"] },
   { label: "Exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
@@ -607,6 +609,12 @@ function Shell() {
         <Route path="/finance" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant"]}>
             <FinancePage />
+          </RequireRoles>
+        } />
+
+        <Route path="/finance/bulk" element={
+          <RequireRoles roles={["super_admin", "admin", "accountant"]}>
+            <BulkFinancePage />
           </RequireRoles>
         } />
 

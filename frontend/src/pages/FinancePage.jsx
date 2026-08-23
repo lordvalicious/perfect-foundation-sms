@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Search,
   Wallet,
@@ -994,6 +995,7 @@ export default function FinancePage() {
         crumb="Home / Finance"
         title="Finance"
         subtitle="Track invoices, payments and fee categories."
+        action={<Link to="/finance/bulk" className="primary-button">Bulk Operations</Link>}
       />
 
       <DashboardCards data={dashboard} />

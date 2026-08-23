@@ -1,4 +1,4 @@
-export function PageHeader({ crumb, title, subtitle }) {
+export function PageHeader({ crumb, title, subtitle, action }) {
   return (
     <div className="page-header">
       <div>
@@ -6,6 +6,7 @@ export function PageHeader({ crumb, title, subtitle }) {
         <h2>{title}</h2>
         <p className="subtitle">{subtitle}</p>
       </div>
+      {action && <div>{action}</div>}
     </div>
   );
 }

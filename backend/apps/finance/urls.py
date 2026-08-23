@@ -23,6 +23,8 @@ from .views import (
     TrialBalanceReportView,
     IncomeExpenseReportView,
     ReceivablesReportView,
+    BulkInvoiceCreateView,
+    BulkPaymentCreateView,
 )
 from .stripe_views import StripeCheckoutView, stripe_webhook
 
@@ -99,5 +101,15 @@ urlpatterns = [
         "fee-structures/<int:pk>/",
         FeeStructureDetailView.as_view(),
         name="fee-structure-detail",
+    ),
+    path(
+        "invoices/bulk/",
+        BulkInvoiceCreateView.as_view(),
+        name="invoice-bulk-create",
+    ),
+    path(
+        "payments/bulk/",
+        BulkPaymentCreateView.as_view(),
+        name="payment-bulk-create",
     ),
 ]
