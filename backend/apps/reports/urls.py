@@ -14,6 +14,11 @@ from .views import (
     StudentStatusReportView,
     SubjectPerformanceReportView,
 )
+from .export_views import (
+    DataBackupView,
+    DataExportListView,
+    DataExportView,
+)
 
 
 urlpatterns = [
@@ -76,5 +81,20 @@ urlpatterns = [
         "generate/",
         ReportGenerateView.as_view(),
         name="report-generate",
+    ),
+    path(
+        "export/",
+        DataExportListView.as_view(),
+        name="data-export-list",
+    ),
+    path(
+        "export/<str:export_key>/",
+        DataExportView.as_view(),
+        name="data-export",
+    ),
+    path(
+        "backup/",
+        DataBackupView.as_view(),
+        name="data-backup",
     ),
 ]

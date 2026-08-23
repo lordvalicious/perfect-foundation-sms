@@ -47,6 +47,7 @@ import {
   FilePlus2,
   Briefcase,
   Palette,
+  Download,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -83,6 +84,7 @@ import ReportBuilderPage from "./pages/ReportBuilderPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import BrandingPage from "./pages/BrandingPage";
 import CampusDashboardPage from "./pages/CampusDashboardPage";
+import ExportPage from "./pages/ExportPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -296,6 +298,7 @@ const navigation = [
   { label: "Payroll", path: "/payroll", icon: Banknote, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Reports", path: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Report Builder", path: "/report-builder", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Data Export", path: "/data-export", icon: Download, roles: ["super_admin", "admin"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
 ];
 
@@ -324,7 +327,7 @@ const navGroups = [
   },
   {
     label: "Finance",
-    items: ["/finance", "/payroll", "/reports", "/report-builder"]
+    items: ["/finance", "/payroll", "/reports", "/report-builder", "/data-export"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -724,6 +727,12 @@ function Shell() {
         <Route path="/report-builder" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
             <ReportBuilderPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/data-export" element={
+          <RequireRoles roles={["super_admin", "admin"]}>
+            <ExportPage />
           </RequireRoles>
         } />
 
