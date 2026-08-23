@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Check, FilePlus2, Search, X } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, StatusBadge } from "./ui";
 
 const API_URL = "/api/students/admissions/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+const ACADEMIC_YEARS_URL = "/api/schools/academic-years/";
+const CLASSES_URL = "/api/schools/classes/";
+const SECTIONS_URL = "/api/schools/sections/";
+const GUARDIANS_URL = "/api/students/guardians/";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -15,6 +20,28 @@ function authHeaders() {
   return csrfToken ? { "X-CSRFToken": csrfToken } : {};
 }
 
+function generateApplicationNumber() {
+  const now = new Date();
+  const date = now.toISOString().slice(0, 10).replace(/-/g, "");
+  const rand = String(Math.floor(Math.random() * 9000) + 1000);
+  return `APP-${date}-${rand}`;
+}
+
+const EMPTY_FORM = {
+  first_name: "",
+  middle_name: "",
+  last_name: "",
+  date_of_birth: "",
+  gender: "male",
+  phone: "",
+  address: "",
+  campus: "",
+  academic_year: "",
+  class_obj: "",
+  section: "",
+  guardian: "",
+};
+
 export default function AdmissionsPage() {
   const [applications, setApplications] = useState([]);
   const [status, setStatus] = useState("");
@@ -24,7 +51,17 @@ export default function AdmissionsPage() {
   const [notice, setNotice] = useState("");
   const [busyId, setBusyId] = useState(null);
 
-  const loadApplications = () => {
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+
+  const [campuses, setCampuses] = useState([]);
+  const [academicYears, setAcademicYears] = useState([]);
+  const [classes, setClasses] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [guardians, setGuardians] = useState([]);
+
+  const loadApplications = useCallback(() => {
     setLoading(true);
     const params = new URLSearchParams();
     if (status) params.set("status", status);
@@ -39,11 +76,116 @@ export default function AdmissionsPage() {
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
-  };
+  }, [status]);
 
   useEffect(() => {
-    loadApplications(); // eslint-disable-line react-hooks/set-state-in-effect
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
+    loadApplications();
+  }, [loadApplications]);
+
+  useEffect(() => {
+    fetch(CAMPUSES_URL, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setCampuses(Array.isArray(d) ? d : d.results || []))
+      .catch(() => {});
+
+    fetch(ACADEMIC_YEARS_URL, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setAcademicYears(Array.isArray(d) ? d : d.results || []))
+      .catch(() => {});
+
+    fetch(GUARDIANS_URL, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setGuardians(Array.isArray(d) ? d : d.results || []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!form.campus) {
+      setClasses([]);
+      setSections([]);
+      return;
+    }
+    fetch(`${CLASSES_URL}?campus=${form.campus}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setClasses(Array.isArray(d) ? d : d.results || []))
+      .catch(() => {});
+    setForm((prev) => ({ ...prev, class_obj: "", section: "" }));
+    setSections([]);
+  }, [form.campus]);
+
+  useEffect(() => {
+    if (!form.class_obj) {
+      setSections([]);
+      return;
+    }
+    fetch(`${SECTIONS_URL}?class=${form.class_obj}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((d) => setSections(Array.isArray(d) ? d : d.results || []))
+      .catch(() => {});
+    setForm((prev) => ({ ...prev, section: "" }));
+  }, [form.class_obj]);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const openCreate = () => {
+    setForm(EMPTY_FORM);
+    setNotice("");
+    setError("");
+    setShowForm(true);
+  };
+
+  const handleCreate = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+    setError("");
+
+    const body = {
+      application_number: generateApplicationNumber(),
+      first_name: form.first_name,
+      middle_name: form.middle_name,
+      last_name: form.last_name,
+      date_of_birth: form.date_of_birth || null,
+      gender: form.gender,
+      phone: form.phone,
+      address: form.address,
+      campus: Number(form.campus),
+      academic_year: Number(form.academic_year),
+      class_obj: Number(form.class_obj),
+      section: form.section ? Number(form.section) : null,
+      guardian: form.guardian ? Number(form.guardian) : null,
+      status: "submitted",
+    };
+
+    try {
+      const response = await fetch(API_URL, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json", ...authHeaders() },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const message = Object.entries(data)
+          .map(([field, value]) => `${field}: ${Array.isArray(value) ? value.join(", ") : String(value)}`)
+          .join(" | ");
+        throw new Error(message || "Could not create application.");
+      }
+
+      setShowForm(false);
+      setForm(EMPTY_FORM);
+      setNotice("Admission application created successfully.");
+      loadApplications();
+    } catch (requestError) {
+      setError(requestError.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const review = (application, action) => {
     setBusyId(application.id);
@@ -101,6 +243,18 @@ export default function AdmissionsPage() {
         subtitle="Review applicants and convert accepted applications into enrolled students."
       />
 
+      {notice && (
+        <div className="state-card success">
+          <strong>{notice}</strong>
+        </div>
+      )}
+
+      {error && (
+        <div className="state-card error">
+          <strong>{error}</strong>
+        </div>
+      )}
+
       <div className="panel students-filters">
         <div className="filter-row">
           <div className="filter-search">
@@ -118,19 +272,18 @@ export default function AdmissionsPage() {
             <option value="accepted">Accepted</option>
             <option value="rejected">Rejected</option>
           </select>
-          <button type="button" className="secondary-button" onClick={loadApplications}>
-            Refresh
+          <button type="button" className="primary-button" onClick={openCreate}>
+            <FilePlus2 size={15} />
+            New Application
           </button>
         </div>
       </div>
 
-      {notice && <div className="state-card">{notice}</div>}
       <div className="panel">
         <PanelHeader
           title="Application queue"
           subtitle="applications"
           count={visibleApplications.length}
-          action={<FilePlus2 size={20} />}
         />
         <StateArea loading={loading} error={error} onRetry={loadApplications}>
           {visibleApplications.length === 0 ? (
@@ -185,6 +338,183 @@ export default function AdmissionsPage() {
           )}
         </StateArea>
       </div>
+
+      {showForm && (
+        <div
+          className="modal-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setShowForm(false);
+          }}
+        >
+          <div className="teacher-modal event-modal">
+            <div className="modal-header">
+              <div>
+                <h3>New Admission Application</h3>
+                <p>Fill in the applicant details below.</p>
+              </div>
+              <button
+                className="modal-close"
+                onClick={() => setShowForm(false)}
+                disabled={saving}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreate}>
+              <div className="form-section">
+                <h4>Applicant Information</h4>
+                <div className="form-grid">
+                  <label>
+                    First Name *
+                    <input
+                      name="first_name"
+                      value={form.first_name}
+                      onChange={handleChange}
+                      placeholder="First name"
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    Middle Name
+                    <input
+                      name="middle_name"
+                      value={form.middle_name}
+                      onChange={handleChange}
+                      placeholder="Middle name"
+                    />
+                  </label>
+
+                  <label>
+                    Last Name
+                    <input
+                      name="last_name"
+                      value={form.last_name}
+                      onChange={handleChange}
+                      placeholder="Last name"
+                    />
+                  </label>
+
+                  <label>
+                    Date of Birth
+                    <input
+                      type="date"
+                      name="date_of_birth"
+                      value={form.date_of_birth}
+                      onChange={handleChange}
+                    />
+                  </label>
+
+                  <label>
+                    Gender *
+                    <select name="gender" value={form.gender} onChange={handleChange} required>
+                      <option value="male">Male</option>
+                      <option value="female">Female</option>
+                    </select>
+                  </label>
+
+                  <label>
+                    Phone
+                    <input
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                      placeholder="03XX-XXXXXXX"
+                    />
+                  </label>
+
+                  <label className="form-span">
+                    Address
+                    <textarea
+                      name="address"
+                      value={form.address}
+                      onChange={handleChange}
+                      placeholder="Full address"
+                      rows="2"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Academic Details</h4>
+                <div className="form-grid">
+                  <label>
+                    Campus *
+                    <select name="campus" value={form.campus} onChange={handleChange} required>
+                      <option value="">Select campus</option>
+                      {campuses.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Academic Year *
+                    <select name="academic_year" value={form.academic_year} onChange={handleChange} required>
+                      <option value="">Select year</option>
+                      {academicYears.map((y) => (
+                        <option key={y.id} value={y.id}>{y.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Class *
+                    <select name="class_obj" value={form.class_obj} onChange={handleChange} required disabled={!form.campus}>
+                      <option value="">Select class</option>
+                      {classes.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Section
+                    <select name="section" value={form.section} onChange={handleChange} disabled={!form.class_obj}>
+                      <option value="">Select section</option>
+                      {sections.map((s) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Guardian
+                    <select name="guardian" value={form.guardian} onChange={handleChange}>
+                      <option value="">Select guardian</option>
+                      {guardians.map((g) => (
+                        <option key={g.id} value={g.id}>{g.name} ({g.relationship})</option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setShowForm(false)}
+                  disabled={saving}
+                >
+                  <X size={15} />
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={saving}
+                >
+                  <Check size={15} />
+                  {saving ? "Submitting..." : "Submit Application"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
