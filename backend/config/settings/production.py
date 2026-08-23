@@ -1,14 +1,17 @@
 import os
 
+from django.core.exceptions import ImproperlyConfigured
+
 from .base import *  # noqa: F401,F403
 from .base import CSRF_COOKIE_SAMESITE, MIDDLEWARE
 
 DEBUG = False
 
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-please-override-in-production",
-)
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "")
+if not SECRET_KEY or SECRET_KEY.startswith("django-insecure-"):
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set to a secure value in production."
+    )
 
 ALLOWED_HOSTS = [
     host

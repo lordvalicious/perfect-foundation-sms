@@ -19,8 +19,8 @@ stay **same-site** and the existing session/CSRF flow works unchanged.
 
 - [ ] Repo pushed to GitHub
 - [ ] A **Neon** account and a project/database created (free, no card)
-- [ ] The Neon connection string pasted into `render.yaml`
-      (`DATABASE_URL`, replacing `REPLACE_ME`)
+- [ ] The Neon connection string added privately in Render as
+  `DATABASE_URL` (never commit it to `render.yaml`)
 - [ ] `render.yaml` `repo:` points at your actual GitHub repo
       (already set to `lordvalicious/perfect-foundation-sms`)
 - [ ] `render.yaml` `DJANGO_CSRF_TRUSTED_ORIGINS` matches your Vercel URL
@@ -44,13 +44,9 @@ stay **same-site** and the existing session/CSRF flow works unchanged.
 3. Go to **Connect** and copy the **Connection string** (URI). It looks like:
    `postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require`
    (Neon includes `?sslmode=require`; keep it - the app needs SSL.)
-4. Paste it into `render.yaml` (repo root) in place of `REPLACE_ME`:
-   ```yaml
-   - key: DATABASE_URL
-     value: postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
-   ```
-   and push to GitHub. (You can also set/override it later in Render
-   Dashboard -> Environment, then Redeploy.)
+4. In Render Dashboard -> Environment, add `DATABASE_URL` as a secret and
+  paste the Neon connection string there. Do not add it to `render.yaml`
+  or commit it to GitHub, then redeploy the service.
 
 ## 3. Deploy the backend on Render
 

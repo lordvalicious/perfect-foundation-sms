@@ -5,7 +5,7 @@
 #   1. Create a free Postgres on Neon (https://neon.tech - no credit card,
 #      no 30-day expiry). Copy its connection string:
 #        postgresql://user:pass@ep-xxx.us-east-1.aws.neon.tech/neondb?sslmode=require
-#      and paste it into the DATABASE_URL value below (REPLACE_ME).
+#      and add it in the Render Dashboard as the DATABASE_URL secret.
 #   2. Ensure this file is committed and pushed to GitHub
 #      (the `repo:` URL below must match your actual repository).
 #   3. Render Dashboard -> New -> Blueprint -> New Blueprint Instance,
@@ -43,16 +43,14 @@ services:
         value: config.settings.production
       - key: DJANGO_SECRET_KEY
         generateValue: true
-      # Tighten this after adding a custom domain:
-      #   e.g. app.yourdomain.com,www.yourdomain.com
+      # Add the Render hostname and any custom backend hostname here.
       - key: DJANGO_ALLOWED_HOSTS
-        value: "*"
+        value: perfect-foundation-backend.onrender.com
       # Origin (scheme + host) of the Vercel frontend. Must match exactly
       # the URL your users open in the browser.
       - key: DJANGO_CSRF_TRUSTED_ORIGINS
         value: https://perfect-foundation-sms.vercel.app
-      # Neon free Postgres. Keep the connection string from the Neon
-      # console (must include ?sslmode=require). Can be overridden later
-      # in Render Dashboard -> Environment.
+      # Neon connection string. Render prompts for this secret in the
+      # Dashboard because it must never be committed to the repository.
       - key: DATABASE_URL
-        value: postgresql://neondb_owner:npg_QyqMOIkYe41d@ep-sweet-sky-azl6rk67-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+        sync: false
