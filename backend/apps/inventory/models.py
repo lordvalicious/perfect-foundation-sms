@@ -1,5 +1,7 @@
 from django.db import models
 
+from apps.schools.models import Campus
+
 
 class AssetCategory(models.Model):
     name = models.CharField(max_length=100, unique=True)
@@ -39,6 +41,13 @@ class Asset(models.Model):
     ]
 
     name = models.CharField(max_length=200)
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assets",
+    )
     code = models.CharField(max_length=50, unique=True, blank=True)
     category = models.ForeignKey(
         AssetCategory,

@@ -23,6 +23,11 @@ def payroll_queryset(model, request, teacher_path="teacher"):
             f"{teacher_path}__membership__institution": request.institution,
         },
     )
+    return apply_campus_scope(
+        queryset,
+        request,
+        f"{teacher_path}__primary_campus_id",
+    )
 
 
 def teacher_queryset(request):
@@ -32,11 +37,6 @@ def teacher_queryset(request):
         ),
         request,
         "primary_campus_id",
-    )
-    return apply_campus_scope(
-        queryset,
-        request,
-        f"{teacher_path}__primary_campus_id",
     )
 
 

@@ -29,6 +29,11 @@ class SupplierSerializer(serializers.ModelSerializer):
 
 
 class AssetSerializer(serializers.ModelSerializer):
+    campus_name = serializers.CharField(
+        source="campus.name",
+        read_only=True,
+        default="",
+    )
     category_name = serializers.CharField(
         source="category.name",
         read_only=True,
@@ -54,6 +59,8 @@ class AssetSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "campus",
+            "campus_name",
             "code",
             "category",
             "category_name",

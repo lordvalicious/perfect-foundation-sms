@@ -10,6 +10,11 @@ class BookCopySerializer(serializers.ModelSerializer):
 
 
 class BookSerializer(serializers.ModelSerializer):
+    campus_name = serializers.CharField(
+        source="campus.name",
+        read_only=True,
+        default="",
+    )
     available_copies = serializers.IntegerField(read_only=True)
     issued_copies = serializers.IntegerField(read_only=True)
     copies = BookCopySerializer(many=True, read_only=True)
@@ -23,6 +28,8 @@ class BookSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "title",
+            "campus",
+            "campus_name",
             "author",
             "isbn",
             "publisher",

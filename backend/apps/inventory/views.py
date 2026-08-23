@@ -1,5 +1,7 @@
 from rest_framework import generics
+from rest_framework.exceptions import PermissionDenied
 
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed
 from apps.accounts.permissions import IsAccountantRole
 
 from .models import (
@@ -47,7 +49,11 @@ class AssetListView(generics.ListCreateAPIView):
     permission_classes = [IsAccountantRole]
 
     def get_queryset(self):
-        queryset = Asset.objects.select_related("category", "supplier")
+        queryset = apply_campus_scope(
+            Asset.objects.select_related("campus", "category", "supplier"),
+            self.request,
+            "campus_id",
+        )
 
         search = self.request.query_params.get("q")
 
@@ -66,32 +72,91 @@ class AssetListView(generics.ListCreateAPIView):
 
         return queryset
 
+    def perform_create(self, serializer):
+        assert_campus_allowed(self.request.user, serializer.validated_data.get("campus"))
+        serializer.save()
+
 
 class AssetDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AssetSerializer
     permission_classes = [IsAccountantRole]
-    queryset = Asset.objects.all()
+    def get_queryset(self):
+        return apply_campus_scope(
+            Asset.objects.all(),
+            self.request,
+            "campus_id",
+        )
+
+    def perform_update(self, serializer):
+        assert_campus_allowed(self.request.user, serializer.validated_data.get("campus", serializer.instance.campus))
+        serializer.save()
 
 
 class AssetAssignmentListView(generics.ListCreateAPIView):
     serializer_class = AssetAssignmentSerializer
     permission_classes = [IsAccountantRole]
-    queryset = AssetAssignment.objects.select_related("asset")
+    def get_queryset(self):
+        return apply_campus_scope(
+            AssetAssignment.objects.select_related("asset"),
+            self.request,
+            "asset__campus_id",
+        )
+
+    def perform_create(self, serializer):
+        asset = serializer.validated_data["asset"]
+        if not self.get_queryset().filter(asset=asset).exists():
+            raise PermissionDenied("The asset is outside your campus scope.")
+        serializer.save()
 
 
 class AssetAssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AssetAssignmentSerializer
     permission_classes = [IsAccountantRole]
-    queryset = AssetAssignment.objects.all()
+    def get_queryset(self):
+        return apply_campus_scope(
+            AssetAssignment.objects.all(),
+            self.request,
+            "asset__campus_id",
+        )
+
+    def perform_update(self, serializer):
+        if not self.get_queryset().filter(
+            asset=serializer.validated_data.get("asset", serializer.instance.asset),
+        ).exists():
+            raise PermissionDenied("The asset is outside your campus scope.")
+        serializer.save()
 
 
 class MaintenanceRecordListView(generics.ListCreateAPIView):
     serializer_class = MaintenanceRecordSerializer
     permission_classes = [IsAccountantRole]
-    queryset = MaintenanceRecord.objects.select_related("asset")
+    def get_queryset(self):
+        return apply_campus_scope(
+            MaintenanceRecord.objects.select_related("asset"),
+            self.request,
+            "asset__campus_id",
+        )
+
+    def perform_create(self, serializer):
+        asset = serializer.validated_data["asset"]
+        if not self.get_queryset().filter(asset=asset).exists():
+            raise PermissionDenied("The asset is outside your campus scope.")
+        serializer.save()
 
 
 class MaintenanceRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = MaintenanceRecordSerializer
     permission_classes = [IsAccountantRole]
-    queryset = MaintenanceRecord.objects.all()
+    def get_queryset(self):
+        return apply_campus_scope(
+            MaintenanceRecord.objects.all(),
+            self.request,
+            "asset__campus_id",
+        )
+
+    def perform_update(self, serializer):
+        if not self.get_queryset().filter(
+            asset=serializer.validated_data.get("asset", serializer.instance.asset),
+        ).exists():
+            raise PermissionDenied("The asset is outside your campus scope.")
+        serializer.save()

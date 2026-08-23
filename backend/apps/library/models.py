@@ -1,5 +1,7 @@
 from django.db import models
 
+from apps.schools.models import Campus
+
 
 class Book(models.Model):
     CATEGORY_CHOICES = [
@@ -16,6 +18,13 @@ class Book(models.Model):
     ]
 
     title = models.CharField(max_length=255)
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="library_books",
+    )
     author = models.CharField(max_length=255, blank=True)
     isbn = models.CharField(
         max_length=32,
