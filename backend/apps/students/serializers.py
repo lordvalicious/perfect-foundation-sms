@@ -347,6 +347,7 @@ class EnrollmentSerializer(serializers.ModelSerializer):
             "class_name",
             "section",
             "section_name",
+            "roll_number",
             "status",
             "enrollment_date",
         ]
@@ -390,6 +391,7 @@ class EnrollmentCreateSerializer(serializers.ModelSerializer):
             "class_name",
             "section",
             "section_name",
+            "roll_number",
             "status",
             "enrollment_date",
             "created_at",
