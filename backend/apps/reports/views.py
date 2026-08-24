@@ -1391,13 +1391,15 @@ class ReportGenerateView(APIView):
         view_instance = view_class()
 
         from django.test import RequestFactory
+        from rest_framework.request import Request as DRFRequest
 
         factory = RequestFactory()
         query_string = "&".join(f"{k}={v}" for k, v in filters.items() if v)
         url = f"/api/reports/{report_type}/?{query_string}"
 
-        req = factory.get(url)
-        req.user = request.user
+        raw_req = factory.get(url)
+        raw_req.user = request.user
+        req = DRFRequest(raw_req)
 
         try:
             data = view_instance._data(req)
