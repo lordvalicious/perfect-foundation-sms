@@ -13,3 +13,5 @@ Pillow==11.3.0
 reportlab==5.0.0
 twilio==9.4.5
 stripe==11.3.0
+pyotp==2.10.0
+pycryptodome==3.23.0

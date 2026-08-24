@@ -28,6 +28,8 @@ const TERMS_API_URL = "/api/schools/terms/";
 const SUBJECTS_API_URL = "/api/schools/subjects/";
 const OFFERINGS_API_URL = "/api/schools/offerings/";
 
+import TwoFASection from "./TwoFASection";
+
 function StatCard({ icon: Icon, label, value }) {
   return (
     <div className="stat-card">
@@ -67,6 +69,8 @@ export default function SettingsPage() {
         title="Settings"
         subtitle="System configuration and academic structure."
       />
+
+      <TwoFASection />
 
       <div className="stats-grid">
         <StatCard

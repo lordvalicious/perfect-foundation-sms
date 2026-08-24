@@ -1,6 +1,10 @@
 from django.urls import path
 
 from .certificates import StudentCertificatePdfView
+from .public_views import (
+    PublicAdmissionApplyView,
+    PublicAdmissionOptionsView,
+)
 from .transcripts import StudentTranscriptPdfView
 from .views import (
     AdmissionApplicationAcceptView,
@@ -46,6 +50,16 @@ urlpatterns = [
         "admissions/<int:pk>/accept/",
         AdmissionApplicationAcceptView.as_view(),
         name="admission-accept",
+    ),
+    path(
+        "admissions/public/options/",
+        PublicAdmissionOptionsView.as_view(),
+        name="public-admission-options",
+    ),
+    path(
+        "admissions/public/apply/",
+        PublicAdmissionApplyView.as_view(),
+        name="public-admission-apply",
     ),
     path(
         "guardian-links/",

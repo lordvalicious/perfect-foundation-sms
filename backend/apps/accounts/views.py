@@ -67,6 +67,25 @@ class LoginView(APIView):
 
         user = serializer.validated_data["user"]
 
+        if user.twofa_enabled and user.twofa_secret:
+            import pyotp
+
+            code = str(request.data.get("otp") or "").strip()
+
+            if not code or not pyotp.TOTP(user.twofa_secret).verify(
+                code, valid_window=1
+            ):
+                return Response(
+                    {
+                        "detail": (
+                            "Enter the 6-digit code from your "
+                            "authenticator app."
+                        ),
+                        "otp_required": True,
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
+
         django_login(request, user)
 
         school_code = serializer.validated_data.get("school_code", "").strip().lower()

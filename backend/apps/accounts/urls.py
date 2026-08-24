@@ -1,5 +1,11 @@
 from django.urls import path
 
+from .twofa_views import (
+    TwoFAActivateView,
+    TwoFADisableView,
+    TwoFASetupView,
+    TwoFAStatusView,
+)
 from .views import (
     ActiveInstitutionView,
     CurrentUserView,
@@ -44,4 +50,8 @@ urlpatterns = [
         PasswordResetConfirmView.as_view(),
         name="password-reset-confirm",
     ),
+    path("2fa/status/", TwoFAStatusView.as_view(), name="twofa-status"),
+    path("2fa/setup/", TwoFASetupView.as_view(), name="twofa-setup"),
+    path("2fa/activate/", TwoFAActivateView.as_view(), name="twofa-activate"),
+    path("2fa/disable/", TwoFADisableView.as_view(), name="twofa-disable"),
 ]

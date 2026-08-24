@@ -96,6 +96,7 @@ import DisciplinePage from "./pages/DisciplinePage";
 import StaffOperationsPage from "./pages/StaffOperationsPage";
 import HomeworkPage from "./pages/HomeworkPage";
 import HealthRecordsPage from "./pages/HealthRecordsPage";
+import AdmissionsApplyPage from "./pages/AdmissionsApplyPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -574,6 +575,11 @@ function Shell() {
         <span>Loading...</span>
       </div>
     );
+  }
+
+  // Public, unauthenticated pages.
+  if (location.pathname === "/apply") {
+    return <AdmissionsApplyPage />;
   }
 
   if (!user) return <LoginPage />;

@@ -31,6 +31,10 @@ from .jazzcash_views import (
     JazzCashCheckoutView,
     jazzcash_callback,
 )
+from .easypaisa_views import (
+    EasyPaisaCheckoutView,
+    easypaisa_callback,
+)
 from .cron_views import LateFeeCronView
 
 
@@ -101,6 +105,16 @@ urlpatterns = [
         "jazzcash/callback/",
         jazzcash_callback,
         name="jazzcash-callback",
+    ),
+    path(
+        "easypaisa/checkout/",
+        EasyPaisaCheckoutView.as_view(),
+        name="easypaisa-checkout",
+    ),
+    path(
+        "easypaisa/callback/",
+        easypaisa_callback,
+        name="easypaisa-callback",
     ),
     path(
         "categories/",

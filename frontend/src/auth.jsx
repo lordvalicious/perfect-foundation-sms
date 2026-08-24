@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
   }, [fetchMe]);
 
   const login = useCallback(
-    async (username, password, schoolCode = "") => {
+    async (username, password, schoolCode = "", otp = "") => {
       setError("");
 
       await fetch("/api/auth/csrf/", {
@@ -90,7 +90,12 @@ export function AuthProvider({ children }) {
           "Content-Type": "application/json",
           "X-CSRFToken": getCookie("csrftoken") || "",
         },
-        body: JSON.stringify({ username, password, school_code: schoolCode }),
+        body: JSON.stringify({
+          username,
+          password,
+          school_code: schoolCode,
+          ...(otp ? { otp } : {}),
+        }),
       });
 
       const data = await readJson(
@@ -107,7 +112,13 @@ export function AuthProvider({ children }) {
             : data.detail;
         }
 
-        throw new Error(message);
+        const error = new Error(message);
+
+        if (data.otp_required) {
+          error.otpRequired = true;
+        }
+
+        throw error;
       }
 
       setUser(data);

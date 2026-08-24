@@ -9,6 +9,8 @@ export default function LoginPage() {
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [otp, setOtp] = useState("");
+  const [otpRequired, setOtpRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [branding, setBranding] = useState(null);
@@ -43,9 +45,13 @@ export default function LoginPage() {
     setError("");
 
     try {
-      await login(identifier, password, schoolCode);
+      await login(identifier, password, schoolCode, otp);
       navigate("/", { replace: true });
     } catch (err) {
+      if (err.otpRequired) {
+        setOtpRequired(true);
+      }
+
       setError(err.message);
     } finally {
       setSubmitting(false);
@@ -93,6 +99,22 @@ export default function LoginPage() {
               required
             />
           </label>
+
+          {otpRequired && (
+            <label>
+              Authenticator code
+              <input
+                type="text"
+                inputMode="numeric"
+                value={otp}
+                onChange={(event) => setOtp(event.target.value)}
+                placeholder="6-digit code"
+                autoComplete="one-time-code"
+                maxLength={6}
+                autoFocus
+              />
+            </label>
+          )}
 
           {error && (
             <div className="login-error">{error}</div>

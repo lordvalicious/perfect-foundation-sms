@@ -37,6 +37,14 @@ class User(AbstractUser):
         null=True,
     )
 
+    twofa_secret = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+    )
+
+    twofa_enabled = models.BooleanField(default=False)
+
     def get_active_memberships(self):
         return self.memberships.filter(status="active").select_related(
             "institution"

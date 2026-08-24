@@ -203,6 +203,7 @@ REST_FRAMEWORK = {
         "user": "2000/day",
         "login": "60/hour",
         "password_reset": "10/hour",
+        "public_apply": "20/hour",
     },
 }
 
