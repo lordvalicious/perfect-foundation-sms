@@ -30,7 +30,7 @@ references:
   - "File: /frontend/src/auth.jsx"
   - "File: /frontend/src/pages/AssignmentsPage.jsx"
   - "File: /frontend/src/pages/ProfilePage.jsx"
-generationTime: 2026-08-24T13:33:02.317Z
+generationTime: 2026-08-24T19:41:25.057Z
 ---
 flowchart TD
     subgraph FE["Frontend"]
@@ -48,6 +48,34 @@ flowchart TD
         AF["HRPage for human resources"]
         AG["AdmissionsPage for student admissions"]
         AH["HealthPage for system health"]
+        AI["StudentsPage for student management"]
+        AJ["TeachersPage for teacher management"]
+        AK["AttendancePage for attendance tracking"]
+        AL["FinancePage for financial operations"]
+        AM["ExamsPage for exam management"]
+        AN["ReportCardsPage for report cards"]
+        AO["TimetablePage for scheduling"]
+        AP["CampusesPage for campus management"]
+        AQ["SettingsPage for application settings"]
+        AR["EventsPage for event management"]
+        AS["AuditLogsPage for audit logs"]
+        AT["LibraryPage for library resources"]
+        AU["TransportPage for transport management"]
+        AV["InventoryPage for inventory management"]
+        AW["PayrollPage for payroll processing"]
+        AX["ReportsPage for report generation"]
+        AY["AnnouncementsPage for announcements"]
+        AZ["SMSPage for SMS communication"]
+        BA["TemplatesPage for template management"]
+        BB["DocumentsPage for document management"]
+        BC["ReportBuilderPage for custom reports"]
+        BD["ExportPage for data export"]
+        BE["DataImportPage for data import"]
+        BF["DisciplinePage for discipline management"]
+        BG["StaffOperationsPage for staff operations"]
+        BH["HomeworkPage for homework assignments"]
+        BI["HealthRecordsPage for health records"]
+        BJ["BrandingPage for branding settings"]
     end
 
     subgraph BE["Backend"]
@@ -75,6 +103,28 @@ flowchart TD
         AF["AdmissionApplication model for student admissions"]
         AG["StudentLifecycleEvent model for tracking student events"]
         AH["StudentLeaveRequest model for student leave requests"]
+        AI["StudentCertificatePdfView for student certificates"]
+        AJ["StudentTranscriptPdfView for student transcripts"]
+        AK["AdmissionApplicationAcceptView for accepting applications"]
+        AL["AdmissionApplicationDetailView for application details"]
+        AM["AdmissionApplicationListCreateView for listing/creating applications"]
+        AN["AdmissionApplicationReviewView for reviewing applications"]
+        AO["GuardianListCreateView for guardian management"]
+        AP["GuardianDetailView for guardian details"]
+        AQ["GuardianMyView for personal guardian view"]
+        AR["StudentListCreateView for student management"]
+        AS["StudentDetailView for student details"]
+        AT["StudentGuardianListCreateView for student-guardian links"]
+        AU["StudentLifecycleActionView for lifecycle actions"]
+        AV["StudentLifecycleListView for lifecycle listing"]
+        AW["StudentLeaveRequestActionView for leave actions"]
+        AX["StudentLeaveRequestListCreateView for leave requests"]
+        AY["StudentMyView for personal student view"]
+        AZ["StudentDocumentListCreateView for document management"]
+        BA["StudentDocumentDetailView for document details"]
+        BB["EnrollmentListCreateView for enrollment management"]
+        BC["EnrollmentDetailView for enrollment details"]
+        BD["PromotionView for student promotions"]
     end
 
     A --> B
@@ -90,6 +140,34 @@ flowchart TD
     E --> AF
     E --> AG
     E --> AH
+    E --> AI
+    E --> AJ
+    E --> AK
+    E --> AL
+    E --> AM
+    E --> AN
+    E --> AO
+    E --> AP
+    E --> AQ
+    E --> AR
+    E --> AS
+    E --> AT
+    E --> AU
+    E --> AV
+    E --> AW
+    E --> AX
+    E --> AY
+    E --> AZ
+    E --> BA
+    E --> BB
+    E --> BC
+    E --> BD
+    E --> BE
+    E --> BF
+    E --> BG
+    E --> BH
+    E --> BI
+    E --> BJ
     F --> H
     G --> H
     Q --> H
@@ -98,6 +176,34 @@ flowchart TD
     AF --> H
     AG --> H
     AH --> H
+    AI --> H
+    AJ --> H
+    AK --> H
+    AL --> H
+    AM --> H
+    AN --> H
+    AO --> H
+    AP --> H
+    AQ --> H
+    AR --> H
+    AS --> H
+    AT --> H
+    AU --> H
+    AV --> H
+    AW --> H
+    AX --> H
+    AY --> H
+    AZ --> H
+    BA --> H
+    BB --> H
+    BC --> H
+    BD --> H
+    BE --> H
+    BF --> H
+    BG --> H
+    BH --> H
+    BI --> H
+    BJ --> H
     H --> I
     H --> K
     I -->|role check| K
@@ -117,6 +223,28 @@ flowchart TD
     N --> AF
     N --> AG
     N --> AH
+    N --> AI
+    N --> AJ
+    N --> AK
+    N --> AL
+    N --> AM
+    N --> AN
+    N --> AO
+    N --> AP
+    N --> AQ
+    N --> AR
+    N --> AS
+    N --> AT
+    N --> AU
+    N --> AV
+    N --> AW
+    N --> AX
+    N --> AY
+    N --> AZ
+    N --> BA
+    N --> BB
+    N --> BC
+    N --> BD
     O --> N
     F --> P
     G --> P
