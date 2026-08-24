@@ -90,6 +90,9 @@ class AuditLog(models.Model):
         )
 
 
+ACTION_CHOICES = AuditLog.ACTION_CHOICES
+
+
 def get_client_ip(request):
     if request is None:
         return None
