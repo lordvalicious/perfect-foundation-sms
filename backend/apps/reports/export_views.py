@@ -26,19 +26,21 @@ EXPORT_CONFIGS = {
             "guardian_name": "guardian__name",
             "guardian_phone": "guardian__phone",
         },
+        "select_related": ["user", "guardian"],
         "filename": "students_export",
     },
     "teachers": {
         "label": "Teachers",
         "model_path": "apps.teachers.models.Teacher",
         "fields": [
-            "id", "employee_id", "first_name", "last_name",
+            "id", "employee_number", "first_name", "last_name",
             "designation", "qualification", "experience_years",
         ],
         "related_fields": {
             "email": "user__email",
             "phone": "user__phone",
         },
+        "select_related": ["user"],
         "filename": "teachers_export",
     },
     "invoices": {
@@ -54,6 +56,14 @@ EXPORT_CONFIGS = {
             "campus": "enrollment__campus__name",
             "class_name": "enrollment__class_obj__name",
         },
+        "select_related": [
+            "enrollment",
+            "enrollment__student",
+            "enrollment__campus",
+            "enrollment__class_obj",
+            "academic_year",
+        ],
+        "prefetch_related": ["items", "payments", "concessions"],
         "filename": "invoices_export",
     },
     "payments": {
@@ -68,13 +78,19 @@ EXPORT_CONFIGS = {
             "invoice_number": "invoice__invoice_number",
             "campus": "invoice__enrollment__campus__name",
         },
+        "select_related": [
+            "invoice",
+            "invoice__enrollment",
+            "invoice__enrollment__student",
+            "invoice__enrollment__campus",
+        ],
         "filename": "payments_export",
     },
     "attendance": {
         "label": "Attendance Records",
         "model_path": "apps.attendance.models.Attendance",
         "fields": [
-            "id", "date", "status", "remarks",
+            "id", "date", "status", "notes",
         ],
         "related_fields": {
             "student_name": "student__first_name",
@@ -82,6 +98,7 @@ EXPORT_CONFIGS = {
             "class_name": "class_obj__name",
             "campus": "campus__name",
         },
+        "select_related": ["student", "class_obj", "campus"],
         "filename": "attendance_export",
     },
     "enrollments": {
@@ -98,6 +115,13 @@ EXPORT_CONFIGS = {
             "campus": "campus__name",
             "academic_year": "academic_year__name",
         },
+        "select_related": [
+            "student",
+            "class_obj",
+            "section",
+            "campus",
+            "academic_year",
+        ],
         "filename": "enrollments_export",
     },
 }
@@ -131,6 +155,12 @@ class DataExportView(APIView):
 
         model = import_string(config["model_path"])
         queryset = model.objects.all()
+
+        if config.get("select_related"):
+            queryset = queryset.select_related(*config["select_related"])
+
+        if config.get("prefetch_related"):
+            queryset = queryset.prefetch_related(*config["prefetch_related"])
 
         fields = config["fields"]
         related = config.get("related_fields", {})
@@ -182,7 +212,15 @@ class DataBackupView(APIView):
             related = config.get("related_fields", {})
             headers = fields + list(related.keys())
 
-            queryset = model.objects.all()[:5000]
+            queryset = model.objects.all()
+
+            if config.get("select_related"):
+                queryset = queryset.select_related(*config["select_related"])
+
+            if config.get("prefetch_related"):
+                queryset = queryset.prefetch_related(*config["prefetch_related"])
+
+            queryset = queryset[:5000]
             rows = []
             for obj in queryset:
                 row = {}

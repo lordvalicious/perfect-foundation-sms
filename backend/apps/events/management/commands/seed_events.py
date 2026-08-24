@@ -38,7 +38,12 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR("No school found."))
             return
 
-        campuses = list(Campus.objects.filter(status="active"))
+        campuses = list(
+            Campus.objects.filter(
+                school=school,
+                status="active",
+            )
+        )
         users = list(User.objects.filter(memberships__status="active").distinct()[:30])
 
         if not users:
@@ -76,10 +81,26 @@ class Command(BaseCommand):
                     k=random.randint(1, 3),
                 )
                 for aud_type in audience_types:
+                    class_obj = None
+
+                    if aud_type == "class" and campus:
+                        from apps.schools.models import Class as SchoolClass
+
+                        class_obj = (
+                            SchoolClass.objects
+                            .filter(unit__campus=campus)
+                            .order_by("?")
+                            .first()
+                        )
+
+                        if class_obj is None:
+                            continue
+
                     EventAudience.objects.create(
                         event=event,
                         audience_type=aud_type,
                         role=random.choice(["teacher", "parent", "student"]) if aud_type == "role" else "",
+                        class_obj=class_obj,
                     )
                     audiences_created += 1
 

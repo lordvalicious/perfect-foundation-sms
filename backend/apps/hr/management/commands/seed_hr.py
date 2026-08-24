@@ -34,7 +34,12 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR("No school found."))
             return
 
-        campuses = list(Campus.objects.filter(status="active"))
+        campuses = list(
+            Campus.objects.filter(
+                school=school,
+                status="active",
+            )
+        )
         teachers = list(Teacher.objects.filter(status="active"))
         staff_profiles = list(StaffProfile.objects.filter(status="active"))
 

@@ -11,6 +11,21 @@ import {
   Banknote,
   UserCheck,
   Tags,
+  AlertTriangle,
+  Briefcase,
+  TrendingUp,
+  LineChart,
+  Activity,
+  Percent,
+  UserX,
+  Coins,
+  BookOpen,
+  Bus,
+  Package,
+  Wrench,
+  CalendarDays,
+  MessageSquare,
+  Trophy,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
@@ -18,36 +33,51 @@ import { apiDownload } from "../api";
 
 const BASE = "/api/reports/";
 
+const EXAM_REPORTS = ["results", "subjects", "top-performers"];
+const STUDENT_REPORTS = ["student-progress"];
+
 const REPORTS = [
   {
     key: "enrollment",
     url: "enrollment/",
-    title: "Enrollment Report",
+    title: "Enrollment",
     icon: GraduationCap,
   },
   {
     key: "attendance",
     url: "attendance/",
-    title: "Attendance Report",
+    title: "Attendance",
     icon: ClipboardCheck,
+  },
+  {
+    key: "chronic-absentee",
+    url: "chronic-absentee/",
+    title: "Chronic Absentees",
+    icon: UserX,
   },
   {
     key: "results",
     url: "results/",
-    title: "Results Report",
+    title: "Results",
     icon: FileText,
   },
   {
-    key: "fees",
-    url: "fees/",
-    title: "Fees Report",
-    icon: Wallet,
+    key: "top-performers",
+    url: "top-performers/",
+    title: "Top Performers",
+    icon: Trophy,
   },
   {
-    key: "staff",
-    url: "staff/",
-    title: "Staff Report",
-    icon: Users,
+    key: "class-performance",
+    url: "class-performance/",
+    title: "Class Performance",
+    icon: TrendingUp,
+  },
+  {
+    key: "student-progress",
+    url: "student-progress/",
+    title: "Student Progress",
+    icon: LineChart,
   },
   {
     key: "subjects",
@@ -56,10 +86,58 @@ const REPORTS = [
     icon: PieChart,
   },
   {
+    key: "fees",
+    url: "fees/",
+    title: "Fees",
+    icon: Wallet,
+  },
+  {
+    key: "fee-defaulters",
+    url: "fee-defaulters/",
+    title: "Fee Defaulters",
+    icon: AlertTriangle,
+  },
+  {
+    key: "collection-trend",
+    url: "collection-trend/",
+    title: "Collection Trend",
+    icon: Activity,
+  },
+  {
+    key: "discounts",
+    url: "discounts/",
+    title: "Discounts",
+    icon: Percent,
+  },
+  {
     key: "payments",
     url: "payments/",
     title: "Payment Methods",
     icon: Banknote,
+  },
+  {
+    key: "fee-categories",
+    url: "fee-categories/",
+    title: "Fee Categories",
+    icon: Tags,
+  },
+  {
+    key: "payroll-summary",
+    url: "payroll-summary/",
+    title: "Payroll Summary",
+    icon: Coins,
+  },
+  {
+    key: "staff",
+    url: "staff/",
+    title: "Staff",
+    icon: Users,
+  },
+  {
+    key: "teacher-workload",
+    url: "teacher-workload/",
+    title: "Teacher Workload",
+    icon: Briefcase,
   },
   {
     key: "student-status",
@@ -68,10 +146,40 @@ const REPORTS = [
     icon: UserCheck,
   },
   {
-    key: "fee-categories",
-    url: "fee-categories/",
-    title: "Fee Categories",
-    icon: Tags,
+    key: "library",
+    url: "library/",
+    title: "Library",
+    icon: BookOpen,
+  },
+  {
+    key: "route-utilization",
+    url: "route-utilization/",
+    title: "Route Utilization",
+    icon: Bus,
+  },
+  {
+    key: "inventory-value",
+    url: "inventory-value/",
+    title: "Inventory Value",
+    icon: Package,
+  },
+  {
+    key: "maintenance-due",
+    url: "maintenance-due/",
+    title: "Maintenance Due",
+    icon: Wrench,
+  },
+  {
+    key: "event-participation",
+    url: "event-participation/",
+    title: "Event Participation",
+    icon: CalendarDays,
+  },
+  {
+    key: "sms-usage",
+    url: "sms-usage/",
+    title: "SMS Usage",
+    icon: MessageSquare,
   },
 ];
 
@@ -82,7 +190,34 @@ export default function ReportsPage() {
   const [error, setError] = useState("");
   const [exam, setExam] = useState("");
   const [exams, setExams] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [studentId, setStudentId] = useState("");
+  const [threshold, setThreshold] = useState("75");
   const [downloading, setDownloading] = useState(false);
+
+  const needsExam = EXAM_REPORTS.includes(active);
+  const needsStudent = STUDENT_REPORTS.includes(active);
+
+  const buildParams = useCallback(
+    (key) => {
+      const params = new URLSearchParams();
+
+      if (EXAM_REPORTS.includes(key) && exam) {
+        params.append("exam", exam);
+      }
+
+      if (STUDENT_REPORTS.includes(key) && studentId) {
+        params.append("student", studentId);
+      }
+
+      if (key === "chronic-absentee" && threshold) {
+        params.append("threshold", threshold);
+      }
+
+      return params;
+    },
+    [exam, studentId, threshold]
+  );
 
   const load = useCallback(
     (key) => {
@@ -91,14 +226,7 @@ export default function ReportsPage() {
       setLoading(true);
       setError("");
 
-      const params = new URLSearchParams();
-
-      if (key === "results" || key === "subjects") {
-        if (exam) {
-          params.append("exam", exam);
-        }
-      }
-
+      const params = buildParams(key);
       const query = params.toString() ? `?${params.toString()}` : "";
 
       fetch(`${BASE}${config.url}${query}`, { credentials: "include" })
@@ -112,13 +240,13 @@ export default function ReportsPage() {
           setLoading(false);
         });
     },
-    [exam]
+    [buildParams]
   );
 
   useEffect(() => {
-     
     load("enrollment");
-  }, [load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     fetch("/api/exams/?page_size=500", { credentials: "include" })
@@ -138,16 +266,23 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
-    if ((active === "results" || active === "subjects") && exam) {
-       
+    fetch("/api/students/?page_size=1000", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : { results: [] }))
+      .then((json) => setStudents(json.results || []))
+      .catch(() => setStudents([]));
+  }, []);
+
+  useEffect(() => {
+    if ((needsExam && exam) || (needsStudent && studentId)) {
       load(active);
     }
-  }, [active, exam, load]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, exam, studentId]);
 
   const switchReport = (key) => {
     setActive(key);
 
-    if (key !== "results" && key !== "subjects" && data[key] === undefined) {
+    if (!EXAM_REPORTS.includes(key) && !STUDENT_REPORTS.includes(key) && data[key] === undefined) {
       load(key);
     }
   };
@@ -157,14 +292,7 @@ export default function ReportsPage() {
 
     setDownloading(true);
 
-    const params = new URLSearchParams();
-
-    if (active === "results" || active === "subjects") {
-      if (exam) {
-        params.append("exam", exam);
-      }
-    }
-
+    const params = buildParams(active);
     params.append("format", "csv");
 
     apiDownload(`${BASE}${config.url}?${params.toString()}`, `${config.key}_report.csv`)
@@ -221,6 +349,54 @@ export default function ReportsPage() {
           error={error}
           onRetry={() => load(active)}
         >
+          {(needsExam || needsStudent || active === "chronic-absentee") && (
+            <div className="filter-row">
+              {needsExam && (
+                <select
+                  value={exam}
+                  onChange={(event) => setExam(event.target.value)}
+                >
+                  {exams.length === 0 && <option value="">No exams with results</option>}
+
+                  {exams.map((item) => (
+                    <option key={item.id} value={String(item.id)}>
+                      {item.name} - {item.exam_type_display} ({item.academic_year_name})
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {needsStudent && (
+                <select
+                  value={studentId}
+                  onChange={(event) => setStudentId(event.target.value)}
+                >
+                  <option value="">Select a student</option>
+
+                  {students.map((student) => (
+                    <option key={student.id} value={String(student.id)}>
+                      {student.full_name} ({student.admission_number})
+                    </option>
+                  ))}
+                </select>
+              )}
+
+              {active === "chronic-absentee" && (
+                <label className="inline-filter">
+                  Below
+                  <input
+                    type="number"
+                    min="1"
+                    max="100"
+                    value={threshold}
+                    onChange={(event) => setThreshold(event.target.value)}
+                  />
+                  % attendance
+                </label>
+              )}
+            </div>
+          )}
+
           {active === "enrollment" && (
             <ReportContent
               summary={[
@@ -263,23 +439,31 @@ export default function ReportsPage() {
             />
           )}
 
-          {(active === "results" || active === "subjects") && (
-            <div className="report-results">
-              <div className="filter-row">
-                <select
-                  value={exam}
-                  onChange={(event) => setExam(event.target.value)}
-                >
-                  {exams.length === 0 && <option value="">No exams with results</option>}
+          {active === "chronic-absentee" && (
+            <ReportContent
+              emptyHint="No students are below this threshold. Adjust the filter to flag more."
+              summary={[
+                { label: "Threshold", value: `${current.summary?.threshold ?? threshold}%` },
+                { label: "Tracked", value: current.summary?.students_tracked ?? 0 },
+                { label: "Flagged", value: current.summary?.students_flagged ?? 0 },
+              ]}
+              headers={["Admission No", "Student", "Campus", "Class", "Days", "Present+Late", "Absent", "Leave", "Rate %"]}
+              rows={(current.students || []).map((row) => [
+                row.admission_number,
+                row.student,
+                row.campus,
+                row.class,
+                row.total_days,
+                row.present,
+                row.absent,
+                row.leave,
+                `${row.attendance_rate}%`,
+              ])}
+            />
+          )}
 
-                  {exams.map((item) => (
-                    <option key={item.id} value={String(item.id)}>
-                      {item.name} - {item.exam_type_display} ({item.academic_year_name})
-                    </option>
-                  ))}
-                </select>
-              </div>
-
+          {EXAM_REPORTS.includes(active) && (
+            <>
               {active === "results" && (
                 <ReportContent
                   summary={[
@@ -323,7 +507,81 @@ export default function ReportsPage() {
                   ])}
                 />
               )}
+
+              {active === "top-performers" && (
+                <ReportContent
+                  summary={[
+                    { label: "Classes", value: current.summary?.classes ?? 0 },
+                    { label: "Students", value: current.summary?.students ?? 0 },
+                    { label: "Top N", value: current.summary?.top_n ?? 3 },
+                  ]}
+                  headers={["Position", "Campus", "Class", "Admission No", "Student", "Percentage", "Grade"]}
+                  rows={(current.performers || []).map((row) => [
+                    `#${row.position}`,
+                    row.campus,
+                    row.class,
+                    row.admission_number,
+                    row.student,
+                    `${row.percentage}%`,
+                    row.grade,
+                  ])}
+                />
+              )}
+            </>
+          )}
+
+          {active === "class-performance" && (
+            <ReportContent
+              summary={[
+                { label: "Students", value: current.summary?.total_students ?? 0 },
+                { label: "Overall Pass Rate", value: current.summary?.overall_pass_rate != null ? `${current.summary.overall_pass_rate}%` : 0 },
+                { label: "Overall Average", value: current.summary?.overall_average != null ? `${current.summary.overall_average}%` : 0 },
+              ]}
+              headers={["Campus", "Class", "Students", "Exams", "Passed", "Failed", "Pass Rate %", "Average %", "Highest %", "Lowest %"]}
+              rows={(current.classes || []).map((row) => [
+                row.campus,
+                row.class,
+                row.total_students,
+                row.exams_covered,
+                row.passed,
+                row.failed,
+                `${row.pass_rate}%`,
+                `${row.average_percentage}%`,
+                `${row.highest}%`,
+                `${row.lowest}%`,
+              ])}
+            />
+          )}
+
+          {active === "student-progress" && !studentId && (
+            <div className="empty-state">
+              <LineChart size={42} />
+              <h3>Select a student</h3>
+              <p>Choose a student above to see their exam progress trend.</p>
             </div>
+          )}
+
+          {active === "student-progress" && studentId && (
+            <ReportContent
+              summary={[
+                { label: "Exams", value: current.summary?.total_exams ?? 0 },
+                { label: "Average %", value: current.summary?.average_percentage ?? 0 },
+                { label: "Best", value: current.summary?.best_percentage ?? 0 },
+                { label: "Worst", value: current.summary?.worst_percentage ?? 0 },
+                { label: "Trend", value: (current.summary?.trend || "-").toUpperCase() },
+              ]}
+              headers={["Exam", "Type", "Campus", "Class", "Percentage", "Grade", "Result", "Position"]}
+              rows={(current.exams || []).map((row) => [
+                row.exam,
+                row.exam_type,
+                row.campus,
+                row.class,
+                `${row.percentage}%`,
+                row.grade,
+                row.result,
+                row.position,
+              ])}
+            />
           )}
 
           {active === "fees" && (
@@ -344,6 +602,76 @@ export default function ReportsPage() {
             />
           )}
 
+          {active === "fee-defaulters" && (
+            <ReportContent
+              summary={[
+                { label: "Defaulters", value: current.summary?.total_defaulters ?? 0 },
+                { label: "Outstanding", value: formatCurrency(current.summary?.total_outstanding) },
+              ]}
+              headers={["Admission No", "Student", "Campus", "Invoices", "Invoiced", "Paid", "Outstanding"]}
+              rows={(current.students || []).map((row) => [
+                row.admission_number,
+                row.student,
+                row.campus,
+                row.invoice_count,
+                formatCurrency(row.total_invoiced),
+                formatCurrency(row.total_paid),
+                formatCurrency(row.total_outstanding),
+              ])}
+            />
+          )}
+
+          {active === "collection-trend" && (
+            <ReportContent
+              summary={[
+                { label: "Invoiced", value: formatCurrency(current.summary?.total_invoiced) },
+                { label: "Collected", value: formatCurrency(current.summary?.total_collected) },
+                { label: "Collection Rate", value: current.summary?.collection_rate != null ? `${current.summary.collection_rate}%` : 0 },
+                { label: "Months", value: current.summary?.months ?? 0 },
+              ]}
+              headers={["Month", "Invoiced", "Collected", "Gap"]}
+              rows={(current.months_data || []).map((row) => [
+                row.month,
+                formatCurrency(row.invoiced),
+                formatCurrency(row.collected),
+                formatCurrency(row.gap),
+              ])}
+            />
+          )}
+
+          {active === "discounts" && (
+            <div className="report-stack">
+              <ReportContent
+                summary={[
+                  { label: "Invoices", value: current.summary?.invoices_affected ?? 0 },
+                  { label: "Discounts", value: formatCurrency(current.summary?.total_discount) },
+                  { label: "Concessions", value: formatCurrency(current.summary?.total_concession) },
+                  { label: "Total Reduction", value: formatCurrency(current.summary?.total_reduction) },
+                ]}
+                headers={["Campus", "Invoices", "Discounts", "Concessions"]}
+                rows={(current.by_campus || []).map((row) => [
+                  row.campus,
+                  row.invoices,
+                  formatCurrency(row.discounts),
+                  formatCurrency(row.concessions),
+                ])}
+              />
+
+              <ReportContent
+                headers={["Invoice", "Student", "Campus", "Subtotal", "Discount", "Concession", "Reduction"]}
+                rows={(current.invoices || []).map((row) => [
+                  row.invoice_number,
+                  row.student,
+                  row.campus,
+                  formatCurrency(row.subtotal),
+                  formatCurrency(row.discount),
+                  formatCurrency(row.concession),
+                  formatCurrency(row.total_reduction),
+                ])}
+              />
+            </div>
+          )}
+
           {active === "staff" && (
             <ReportContent
               summary={[
@@ -354,6 +682,25 @@ export default function ReportsPage() {
                 row.campus,
                 row.designation,
                 row.count,
+              ])}
+            />
+          )}
+
+          {active === "teacher-workload" && (
+            <ReportContent
+              summary={[
+                { label: "Teachers", value: current.summary?.total_teachers ?? 0 },
+                { label: "Assignments", value: current.summary?.total_assignments ?? 0 },
+              ]}
+              headers={["Teacher", "Emp No", "Campus", "Assignments", "Subjects", "Classes", "Sections"]}
+              rows={(current.teachers || []).map((row) => [
+                row.teacher,
+                row.employee_number,
+                row.campus,
+                row.assignments,
+                row.subjects,
+                row.classes,
+                row.sections,
               ])}
             />
           )}
@@ -426,19 +773,201 @@ export default function ReportsPage() {
               />
             </div>
           )}
+
+          {active === "payroll-summary" && (
+            <div className="report-stack">
+              <ReportContent
+                summary={[
+                  { label: "Records", value: current.summary?.records ?? 0 },
+                  { label: "Gross", value: formatCurrency(current.summary?.total_gross) },
+                  { label: "Deductions", value: formatCurrency(current.summary?.total_deductions) },
+                  { label: "Net Paid", value: formatCurrency(current.summary?.total_net) },
+                ]}
+                headers={["Period", "Employees", "Gross", "Deductions", "Net"]}
+                rows={(current.by_period || []).map((row) => [
+                  row.period,
+                  row.employees,
+                  formatCurrency(row.gross),
+                  formatCurrency(row.deductions),
+                  formatCurrency(row.net),
+                ])}
+              />
+
+              <ReportContent
+                headers={["Campus", "Employees", "Gross", "Net"]}
+                rows={(current.by_campus || []).map((row) => [
+                  row.campus,
+                  row.employees,
+                  formatCurrency(row.gross),
+                  formatCurrency(row.net),
+                ])}
+              />
+            </div>
+          )}
+
+          {active === "library" && (
+            <div className="report-stack">
+              <ReportContent
+                summary={[
+                  { label: "Total Issues", value: current.summary?.total_issues ?? 0 },
+                  { label: "Active Issues", value: current.summary?.active_issues ?? 0 },
+                  { label: "Overdue", value: current.summary?.marked_overdue ?? 0 },
+                  { label: "Fines Due", value: formatCurrency(current.summary?.fines_outstanding) },
+                  { label: "Fines Collected", value: formatCurrency(current.summary?.fines_collected) },
+                ]}
+                headers={["Title", "Issues", "Currently Out"]}
+                rows={(current.most_borrowed || []).map((row) => [
+                  row.title,
+                  row.issues,
+                  row.currently_out,
+                ])}
+              />
+
+              <ReportContent
+                headers={["Title", "Borrower", "Due Date", "Days Overdue", "Fine"]}
+                rows={(current.overdue || []).map((row) => [
+                  row.title,
+                  row.borrower,
+                  row.due_date,
+                  row.days_overdue,
+                  formatCurrency(row.fine),
+                ])}
+              />
+            </div>
+          )}
+
+          {active === "route-utilization" && (
+            <ReportContent
+              summary={[
+                { label: "Routes", value: current.summary?.routes ?? 0 },
+                { label: "Capacity", value: current.summary?.total_capacity ?? 0 },
+                { label: "Students", value: current.summary?.total_students ?? 0 },
+                { label: "Avg Utilization", value: current.summary?.average_utilization != null ? `${current.summary.average_utilization}%` : 0 },
+                { label: "Overloaded", value: current.summary?.overloaded_routes ?? 0 },
+              ]}
+              headers={["Route", "Campus", "Vehicle", "Driver", "Capacity", "Students", "Free", "Utilization %"]}
+              rows={(current.routes || []).map((row) => [
+                row.route,
+                row.campus,
+                row.vehicle,
+                row.driver,
+                row.capacity,
+                row.students,
+                row.seats_free,
+                `${row.utilization}%`,
+              ])}
+            />
+          )}
+
+          {active === "inventory-value" && (
+            <div className="report-stack">
+              <ReportContent
+                summary={[
+                  { label: "Items", value: current.summary?.items ?? 0 },
+                  { label: "Units", value: current.summary?.quantity ?? 0 },
+                  { label: "Total Value", value: formatCurrency(current.summary?.total_value) },
+                  ...(current.summary?.statuses || []).map((item) => ({
+                    label: item.status,
+                    value: item.count,
+                  })),
+                ]}
+                headers={["Category", "Items", "Quantity", "Value"]}
+                rows={(current.by_category || []).map((row) => [
+                  row.category,
+                  row.items,
+                  row.quantity,
+                  formatCurrency(row.value),
+                ])}
+              />
+
+              <ReportContent
+                headers={["Campus", "Items", "Quantity", "Value"]}
+                rows={(current.by_campus || []).map((row) => [
+                  row.campus,
+                  row.items,
+                  row.quantity,
+                  formatCurrency(row.value),
+                ])}
+              />
+            </div>
+          )}
+
+          {active === "maintenance-due" && (
+            <ReportContent
+              summary={[
+                { label: "Open Records", value: current.summary?.open_records ?? 0 },
+                { label: "Scheduled Cost", value: formatCurrency(current.summary?.scheduled_cost) },
+                { label: "In Progress Cost", value: formatCurrency(current.summary?.in_progress_cost) },
+                { label: "Assets In Maintenance", value: current.summary?.assets_in_maintenance ?? 0 },
+              ]}
+              headers={["Asset", "Code", "Campus", "Status", "Date", "Cost", "By"]}
+              rows={(current.records || []).map((row) => [
+                row.asset,
+                row.code,
+                row.campus,
+                row.status,
+                row.date,
+                formatCurrency(row.cost),
+                row.performed_by,
+              ])}
+            />
+          )}
+
+          {active === "event-participation" && (
+            <ReportContent
+              summary={[
+                { label: "Events", value: current.summary?.events ?? 0 },
+                { label: "Responses", value: current.summary?.total_responses ?? 0 },
+                { label: "Attending", value: current.summary?.attending ?? 0 },
+                { label: "Participation Rate", value: current.summary?.participation_rate != null ? `${current.summary.participation_rate}%` : 0 },
+              ]}
+              headers={["Event", "Campus", "Start", "Attending", "Not Attending", "Maybe", "Responses", "Rate %"]}
+              rows={(current.events || []).map((row) => [
+                row.event,
+                row.campus,
+                row.start,
+                row.attending,
+                row.not_attending,
+                row.maybe,
+                row.responses,
+                `${row.participation_rate}%`,
+              ])}
+            />
+          )}
+
+          {active === "sms-usage" && (
+            <ReportContent
+              summary={[
+                { label: "Year", value: current.summary?.year ?? "-" },
+                { label: "Messages", value: current.summary?.total_messages ?? 0 },
+                { label: "Sent", value: current.summary?.sent ?? 0 },
+                { label: "Failed", value: current.summary?.failed ?? 0 },
+                { label: "Success Rate", value: current.summary?.success_rate != null ? `${current.summary.success_rate}%` : 0 },
+              ]}
+              headers={["Month", "Sent", "Failed", "Queued", "Total", "Success %"]}
+              rows={(current.months_data || []).map((row) => [
+                row.month,
+                row.sent,
+                row.failed,
+                row.queued,
+                row.total,
+                `${row.success_rate}%`,
+              ])}
+            />
+          )}
         </StateArea>
       </div>
     </section>
   );
 }
 
-function ReportContent({ summary = [], headers, rows }) {
+function ReportContent({ summary = [], headers, rows, emptyHint }) {
   if (rows.length === 0) {
     return (
       <div className="empty-state">
         <BarChart3 size={42} />
         <h3>No data available</h3>
-        <p>Adjust the filters to generate this report.</p>
+        <p>{emptyHint || "Adjust the filters to generate this report."}</p>
       </div>
     );
   }

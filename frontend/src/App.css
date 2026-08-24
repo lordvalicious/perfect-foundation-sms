@@ -1674,6 +1674,19 @@ select {
 
 .filter-row .field-label { margin-bottom: 3px; }
 
+.filter-row .inline-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted, #555);
+}
+
+.filter-row .inline-filter input {
+  width: 74px;
+}
+
 .filter-search {
   flex: 1;
   min-width: 210px;

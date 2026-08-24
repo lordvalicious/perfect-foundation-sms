@@ -1,9 +1,24 @@
 from django.urls import path
 
+from .extended_views import (
+    ChronicAbsenteeReportView,
+    CollectionTrendReportView,
+    DiscountsReportView,
+    EventParticipationReportView,
+    InventoryValueReportView,
+    LibraryOverviewReportView,
+    MaintenanceDueReportView,
+    PayrollSummaryReportView,
+    RouteUtilizationReportView,
+    SmsUsageReportView,
+    TopPerformersReportView,
+)
 from .views import (
     AttendanceReportView,
+    ClassPerformanceReportView,
     EnrollmentReportView,
     FeeCategoryReportView,
+    FeeDefaultersReportView,
     FeesReportView,
     PaymentMethodsReportView,
     ReportGenerateView,
@@ -11,8 +26,10 @@ from .views import (
     ReportTemplateListView,
     ResultsReportView,
     StaffReportView,
+    StudentProgressTrendReportView,
     StudentStatusReportView,
     SubjectPerformanceReportView,
+    TeacherWorkloadReportView,
 )
 from .export_views import (
     DataBackupView,
@@ -67,6 +84,81 @@ urlpatterns = [
         "fee-categories/",
         FeeCategoryReportView.as_view(),
         name="report-fee-categories",
+    ),
+    path(
+        "fee-defaulters/",
+        FeeDefaultersReportView.as_view(),
+        name="report-fee-defaulters",
+    ),
+    path(
+        "teacher-workload/",
+        TeacherWorkloadReportView.as_view(),
+        name="report-teacher-workload",
+    ),
+    path(
+        "class-performance/",
+        ClassPerformanceReportView.as_view(),
+        name="report-class-performance",
+    ),
+    path(
+        "student-progress/",
+        StudentProgressTrendReportView.as_view(),
+        name="report-student-progress",
+    ),
+    path(
+        "collection-trend/",
+        CollectionTrendReportView.as_view(),
+        name="report-collection-trend",
+    ),
+    path(
+        "discounts/",
+        DiscountsReportView.as_view(),
+        name="report-discounts",
+    ),
+    path(
+        "chronic-absentee/",
+        ChronicAbsenteeReportView.as_view(),
+        name="report-chronic-absentee",
+    ),
+    path(
+        "payroll-summary/",
+        PayrollSummaryReportView.as_view(),
+        name="report-payroll-summary",
+    ),
+    path(
+        "library/",
+        LibraryOverviewReportView.as_view(),
+        name="report-library",
+    ),
+    path(
+        "route-utilization/",
+        RouteUtilizationReportView.as_view(),
+        name="report-route-utilization",
+    ),
+    path(
+        "inventory-value/",
+        InventoryValueReportView.as_view(),
+        name="report-inventory-value",
+    ),
+    path(
+        "maintenance-due/",
+        MaintenanceDueReportView.as_view(),
+        name="report-maintenance-due",
+    ),
+    path(
+        "event-participation/",
+        EventParticipationReportView.as_view(),
+        name="report-event-participation",
+    ),
+    path(
+        "sms-usage/",
+        SmsUsageReportView.as_view(),
+        name="report-sms-usage",
+    ),
+    path(
+        "top-performers/",
+        TopPerformersReportView.as_view(),
+        name="report-top-performers",
     ),
     path(
         "templates/",

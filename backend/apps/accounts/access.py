@@ -248,6 +248,29 @@ def restrict_to_allowed_campuses(queryset, user, campus_field="campus_id"):
     return queryset
 
 
+def _model_has_path(model, path):
+    """True when ``path`` (e.g. ``"institution_id"`` or ``"book__school_id"``)
+    resolves against ``model``. Guards ``apply_campus_scope`` against models
+    that predate the institution FK."""
+    parts = path.split("__")
+    current = model
+
+    for part in parts[:-1]:
+        try:
+            field = current._meta.get_field(part)
+        except Exception:
+            return False
+        current = field.related_model
+        if current is None:
+            return False
+
+    try:
+        current._meta.get_field(parts[-1])
+        return True
+    except Exception:
+        return False
+
+
 def apply_campus_scope(queryset, request, campus_field="campus_id", institution_field="institution_id"):
     """Restrict a campus-scoped queryset to the user's allowed campuses.
 
@@ -256,18 +279,18 @@ def apply_campus_scope(queryset, request, campus_field="campus_id", institution_
     or ``"primary_campus_id"``.
 
     ``institution_field`` is the ORM path to the institution relation, e.g.
-    ``"institution_id"`` or ``"school_id"``.  When ``None`` (the default),
-    institution scoping is skipped.  When set, records matching the active
-    institution OR records with no institution value (school-wide legacy data)
-    are included.
+    ``"institution_id"`` or ``"school_id"``.  When ``None``, institution
+    scoping is skipped.  When set but the target model does not define the
+    relation (legacy tables), institution scoping is silently skipped so
+    shared reports keep working.
 
     Global users are filtered by the optional ``campus`` param (all when
     absent). Non-global users are always limited to their allowed campuses,
     and asking for another campus is rejected earlier in ``campus_access``.
     Records with no campus value are school-wide and stay visible.
     """
-    # --- Institution scoping (new) ---
-    if institution_field:
+    # --- Institution scoping ---
+    if institution_field and _model_has_path(queryset.model, institution_field):
         institution = get_institution(request)
         if institution is not None:
             queryset = queryset.filter(

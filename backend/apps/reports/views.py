@@ -1783,6 +1783,17 @@ REPORT_VIEW_MAP = {
     "teacher_workload": "apps.reports.views.TeacherWorkloadReportView",
     "class_performance": "apps.reports.views.ClassPerformanceReportView",
     "student_progress": "apps.reports.views.StudentProgressTrendReportView",
+    "collection_trend": "apps.reports.extended_views.CollectionTrendReportView",
+    "discounts": "apps.reports.extended_views.DiscountsReportView",
+    "chronic_absentee": "apps.reports.extended_views.ChronicAbsenteeReportView",
+    "payroll_summary": "apps.reports.extended_views.PayrollSummaryReportView",
+    "library_overview": "apps.reports.extended_views.LibraryOverviewReportView",
+    "route_utilization": "apps.reports.extended_views.RouteUtilizationReportView",
+    "inventory_value": "apps.reports.extended_views.InventoryValueReportView",
+    "maintenance_due": "apps.reports.extended_views.MaintenanceDueReportView",
+    "event_participation": "apps.reports.extended_views.EventParticipationReportView",
+    "sms_usage": "apps.reports.extended_views.SmsUsageReportView",
+    "top_performers": "apps.reports.extended_views.TopPerformersReportView",
 }
 
 

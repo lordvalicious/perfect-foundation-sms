@@ -13,6 +13,21 @@ class ReportTemplate(models.Model):
         ("payments", "Payment Methods"),
         ("student_status", "Student Status"),
         ("fee_categories", "Fee Categories"),
+        ("fee_defaulters", "Fee Defaulters"),
+        ("teacher_workload", "Teacher Workload"),
+        ("class_performance", "Class Performance"),
+        ("student_progress", "Student Progress"),
+        ("collection_trend", "Collection Trend"),
+        ("discounts", "Discounts & Concessions"),
+        ("chronic_absentee", "Chronic Absentees"),
+        ("payroll_summary", "Payroll Summary"),
+        ("library_overview", "Library Overview"),
+        ("route_utilization", "Route Utilization"),
+        ("inventory_value", "Inventory Value"),
+        ("maintenance_due", "Maintenance Due"),
+        ("event_participation", "Event Participation"),
+        ("sms_usage", "SMS Usage"),
+        ("top_performers", "Top Performers"),
     ]
 
     name = models.CharField(max_length=200)
