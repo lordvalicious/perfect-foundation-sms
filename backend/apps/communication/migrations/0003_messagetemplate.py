@@ -7,7 +7,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-        ("communication", "0002_announcement_notification_smslog_notificationpreference"),
+        ("communication", "0003_notificationpreference_smslog"),
     ]
 
     operations = [
