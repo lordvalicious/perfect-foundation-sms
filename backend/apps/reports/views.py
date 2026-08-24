@@ -1258,8 +1258,18 @@ class FeeDefaultersReportView(APIView):
 
     permission_classes = [IsAccountantRole]
 
+    # Cap the detailed rows so the response stays inside serverless
+    # time/size limits on large datasets. Totals always cover the
+    # full set. Use ?limit=0 for every row (may be slow).
+    DEFAULT_ROW_LIMIT = 500
+
     def _data(self, request):
         from apps.finance.models import Invoice
+
+        try:
+            row_limit = int(request.query_params.get("limit", self.DEFAULT_ROW_LIMIT))
+        except (TypeError, ValueError):
+            row_limit = self.DEFAULT_ROW_LIMIT
 
         queryset = (
             Invoice.objects
@@ -1319,10 +1329,14 @@ class FeeDefaultersReportView(APIView):
             row["total_outstanding"] for row in rows
         )
 
+        shown = rows[:row_limit] if row_limit else rows
+
         return {
             "summary": {
                 "total_defaulters": len(rows),
                 "total_outstanding": quantize(total_outstanding),
+                "row_limit": row_limit,
+                "rows_truncated": bool(row_limit) and len(rows) > row_limit,
             },
             "students": [
                 {
@@ -1331,7 +1345,7 @@ class FeeDefaultersReportView(APIView):
                     "total_paid": quantize(row["total_paid"]),
                     "total_outstanding": quantize(row["total_outstanding"]),
                 }
-                for row in rows
+                for row in shown
             ],
         }
 
