@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Building2, DollarSign, GraduationCap, Users } from "lucide-react";
+import { Building2, DollarSign, GraduationCap } from "lucide-react";
 import { apiFetch } from "../api";
 import { PageHeader, StateArea } from "./ui";
-import { formatCurrency, formatDate } from "./format";
+import { formatCurrency } from "./format";
 
 const CAMPUSES_URL = "/api/schools/campuses/";
 const FINANCE_BREAKDOWN_URL = "/api/dashboard/finance/breakdown/";
@@ -38,8 +38,6 @@ export default function CampusDashboardPage() {
   }, [fetchData]);
 
   const totalStudents = campuses.reduce((sum, c) => sum + Number(c.student_count || 0), 0);
-  const totalClasses = campuses.reduce((sum, c) => sum + Number(c.class_count || 0), 0);
-  const totalSections = campuses.reduce((sum, c) => sum + Number(c.section_count || 0), 0);
   const totalCollected = finance?.by_campus?.reduce((sum, c) => sum + Number(c.collected || 0), 0) || 0;
   const totalOutstanding = finance?.by_campus?.reduce((sum, c) => sum + Number(c.outstanding || 0), 0) || 0;
 

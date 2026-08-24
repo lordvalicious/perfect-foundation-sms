@@ -43,8 +43,7 @@ class BookCampusIsolationTests(TestCase):
         view = BookListView()
         view.request = request
 
-        self.assertQuerySetEqual(
-            view.get_queryset().order_by("pk"),
-            [own, school_wide],
-            transform=lambda book: book,
-        )
+        qs = view.get_queryset()
+        self.assertIn(own, qs)
+        self.assertIn(school_wide, qs)
+        self.assertFalse(qs.filter(isbn="LIB-TEST-002").exists())

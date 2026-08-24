@@ -33,7 +33,7 @@ export default function HRPage() {
   };
 
   useEffect(() => {
-    loadEmployees(); // eslint-disable-line react-hooks/set-state-in-effect
+    loadEmployees();  
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

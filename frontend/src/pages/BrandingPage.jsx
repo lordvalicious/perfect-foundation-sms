@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Palette, Save, Upload, X } from "lucide-react";
-import { apiFetch, jsonHeaders } from "../api";
+import { Palette, Save, Upload } from "lucide-react";
 import { PageHeader, StateArea } from "./ui";
 
 const BRANDING_URL = "/api/schools/branding/";

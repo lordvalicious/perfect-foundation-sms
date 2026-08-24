@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Download, FileText, Database } from "lucide-react";
 import { apiFetch, apiDownload } from "../api";
-import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
+import { PageHeader, StateArea, EmptyState } from "./ui";
 
 const EXPORT_LIST_URL = "/api/reports/export/";
 const EXPORT_URL = "/api/reports/export";

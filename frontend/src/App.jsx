@@ -112,7 +112,7 @@ function GlobalSearch() {
 
   useEffect(() => {
     const value = query.trim();
-    if (value.length < 2) { setResults([]); setOpen(false); return; } // eslint-disable-line react-hooks/set-state-in-effect
+    if (value.length < 2) { setResults([]); setOpen(false); return; }  
     setLoading(true);
     const timer = setTimeout(() => {
       fetch(`${SEARCH_URL}?q=${encodeURIComponent(value)}`, { credentials: "include" })

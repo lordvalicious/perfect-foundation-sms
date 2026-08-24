@@ -16,7 +16,7 @@ function useCountUp(value) {
 
   useEffect(() => {
     if (value === null || value === undefined) {
-      setDisplay(0); // eslint-disable-line react-hooks/set-state-in-effect
+      setDisplay(0);  
       return undefined;
     }
 

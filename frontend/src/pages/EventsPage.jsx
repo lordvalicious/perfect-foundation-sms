@@ -88,7 +88,7 @@ export default function EventsPage() {
   }, []);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- fires a debounced data fetch
+     
     loadEvents();
   }, [loadEvents]);
 

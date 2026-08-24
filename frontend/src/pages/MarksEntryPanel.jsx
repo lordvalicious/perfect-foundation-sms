@@ -25,7 +25,7 @@ export default function MarksEntryPanel({ exams, onSaved }) {
 
   useEffect(() => {
     if (!exam) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets dependent state
+       
       setSubjects([]);
       setSubject("");
       return;

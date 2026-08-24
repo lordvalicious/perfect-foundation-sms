@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Layers, Plus, X } from "lucide-react";
+import { Layers, X } from "lucide-react";
 import { useAuth } from "../auth";
-import { PageHeader, PanelHeader, StateArea, StatusBadge } from "./ui";
-import { formatCurrency, formatDate } from "./format";
+import { PageHeader, StateArea } from "./ui";
+import { formatCurrency } from "./format";
 import { apiFetch, jsonHeaders } from "../api";
 
 const BULK_INVOICES_URL = "/api/finance/invoices/bulk/";
@@ -40,17 +40,6 @@ const EMPTY_PAYMENT_FORM = {
   notes: "",
 };
 
-function getCookie(name) {
-  const value = `; ${document.cookie}`;
-  const parts = value.split(`; ${name}=`);
-  return parts.length === 2 ? parts.pop().split(";").shift() : null;
-}
-
-function authHeaders() {
-  const csrfToken = getCookie("csrftoken");
-  return csrfToken ? { "X-CSRFToken": csrfToken } : {};
-}
-
 function BulkInvoiceModal({ onClose, onDone }) {
   const [form, setForm] = useState(EMPTY_INVOICE_FORM);
   const [saving, setSaving] = useState(false);
@@ -61,7 +50,7 @@ function BulkInvoiceModal({ onClose, onDone }) {
   const [academicYears, setAcademicYears] = useState([]);
   const [classes, setClasses] = useState([]);
   const [categories, setCategories] = useState([]);
-  const [structures, setStructures] = useState([]);
+  const [, setStructures] = useState([]);
 
   useEffect(() => {
     const opts = { credentials: "include" };
@@ -127,10 +116,6 @@ function BulkInvoiceModal({ onClose, onDone }) {
       setSaving(false);
     }
   };
-
-  const categoryHasStructure = form.academic_year && form.campus && form.class_obj
-    ? (catId) => structures.some((s) => String(s.category) === String(catId))
-    : () => true;
 
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
@@ -492,8 +477,7 @@ export default function BulkFinancePage() {
   const { hasRole } = useAuth();
   const [showBulkInvoice, setShowBulkInvoice] = useState(false);
   const [showBulkPayment, setShowBulkPayment] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-
+  const [, setRefreshKey] = useState(0);
   const canManage = hasRole(["super_admin", "admin", "accountant"]);
 
   return (

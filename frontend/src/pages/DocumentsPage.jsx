@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FileText, Upload, Download, Search, Filter, X } from "lucide-react";
 import { useAuth } from "../auth";
-import { apiFetch, jsonHeaders } from "../api";
+import { apiFetch } from "../api";
 import { PageHeader, PanelHeader, StateArea, StatusBadge, EmptyState } from "./ui";
 import { formatDate } from "./format";
 
@@ -31,7 +31,6 @@ const EMPLOYEE_DOC_TYPES = [
 ];
 
 function UploadDocumentModal({ onClose, onDone }) {
-  const { user } = useAuth();
   const [entityType, setEntityType] = useState("student");
   const [entityId, setEntityId] = useState("");
   const [entitySearch, setEntitySearch] = useState("");

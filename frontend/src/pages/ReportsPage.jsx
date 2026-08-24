@@ -116,7 +116,7 @@ export default function ReportsPage() {
   );
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads the default report on mount
+     
     load("enrollment");
   }, [load]);
 
@@ -139,7 +139,7 @@ export default function ReportsPage() {
 
   useEffect(() => {
     if ((active === "results" || active === "subjects") && exam) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- reloads the report when the exam changes
+       
       load(active);
     }
   }, [active, exam, load]);

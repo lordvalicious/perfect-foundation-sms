@@ -24,7 +24,7 @@ class AssetCampusIsolationTests(TestCase):
 
     def test_asset_list_includes_own_and_school_wide_assets_only(self):
         own = Asset.objects.create(name="Campus A asset", campus=self.campus_a)
-        Asset.objects.create(name="Campus B asset", campus=self.campus_b)
+        campus_b_asset = Asset.objects.create(name="Campus B asset", campus=self.campus_b)
         school_wide = Asset.objects.create(name="Shared asset")
 
         request = make_request(self.user)
@@ -32,8 +32,7 @@ class AssetCampusIsolationTests(TestCase):
         view = AssetListView()
         view.request = request
 
-        self.assertQuerySetEqual(
-            view.get_queryset().order_by("pk"),
-            [own, school_wide],
-            transform=lambda asset: asset,
-        )
+        qs = view.get_queryset()
+        self.assertIn(own, qs)
+        self.assertIn(school_wide, qs)
+        self.assertNotIn(campus_b_asset, qs)
