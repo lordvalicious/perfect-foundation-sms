@@ -84,7 +84,7 @@ class DocumentListView(APIView):
                     Q(title__icontains=search)
                     | Q(employee__first_name__icontains=search)
                     | Q(employee__last_name__icontains=search)
-                    | Q(employee__employee_id__icontains=search)
+                    | Q(employee__employee_number__icontains=search)
                 )
 
             for d in qs:
@@ -93,7 +93,7 @@ class DocumentListView(APIView):
                     "id": d.id,
                     "entity_type": "employee",
                     "entity_id": d.employee_id,
-                    "entity_label": f"{emp_name} ({d.employee.employee_id})",
+                    "entity_label": f"{emp_name} ({d.employee.employee_number})",
                     "document_type": d.document_type,
                     "document_type_display": d.document_type,
                     "title": d.title,

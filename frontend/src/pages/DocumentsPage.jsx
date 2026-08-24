@@ -151,7 +151,7 @@ function UploadDocumentModal({ onClose, onDone }) {
                   {entities.map((ent) => {
                     const label = entityType === "student"
                       ? `${ent.first_name} ${ent.last_name} (${ent.admission_number})`
-                      : `${ent.first_name} ${ent.last_name} (${ent.employee_id})`;
+                      : `${ent.first_name} ${ent.last_name} (${ent.employee_number})`;
                     return <option key={ent.id} value={ent.id}>{label}</option>;
                   })}
                 </select>

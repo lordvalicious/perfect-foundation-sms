@@ -254,9 +254,9 @@ export default function AssignmentsPage() {
       (section) => !classId || section.class_obj === classId
     );
 
-  const unitOfClass = (classId) =>
-    options.units.find(
-      (unit) => unit.id === (classId || -1)
+  const classById = (classId) =>
+    options.classes.find(
+      (cls) => cls.id === Number(classId)
     );
 
   const handleAssignmentChange = (event) => {
@@ -266,12 +266,12 @@ export default function AssignmentsPage() {
       const next = { ...previous, [name]: value };
 
       if (name === "class_obj") {
-        const unit = unitOfClass(value);
+        const cls = classById(value);
 
         next.section = "";
 
         const campus = options.campuses.find(
-          (c) => c.id === (unit?.campus_id || -1)
+          (c) => c.id === (cls?.campus || -1)
         );
 
         if (campus) next.campus = campus.id;
@@ -288,12 +288,12 @@ export default function AssignmentsPage() {
       const next = { ...previous, [name]: value };
 
       if (name === "class_obj") {
-        const unit = unitOfClass(value);
+        const cls = classById(value);
 
         next.section = "";
 
         const campus = options.campuses.find(
-          (c) => c.id === (unit?.campus_id || -1)
+          (c) => c.id === (cls?.campus || -1)
         );
 
         if (campus) next.campus = campus.id;
@@ -615,17 +615,6 @@ export default function AssignmentsPage() {
                 >
                   <option value="">Select section</option>
 
-              <label>
-                Roll Number
-                <input
-                  name="roll_number"
-                  value={enrollmentForm.roll_number}
-                  onChange={handleEnrollmentChange}
-                  maxLength={20}
-                  placeholder="Optional"
-                />
-              </label>
-
                   {sectionsForClass(
                     assignmentForm.class_obj
                   ).map((section) => (
@@ -871,6 +860,17 @@ export default function AssignmentsPage() {
                     </option>
                   ))}
                 </select>
+              </label>
+
+              <label>
+                Roll Number
+                <input
+                  name="roll_number"
+                  value={enrollmentForm.roll_number}
+                  onChange={handleEnrollmentChange}
+                  maxLength={20}
+                  placeholder="Optional"
+                />
               </label>
 
               <label>

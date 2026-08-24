@@ -250,20 +250,32 @@ function BulkPaymentModal({ onClose, onDone }) {
     setClassObj("");
   }, [campus]);
 
-  const loadInvoices = useCallback(() => {
+  const loadInvoices = useCallback(async () => {
     setLoading(true);
-    const params = new URLSearchParams({ status: "issued", page: "1", page_size: "100" });
-    if (campus) params.set("campus", campus);
-    if (classObj) params.set("class", classObj);
-    fetch(`${INVOICES_URL}?${params}`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { results: [] }))
-      .then((d) => {
-        const rows = (d.results || []).filter((inv) => inv.balance > 0);
-        setInvoices(rows);
-        setSelected({});
-      })
-      .catch(() => setInvoices([]))
-      .finally(() => setLoading(false));
+    try {
+      const all = [];
+      let next = `${INVOICES_URL}?status=issued`;
+      if (campus) next += `&campus=${campus}`;
+      if (classObj) next += `&class=${classObj}`;
+      while (next) {
+        const response = await fetch(next, { credentials: "include" });
+        if (!response.ok) break;
+        const data = await response.json();
+        all.push(...(Array.isArray(data) ? data : data.results || []));
+        if (data.next) {
+          const nextUrl = new URL(data.next, window.location.origin);
+          next = nextUrl.pathname + nextUrl.search;
+        } else {
+          next = null;
+        }
+      }
+      setInvoices(all.filter((inv) => inv.balance > 0));
+      setSelected({});
+    } catch {
+      setInvoices([]);
+    } finally {
+      setLoading(false);
+    }
   }, [campus, classObj]);
 
   useEffect(() => {

@@ -330,7 +330,7 @@ const navGroups = [
   },
   {
     label: "Finance",
-    items: ["/finance", "/payroll", "/reports", "/report-builder", "/data-export"]
+    items: ["/finance", "/finance/bulk", "/payroll", "/reports", "/report-builder", "/data-export"]
       .map(findNav)
       .filter(Boolean),
   },
