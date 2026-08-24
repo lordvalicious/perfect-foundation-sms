@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path(.*)",
-      "destination": "https://perfect-foundation-backend.onrender.com/api/:path"
+      "destination": "https://perfect-foundation-api.vercel.app/api/:path"
     },
     {
       "source": "/(.*)",
