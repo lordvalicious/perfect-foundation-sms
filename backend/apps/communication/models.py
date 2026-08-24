@@ -561,6 +561,56 @@ class NotificationPreference(models.Model):
         return f"Notification prefs for {self.user.username}"
 
 
+class EmailLog(models.Model):
+    """Log of every outbound email sent through the system."""
+
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("sent", "Sent"),
+        ("failed", "Failed"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="email_logs_tenant",
+        null=True,
+        blank=True,
+    )
+
+    recipient_email = models.EmailField()
+
+    subject = models.CharField(max_length=250)
+
+    body = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="queued",
+    )
+
+    error = models.TextField(blank=True)
+
+    sent_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sent_email_logs",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "email log"
+        verbose_name_plural = "email logs"
+
+    def __str__(self):
+        return f"Email to {self.recipient_email}: {self.subject[:50]}"
+
+
 class MessageTemplate(models.Model):
     CHANNEL_CHOICES = [
         ("sms", "SMS"),

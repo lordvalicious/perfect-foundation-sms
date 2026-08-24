@@ -27,6 +27,11 @@ from .views import (
     BulkPaymentCreateView,
 )
 from .stripe_views import StripeCheckoutView, stripe_webhook
+from .jazzcash_views import (
+    JazzCashCheckoutView,
+    jazzcash_callback,
+)
+from .cron_views import LateFeeCronView
 
 
 urlpatterns = [
@@ -88,6 +93,16 @@ urlpatterns = [
         name="stripe-webhook",
     ),
     path(
+        "jazzcash/checkout/",
+        JazzCashCheckoutView.as_view(),
+        name="jazzcash-checkout",
+    ),
+    path(
+        "jazzcash/callback/",
+        jazzcash_callback,
+        name="jazzcash-callback",
+    ),
+    path(
         "categories/",
         FeeCategoryListView.as_view(),
         name="fee-category-list",
@@ -111,5 +126,10 @@ urlpatterns = [
         "payments/bulk/",
         BulkPaymentCreateView.as_view(),
         name="payment-bulk-create",
+    ),
+    path(
+        "cron/late-fees/",
+        LateFeeCronView.as_view(),
+        name="late-fee-cron",
     ),
 ]

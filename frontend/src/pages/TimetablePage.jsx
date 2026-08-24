@@ -1,4 +1,5 @@
-import { CalendarDays } from "lucide-react";
+import { useState } from "react";
+import { CalendarDays, Sparkles } from "lucide-react";
 import { useApiList } from "./useApiList";
 import { useAuth } from "../auth";
 import {
@@ -8,9 +9,98 @@ import {
   EmptyState,
   StatusBadge,
 } from "./ui";
+import { apiFetch, authHeaders } from "../api";
 
 const PERIODS_API_URL = "/api/timetable/periods/";
 const ENTRIES_API_URL = "/api/timetable/entries/";
+const GENERATE_URL = "/api/timetable/generate/";
+
+function AutoGeneratePanel() {
+  const [campus, setCampus] = useState("");
+  const [lessons, setLessons] = useState(5);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
+
+  const run = () => {
+    if (!campus) return;
+
+    setBusy(true);
+    setError("");
+    setResult(null);
+
+    apiFetch(GENERATE_URL, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({
+        campus: isNaN(Number(campus)) ? campus : Number(campus),
+        lessons_per_subject: Number(lessons),
+        confirm: true,
+      }),
+    })
+      .then(setResult)
+      .catch((err) => setError(err.message))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="panel">
+      <PanelHeader
+        title="Auto-generate"
+        subtitle="Rebuilds the weekly timetable from teacher assignments. Existing entries for the campus are replaced."
+      />
+
+      <div className="filter-row">
+        <input
+          placeholder="Campus name..."
+          value={campus}
+          onChange={(e) => setCampus(e.target.value)}
+        />
+
+        <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          Lessons/subject/week
+          <input
+            type="number"
+            min="1"
+            max="20"
+            value={lessons}
+            onChange={(e) => setLessons(e.target.value)}
+            style={{ width: 64 }}
+          />
+        </label>
+
+        <button
+          type="button"
+          className="primary-button"
+          disabled={busy || !campus}
+          onClick={() => {
+            if (
+              window.confirm(
+                `Replace the current timetable for "${campus}"?`
+              )
+            ) {
+              run();
+            }
+          }}
+        >
+          <Sparkles size={15} />
+          {busy ? "Generating..." : "Generate"}
+        </button>
+      </div>
+
+      {error && <div className="state-card error">{error}</div>}
+
+      {result && (
+        <p>
+          Created <strong>{result.created}</strong> entries across{" "}
+          <strong>{result.sections}/{result.sections_total}</strong> sections.
+          {result.unplaced_count > 0 &&
+            ` ${result.unplaced_count} lessons could not be placed (teacher conflicts).`}
+        </p>
+      )}
+    </div>
+  );
+}
 
 export default function TimetablePage() {
   const periods = useApiList(PERIODS_API_URL);
@@ -18,6 +108,7 @@ export default function TimetablePage() {
   const { user, hasRole } = useAuth();
 
   const isTeacher = hasRole(["teacher"]);
+  const canGenerate = hasRole(["super_admin", "admin", "principal", "academic"]);
 
   const teacherName = user
     ? `${user.first_name || ""} ${user.last_name || ""}`.trim()
@@ -36,6 +127,8 @@ export default function TimetablePage() {
         title={pageTitle}
         subtitle={pageSubtitle}
       />
+
+      {canGenerate && <AutoGeneratePanel />}
 
       <div className="panel">
         <PanelHeader

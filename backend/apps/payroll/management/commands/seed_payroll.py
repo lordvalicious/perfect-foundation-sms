@@ -36,6 +36,29 @@ class Command(BaseCommand):
             self.stderr.write(self.style.ERROR("No active teachers found. Run teacher seed command first."))
             return
 
+        # Backfill primary_campus from active assignments so campus
+        # scoping (and payslips) work for seeded teachers.
+        fixed_campus = 0
+
+        for teacher in teachers:
+            if teacher.primary_campus_id:
+                continue
+
+            assignment = teacher.assignments.filter(status="active").select_related("campus").first()
+
+            if assignment is not None:
+                teacher.primary_campus = assignment.campus
+                teacher.save(update_fields=["primary_campus"])
+                fixed_campus += 1
+
+        if fixed_campus:
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Backfilled primary_campus for {fixed_campus} teachers "
+                    "from their assignments."
+                )
+            )
+
         structures_created = 0
         records_created = 0
 

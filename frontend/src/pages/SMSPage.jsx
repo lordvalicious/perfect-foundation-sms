@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { MessageSquare, Send, Settings2, AlertCircle, CheckCircle, XCircle } from "lucide-react";
+import { MessageSquare, Send, Settings2, AlertCircle, CheckCircle, XCircle, Mail } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 
 const API_BASE = "/api/communication";
@@ -48,6 +48,13 @@ export default function SMSPage() {
   const [prefs, setPrefs] = useState(null);
   const [prefsLoading, setPrefsLoading] = useState(true);
   const [prefsSaving, setPrefsSaving] = useState(false);
+  const [emailTab, setEmailTab] = useState("compose");
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailMessage, setEmailMessage] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailResult, setEmailResult] = useState(null);
+  const [emailConfigured, setEmailConfigured] = useState(null);
+  const [emailLogs, setEmailLogs] = useState([]);
 
   useEffect(() => {
     fetch(`${API_BASE}/sms/logs/?${logFilter ? `status=${logFilter}` : ""}`, {
@@ -75,6 +82,55 @@ export default function SMSPage() {
       .then((data) => setCampuses(Array.isArray(data) ? data : data.results || []))
       .catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (emailTab === "logs") {
+      fetch(`${API_BASE}/email/logs/`, { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : []))
+        .then(setEmailLogs)
+        .catch(() => setEmailLogs([]));
+    }
+  }, [emailTab]);
+
+  const handleEmailSend = async (e) => {
+    e.preventDefault();
+    if (!emailSubject.trim() || !emailMessage.trim()) return;
+
+    setEmailSending(true);
+    setEmailResult(null);
+
+    try {
+      const body = {
+        subject: emailSubject.trim(),
+        message: emailMessage.trim(),
+      };
+      if (campusId) body.campus_id = Number(campusId);
+      if (role) body.role = role;
+
+      const res = await fetch(`${API_BASE}/email/send/`, {
+        method: "POST",
+        credentials: "include",
+        headers: authHeaders(),
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        setEmailResult({ ok: false, text: data.detail || "Failed to send." });
+      } else {
+        setEmailResult({
+          ok: true,
+          text: `Sent: ${data.sent} | Failed: ${data.failed} | Total: ${data.total_recipients}`,
+        });
+        setEmailSubject("");
+        setEmailMessage("");
+      }
+    } catch (err) {
+      setEmailResult({ ok: false, text: err.message });
+    } finally {
+      setEmailSending(false);
+    }
+  };
 
   const handleSend = async (e) => {
     e.preventDefault();
@@ -156,6 +212,18 @@ export default function SMSPage() {
           onClick={() => setTab("prefs")}
         >
           <Settings2 size={14} /> Preferences
+        </button>
+        <button
+          className={`tab ${tab === "email-compose" ? "active" : ""}`}
+          onClick={() => {
+            setTab("email-compose");
+            fetch(`${API_BASE}/email/send/`, { credentials: "include" })
+              .then((r) => (r.ok ? r.json() : {}))
+              .then((d) => setEmailConfigured(Boolean(d.configured)))
+              .catch(() => setEmailConfigured(false));
+          }}
+        >
+          <Mail size={14} /> Email
         </button>
       </div>
 
@@ -279,6 +347,122 @@ export default function SMSPage() {
               </tbody>
             </table>
           </StateArea>
+        </div>
+      )}
+
+      {tab === "email-compose" && (
+        <div className="panel" style={{ padding: 24, maxWidth: 640 }}>
+          <PanelHeader
+            title="Send Email Broadcast"
+            subtitle={
+              emailConfigured === false
+                ? "Email is not configured — set DJANGO_EMAIL_* variables on the server."
+                : "Uses the school SMTP account."
+            }
+          />
+
+          {emailResult && (
+            <div
+              className={`alert ${emailResult.ok ? "alert-success" : "alert-error"}`}
+              style={{ marginBottom: 16 }}
+            >
+              {emailResult.text}
+            </div>
+          )}
+
+          <form onSubmit={handleEmailSend}>
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label className="form-label">Recipient Group</label>
+              <select
+                className="form-input"
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+              >
+                <option value="">Select group...</option>
+                <option value="all">Everyone</option>
+                <option value="parent">Parents</option>
+                <option value="student">Students</option>
+                <option value="teacher">Teachers</option>
+              </select>
+            </div>
+
+            {role === "parent" || role === "student" ? (
+              <div className="form-group" style={{ marginBottom: 16 }}>
+                <label className="form-label">Campus (optional)</label>
+                <select
+                  className="form-input"
+                  value={campusId}
+                  onChange={(e) => setCampusId(e.target.value)}
+                >
+                  <option value="">All campuses</option>
+                  {campuses.map((campus) => (
+                    <option key={campus.id} value={campus.id}>
+                      {campus.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label className="form-label">Subject</label>
+              <input
+                className="form-input"
+                value={emailSubject}
+                onChange={(e) => setEmailSubject(e.target.value)}
+                placeholder="Email subject"
+              />
+            </div>
+
+            <div className="form-group" style={{ marginBottom: 16 }}>
+              <label className="form-label">Message</label>
+              <textarea
+                className="form-input"
+                rows={5}
+                value={emailMessage}
+                onChange={(e) => setEmailMessage(e.target.value)}
+                placeholder="Write your message..."
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="primary-button"
+              disabled={emailSending || !emailSubject.trim() || !emailMessage.trim()}
+            >
+              <Mail size={15} />
+              {emailSending ? "Sending..." : "Send Email"}
+            </button>
+
+            <button
+              type="button"
+              className="table-action"
+              style={{ marginLeft: 10 }}
+              onClick={() => setEmailTab(emailTab === "compose" ? "logs" : "compose")}
+            >
+              {emailTab === "compose" ? "View email logs" : "Back to compose"}
+            </button>
+
+            {emailTab === "logs" && emailLogs.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                <h4>Recent emails</h4>
+                <table className="data-table">
+                  <thead>
+                    <tr><th>To</th><th>Subject</th><th>Status</th></tr>
+                  </thead>
+                  <tbody>
+                    {emailLogs.slice(0, 20).map((log) => (
+                      <tr key={log.id}>
+                        <td>{log.recipient_email}</td>
+                        <td>{log.subject}</td>
+                        <td>{log.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </form>
         </div>
       )}
 

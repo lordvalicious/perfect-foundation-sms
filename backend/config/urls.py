@@ -123,6 +123,21 @@ urlpatterns = [
         "api/documents/",
         include("apps.documents.urls"),
     ),
+
+    path(
+        "api/discipline/",
+        include("apps.discipline.urls"),
+    ),
+
+    path(
+        "api/homework/",
+        include("apps.homework.urls"),
+    ),
+
+    path(
+        "api/health-records/",
+        include("apps.health.urls"),
+    ),
 ]
 
 urlpatterns += static(

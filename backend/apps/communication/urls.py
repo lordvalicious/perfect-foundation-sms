@@ -12,6 +12,7 @@ from .views import (
     NotificationMarkAllReadView,
     NotificationMarkReadView,
 )
+from .email_views import EmailBroadcastView, EmailLogListView
 from .sms_views import (
     NotificationPreferenceView,
     SMSBroadcastView,
@@ -89,6 +90,16 @@ urlpatterns = [
         "notification-preferences/",
         NotificationPreferenceView.as_view(),
         name="notification-preferences",
+    ),
+    path(
+        "email/send/",
+        EmailBroadcastView.as_view(),
+        name="email-send",
+    ),
+    path(
+        "email/logs/",
+        EmailLogListView.as_view(),
+        name="email-logs",
     ),
     path(
         "templates/",

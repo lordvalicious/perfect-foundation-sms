@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Banknote, BadgePoundSterling, ReceiptText } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatCurrency, formatDate } from "./format";
-import { apiFetch, jsonHeaders } from "../api";
+import { apiFetch, apiDownload, jsonHeaders } from "../api";
 
 const BASE = "/api/payroll/";
 
@@ -225,7 +225,7 @@ export default function PayrollPage() {
                         </td>
 
                         <td>
-                          {record.status !== "paid" ? (
+                          {record.status !== "paid" && (
                             <button
                               type="button"
                               className="table-action"
@@ -234,8 +234,20 @@ export default function PayrollPage() {
                             >
                               {processing === record.id ? "Processing..." : "Mark Paid"}
                             </button>
-                          ) : (
-                            <span className="muted">—</span>
+                          )}
+                          {record.status === "paid" && (
+                            <button
+                              type="button"
+                              className="table-action"
+                              onClick={() =>
+                                apiDownload(
+                                  `${BASE}records/${record.id}/payslip.pdf`,
+                                  `payslip_${record.teacher_number || record.id}_${record.year}_${String(record.month).padStart(2, "0")}.pdf`
+                                ).catch(() => alert("Could not download payslip."))
+                              }
+                            >
+                              Payslip PDF
+                            </button>
                           )}
                         </td>
                       </tr>

@@ -36,6 +36,11 @@ from .export_views import (
     DataExportListView,
     DataExportView,
 )
+from .import_views import (
+    ImportCommitView,
+    ImportPreviewView,
+    ImportTemplateView,
+)
 from .health_views import SystemHealthView
 
 
@@ -189,6 +194,21 @@ urlpatterns = [
         "backup/",
         DataBackupView.as_view(),
         name="data-backup",
+    ),
+    path(
+        "import/templates/<str:import_key>/",
+        ImportTemplateView.as_view(),
+        name="import-template",
+    ),
+    path(
+        "import/preview/",
+        ImportPreviewView.as_view(),
+        name="import-preview",
+    ),
+    path(
+        "import/commit/",
+        ImportCommitView.as_view(),
+        name="import-commit",
     ),
     path(
         "health/",

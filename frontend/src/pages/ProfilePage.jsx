@@ -8,6 +8,7 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  FileText,
   GraduationCap,
   Layers,
   Mail,
@@ -20,6 +21,47 @@ import {
 
 import { StatusBadge } from "./ui";
 import { formatDate } from "./format";
+import { apiDownload } from "../api";
+
+const CERTIFICATE_TYPES = [
+  ["bonafide", "Bonafide"],
+  ["character", "Character"],
+  ["transfer", "Transfer"],
+];
+
+function CertificateButtons({ studentId }) {
+  return (
+    <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {CERTIFICATE_TYPES.map(([value, label]) => (
+        <button
+          key={value}
+          type="button"
+          className="primary-button"
+          onClick={() =>
+            apiDownload(
+              `/api/students/${studentId}/certificate/${value}/`,
+              `${value}_certificate.pdf`
+            ).catch(() => alert("Could not download certificate."))
+          }
+        >
+          {label}
+        </button>
+      ))}
+      <button
+        type="button"
+        className="primary-button"
+        onClick={() =>
+          apiDownload(
+            `/api/students/${studentId}/transcript.pdf`,
+            `transcript.pdf`
+          ).catch(() => alert("Could not download transcript."))
+        }
+      >
+        Transcript
+      </button>
+    </div>
+  );
+}
 const ROLE_LABELS = {
   super_admin: "Super Admin",
   admin: "Admin",
@@ -412,6 +454,12 @@ export default function ProfilePage() {
                     value={
                       <StatusBadge status={profile.status} />
                     }
+                  />
+
+                  <DetailRow
+                    icon={FileText}
+                    label="Certificates"
+                    value={<CertificateButtons studentId={profile.id} />}
                   />
                 </>
               )}

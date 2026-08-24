@@ -52,6 +52,9 @@ INSTALLED_APPS = [
     "apps.reports",
     "apps.search",
     "apps.documents",
+    "apps.discipline",
+    "apps.homework",
+    "apps.health",
 
     "corsheaders",
     "rest_framework",

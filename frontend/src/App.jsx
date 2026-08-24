@@ -16,10 +16,12 @@ import {
   Users,
   GraduationCap,
   ClipboardCheck,
+  HeartPulse,
   Wallet,
   FileText,
   CalendarDays,
   BookOpen,
+  BookOpenCheck,
   Building2,
   Settings,
   Bell,
@@ -48,7 +50,9 @@ import {
   Briefcase,
   Palette,
   Download,
+  Upload,
   Activity,
+  AlertOctagon,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -87,6 +91,11 @@ import BrandingPage from "./pages/BrandingPage";
 import CampusDashboardPage from "./pages/CampusDashboardPage";
 import ExportPage from "./pages/ExportPage";
 import HealthPage from "./pages/HealthPage";
+import DataImportPage from "./pages/DataImportPage";
+import DisciplinePage from "./pages/DisciplinePage";
+import StaffOperationsPage from "./pages/StaffOperationsPage";
+import HomeworkPage from "./pages/HomeworkPage";
+import HealthRecordsPage from "./pages/HealthRecordsPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -279,9 +288,13 @@ const navigation = [
   { label: "Admissions", path: "/admissions", icon: FilePlus2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "vice_principal", "campus_admin", "hr"] },
+  { label: "Staff Leave & Attendance", path: "/staff-operations", icon: CalendarClock, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr"] },
+  { label: "Health Records", path: "/health-records", icon: HeartPulse, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
   { label: "Human Resources", path: "/hr", icon: Briefcase, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr", "accountant"] },
   { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Homework", path: "/homework", icon: BookOpenCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student", "parent"] },
   { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
+  { label: "Discipline", path: "/discipline", icon: AlertOctagon, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
   { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
   { label: "Bulk Finance", path: "/finance/bulk", icon: Layers, roles: ["super_admin", "admin", "accountant"] },
   { label: "Exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
@@ -301,6 +314,7 @@ const navigation = [
   { label: "Reports", path: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Report Builder", path: "/report-builder", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Data Export", path: "/data-export", icon: Download, roles: ["super_admin", "admin"] },
+  { label: "Data Import", path: "/data-import", icon: Upload, roles: ["super_admin", "admin"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
 ];
 
@@ -318,19 +332,19 @@ function findNav(path) {
 const navGroups = [
   {
     label: "People",
-    items: ["/students", "/admissions", "/teachers", "/staff", "/hr", "/parent-portal", "/profile"]
+    items: ["/students", "/admissions", "/teachers", "/staff", "/staff-operations", "/health-records", "/hr", "/parent-portal", "/profile"]
       .map(findNav)
       .filter(Boolean),
   },
   {
     label: "Academics",
-    items: ["/attendance", "/exams", "/report-cards", "/timetable", "/assignments"]
+    items: ["/attendance", "/discipline", "/exams", "/homework", "/report-cards", "/timetable", "/assignments"]
       .map(findNav)
       .filter(Boolean),
   },
   {
     label: "Finance",
-    items: ["/finance", "/finance/bulk", "/payroll", "/reports", "/report-builder", "/data-export"]
+    items: ["/finance", "/finance/bulk", "/payroll", "/reports", "/report-builder", "/data-export", "/data-import"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -736,6 +750,36 @@ function Shell() {
         <Route path="/data-export" element={
           <RequireRoles roles={["super_admin", "admin"]}>
             <ExportPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/data-import" element={
+          <RequireRoles roles={["super_admin", "admin"]}>
+            <DataImportPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/discipline" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"]}>
+            <DisciplinePage />
+          </RequireRoles>
+        } />
+
+        <Route path="/staff-operations" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr"]}>
+            <StaffOperationsPage canReview />
+          </RequireRoles>
+        } />
+
+        <Route path="/homework" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "student", "parent"]}>
+            <HomeworkPage isStudent={hasRole(["student"])} />
+          </RequireRoles>
+        } />
+
+        <Route path="/health-records" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"]}>
+            <HealthRecordsPage />
           </RequireRoles>
         } />
 

@@ -1,0 +1,191 @@
+"""Greedy timetable generator.
+
+Builds a weekly timetable for every section of a campus from existing
+TeacherAssignments and SubjectOfferings:
+
+- Each subject assigned to a section gets ``lessons_per_subject``
+  periods per week.
+- A section can only be in one place at a time; a teacher cannot teach
+  two sections at once. The database-level unique constraints mirror
+  these rules.
+- Subjects are interleaved and slot order is rotated per lesson so the
+  schedule spreads instead of clustering.
+
+Unplaceable lessons (e.g. a teacher overloaded beyond capacity) are
+reported back rather than failing the whole run.
+"""
+
+import random
+
+from django.db import transaction
+
+DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"]
+
+
+def generate_timetable(
+    campus,
+    academic_year,
+    lessons_per_subject=5,
+    days=None,
+    replace=True,
+    seed=None,
+):
+    """Generate entries for one campus + academic year.
+
+    Returns a stats dict:
+        {
+          "sections": n,
+          "requirements": n,
+          "created": n,
+          "unplaced": [{section, subject, reason}],
+        }
+    """
+    from apps.schools.models import Section
+    from apps.teachers.models import TeacherAssignment
+    from .models import Period, TimetableEntry
+
+    if days is None:
+        days = DAYS
+
+    rng = random.Random(seed)
+
+    periods = list(
+        Period.objects.filter(
+            status="active",
+            is_break=False,
+        ).order_by("number")
+    )
+
+    if not periods:
+        raise ValueError("No teaching periods configured.")
+
+    assignments = list(
+        TeacherAssignment.objects
+        .filter(
+            campus=campus,
+            academic_year=academic_year,
+            status="active",
+        )
+        .select_related("class_obj", "section", "subject", "teacher")
+    )
+
+    if not assignments:
+        raise ValueError(
+            "No active teacher assignments found for this campus "
+            "and academic year."
+        )
+
+    # Requirements per section.
+    section_map = {}
+
+    for assignment in assignments:
+        key = assignment.section_id or assignment.class_obj_id
+        entry = section_map.setdefault(
+            key,
+            {
+                "class_obj": assignment.class_obj,
+                "section": assignment.section,
+                "items": [],
+            },
+        )
+        entry["items"].append((assignment.subject, assignment.teacher))
+
+    slots = [
+        (day, period)
+        for day in days
+        for period in periods
+    ]
+
+    created = 0
+    unplaced = []
+    sections_covered = 0
+
+    busy_teacher = {}
+    busy_section = {}
+
+    def _mark(teacher_id, section_key, slot):
+        busy_teacher[(teacher_id, slot)] = True
+        busy_section[(section_key, slot)] = True
+
+    def _free(teacher_id, section_key, slot):
+        return not (
+            busy_teacher.get((teacher_id, slot))
+            or busy_section.get((section_key, slot))
+        )
+
+    with transaction.atomic():
+        if replace:
+            TimetableEntry.objects.filter(
+                campus=campus,
+                academic_year=academic_year,
+            ).delete()
+
+        for key in sorted(section_map):
+            info = section_map[key]
+            section_key = (
+                info["section"].id if info["section"] else key
+            )
+
+            # Interleave subjects: [A,B,C,A,B,C...] not AAA BBB CCC.
+            pool = []
+            counters = {}
+
+            for subject, teacher in info["items"]:
+                for _ in range(lessons_per_subject):
+                    index = counters.get(subject.id, 0)
+                    pool.append((index, subject.id, subject, teacher))
+                    counters[subject.id] = index + 1
+
+            pool.sort(key=lambda item: (item[0], rng.random()))
+
+            placed_any = False
+
+            for _, _, subject, teacher in pool:
+                order = list(slots)
+                rng.shuffle(order)
+
+                placed = False
+
+                for slot in order:
+                    if _free(teacher.id, section_key, slot):
+                        day, period = slot
+
+                        TimetableEntry.objects.create(
+                            academic_year=academic_year,
+                            campus=campus,
+                            class_obj=info["class_obj"],
+                            section=info["section"],
+                            subject=subject,
+                            teacher=teacher,
+                            period=period,
+                            day=day,
+                        )
+
+                        _mark(teacher.id, section_key, slot)
+                        created += 1
+                        placed = True
+                        placed_any = True
+                        break
+
+                if not placed:
+                    unplaced.append({
+                        "section": (
+                            info["section"].name
+                            if info["section"]
+                            else info["class_obj"].name
+                        ),
+                        "subject": subject.name,
+                        "reason": f"No free slot for {teacher.full_name}",
+                    })
+
+            if placed_any:
+                sections_covered += 1
+
+    return {
+        "sections": sections_covered,
+        "sections_total": len(section_map),
+        "requirements": sum(len(v["items"]) for v in section_map.values()),
+        "created": created,
+        "unplaced": unplaced[:50],
+        "unplaced_count": len(unplaced),
+    }

@@ -8,8 +8,23 @@ import {
   ClipboardCheck,
   CalendarDays,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  AreaChart,
+  Area,
+  Legend,
+} from "recharts";
 
 const API_URL = "/api/dashboard/overview/";
+const ENROLLMENT_REPORT_URL = "/api/reports/enrollment/";
+const ATTENDANCE_REPORT_URL = "/api/reports/attendance/";
+const COLLECTION_TREND_URL = "/api/reports/collection-trend/?months=6";
 
 function useCountUp(value) {
   const [display, setDisplay] = useState(0);
@@ -52,6 +67,9 @@ function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [enrollmentByCampus, setEnrollmentByCampus] = useState([]);
+  const [attendanceRows, setAttendanceRows] = useState([]);
+  const [collectionTrend, setCollectionTrend] = useState([]);
 
   useEffect(() => {
     fetch(API_URL, { credentials: "include" })
@@ -70,6 +88,57 @@ function Dashboard() {
         setError(err.message);
         setLoading(false);
       });
+
+    // Charts — reports are optional; failures just hide the chart.
+    fetch(ENROLLMENT_REPORT_URL, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!data || !Array.isArray(data.classes)) return;
+
+        const byCampus = {};
+
+        for (const row of data.classes) {
+          byCampus[row.campus] =
+            (byCampus[row.campus] || 0) + (row.total || 0);
+        }
+
+        setEnrollmentByCampus(
+          Object.entries(byCampus).map(([campus, students]) => ({
+            campus,
+            students,
+          }))
+        );
+      })
+      .catch(() => {});
+
+    fetch(ATTENDANCE_REPORT_URL, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!Array.isArray(data?.classes)) return;
+
+        setAttendanceRows(
+          data.classes.map((row) => ({
+            name: `${row.class}`.slice(0, 14),
+            rate: row.attendance_rate ?? 0,
+          }))
+        );
+      })
+      .catch(() => {});
+
+    fetch(COLLECTION_TREND_URL, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (!Array.isArray(data?.months_data)) return;
+
+        setCollectionTrend(
+          data.months_data.map((row) => ({
+            month: String(row.month).slice(2),
+            invoiced: Number(row.invoiced),
+            collected: Number(row.collected),
+          }))
+        );
+      })
+      .catch(() => {});
   }, []);
 
   const stats = dashboard
@@ -166,6 +235,96 @@ function Dashboard() {
               </div>
             ))}
           </div>
+
+          {(enrollmentByCampus.length > 0 ||
+            attendanceRows.length > 0 ||
+            collectionTrend.length > 0) && (
+            <div className="dashboard-grid">
+              {collectionTrend.length > 0 && (
+                <div className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>Fee Collection Trend</h3>
+                      <p>Invoiced vs collected — last 6 months</p>
+                    </div>
+                  </div>
+
+                  <div style={{ width: "100%", height: 240 }}>
+                    <ResponsiveContainer>
+                      <AreaChart
+                        data={collectionTrend}
+                        margin={{ left: -10, right: 10, top: 5 }}
+                      >
+                        <defs>
+                          <linearGradient id="inv" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="col" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
+                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                        <XAxis dataKey="month" fontSize={11} />
+                        <YAxis fontSize={11} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                        <Tooltip formatter={(v) => Number(v).toLocaleString()} />
+                        <Legend />
+                        <Area type="monotone" dataKey="invoiced" stroke="#6366f1" fill="url(#inv)" strokeWidth={2} />
+                        <Area type="monotone" dataKey="collected" stroke="#22c55e" fill="url(#col)" strokeWidth={2} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {enrollmentByCampus.length > 0 && (
+                <div className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>Enrollment by Campus</h3>
+                      <p>Active students per campus</p>
+                    </div>
+                  </div>
+
+                  <div style={{ width: "100%", height: 240 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={enrollmentByCampus} margin={{ left: -20, right: 10, top: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                        <XAxis dataKey="campus" fontSize={11} />
+                        <YAxis fontSize={11} allowDecimals={false} />
+                        <Tooltip />
+                        <Bar dataKey="students" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+
+              {attendanceRows.length > 0 && (
+                <div className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <h3>Attendance Rate by Class</h3>
+                      <p>Present + late as share of all records</p>
+                    </div>
+                  </div>
+
+                  <div style={{ width: "100%", height: 240 }}>
+                    <ResponsiveContainer>
+                      <BarChart data={attendanceRows} layout="vertical" margin={{ left: 10, right: 20 }}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                        <XAxis type="number" domain={[0, 100]} fontSize={11} unit="%" />
+                        <YAxis type="category" dataKey="name" fontSize={11} width={90} />
+                        <Tooltip formatter={(v) => `${v}%`} />
+                        <Bar dataKey="rate" fill="#22c55e" radius={[0, 6, 6, 0]} maxBarSize={18} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="dashboard-grid">
             <div className="panel">

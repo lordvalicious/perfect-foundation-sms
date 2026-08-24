@@ -29,10 +29,11 @@ def payroll_queryset(queryset, request, teacher_path="teacher"):
         institution = get_institution(request)
 
     if institution is not None:
+        from django.db.models import Q
+
         queryset = queryset.filter(
-            **{
-                f"{teacher_path}__membership__institution": institution,
-            },
+            Q(**{f"{teacher_path}__membership__institution": institution})
+            | Q(**{f"{teacher_path}__primary_campus__school": institution})
         )
 
     return apply_campus_scope(

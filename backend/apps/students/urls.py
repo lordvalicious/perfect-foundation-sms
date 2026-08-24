@@ -1,5 +1,7 @@
 from django.urls import path
 
+from .certificates import StudentCertificatePdfView
+from .transcripts import StudentTranscriptPdfView
 from .views import (
     AdmissionApplicationAcceptView,
     AdmissionApplicationDetailView,
@@ -116,6 +118,18 @@ urlpatterns = [
         "enrollments/",
         EnrollmentListCreateView.as_view(),
         name="enrollment-list",
+    ),
+
+    path(
+        "<int:pk>/certificate/<str:cert_type>/",
+        StudentCertificatePdfView.as_view(),
+        name="student-certificate",
+    ),
+
+    path(
+        "<int:pk>/transcript.pdf",
+        StudentTranscriptPdfView.as_view(),
+        name="student-transcript",
     ),
 
     path(

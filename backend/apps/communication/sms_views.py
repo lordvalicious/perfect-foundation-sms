@@ -85,7 +85,7 @@ class SMSBroadcastView(APIView):
             student_ids = list(
                 User.objects.filter(
                     id__in=recipient_ids,
-                    student_profile_id__isnull=False,
+                    student_profile__isnull=False,
                 ).values_list("student_profile_id", flat=True)
             )
             if student_ids:
@@ -106,7 +106,7 @@ class SMSBroadcastView(APIView):
 
             elif role == "parent":
                 users_qs = User.objects.filter(
-                    guardian_profile_id__isnull=False
+                    guardian_profile__isnull=False
                 )
                 if campus_id:
                     student_ids = Student.objects.filter(
@@ -128,7 +128,7 @@ class SMSBroadcastView(APIView):
             elif role == "student":
                 users_qs = User.objects.filter(
                     memberships__status="active",
-                    student_profile_id__isnull=False,
+                    student_profile__isnull=False,
                 ).distinct()
                 if campus_id:
                     users_qs = users_qs.filter(
@@ -140,7 +140,7 @@ class SMSBroadcastView(APIView):
             elif role == "teacher":
                 users_qs = User.objects.filter(
                     memberships__status="active",
-                    teacher_profile_id__isnull=False,
+                    teacher_profile__isnull=False,
                 ).distinct()
                 if campus_id:
                     users_qs = users_qs.filter(
