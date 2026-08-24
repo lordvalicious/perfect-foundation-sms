@@ -244,7 +244,8 @@ class Invoice(models.Model):
         concession_total = sum(
             (
                 concession.amount
-                for concession in self.concessions.filter(status="approved")
+                for concession in self.concessions.all()
+                if concession.status == "approved"
             ),
             Decimal("0.00"),
         )
@@ -256,9 +257,8 @@ class Invoice(models.Model):
         return sum(
             (
                 payment.net_amount
-                for payment in self.payments.filter(
-                    status="completed"
-                )
+                for payment in self.payments.all()
+                if payment.status == "completed"
             ),
             Decimal("0.00"),
         )
@@ -472,14 +472,14 @@ class Payment(models.Model):
     @property
     def reversed_amount(self):
         return sum(
-            (reversal.amount for reversal in self.reversals.filter(status="completed")),
+            (reversal.amount for reversal in self.reversals.all() if reversal.status == "completed"),
             Decimal("0.00"),
         )
 
     @property
     def net_amount(self):
         refunded = sum(
-            (refund.amount for refund in self.refunds.filter(status="completed")),
+            (refund.amount for refund in self.refunds.all() if refund.status == "completed"),
             Decimal("0.00"),
         )
         return max(

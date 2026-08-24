@@ -63,7 +63,13 @@ EXPORT_CONFIGS = {
             "enrollment__class_obj",
             "academic_year",
         ],
-        "prefetch_related": ["items", "payments", "concessions"],
+        "prefetch_related": [
+            "items",
+            "payments",
+            "payments__refunds",
+            "payments__reversals",
+            "concessions",
+        ],
         "filename": "invoices_export",
     },
     "payments": {
@@ -84,6 +90,7 @@ EXPORT_CONFIGS = {
             "invoice__enrollment__student",
             "invoice__enrollment__campus",
         ],
+        "prefetch_related": ["refunds", "reversals"],
         "filename": "payments_export",
     },
     "attendance": {

@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import IsAccountantRole
 
-from .utils import quantize, to_csv
+from .utils import prefetch_reportcard_results, quantize, to_csv
 
 
 class EnrollmentReportView(APIView):
@@ -319,6 +319,8 @@ class ResultsReportView(APIView):
             return []
 
         queryset = queryset.filter(exam_id=exam)
+
+        prefetch_reportcard_results(queryset)
 
         rows = []
 
@@ -1262,6 +1264,13 @@ class FeeDefaultersReportView(APIView):
         queryset = (
             Invoice.objects
             .filter(status__in=["issued", "partial", "overdue"])
+            .prefetch_related(
+                "items",
+                "payments",
+                "payments__refunds",
+                "payments__reversals",
+                "concessions",
+            )
             .select_related(
                 "student",
                 "enrollment__campus",
@@ -1471,6 +1480,8 @@ class ClassPerformanceReportView(APIView):
         academic_year = request.query_params.get("academic_year")
         if academic_year:
             queryset = queryset.filter(exam__academic_year_id=academic_year)
+
+        prefetch_reportcard_results(queryset)
 
         classes = {}
 

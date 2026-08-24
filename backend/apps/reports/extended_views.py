@@ -14,7 +14,7 @@ from rest_framework.views import APIView
 from apps.accounts.access import apply_campus_scope, institution_scope
 from apps.accounts.permissions import IsAccountantRole
 
-from .utils import quantize, to_csv
+from .utils import prefetch_reportcard_results, quantize, to_csv
 
 
 def _month_label(year, month):
@@ -61,7 +61,13 @@ class CollectionTrendReportView(APIView):
         invoices = (
             Invoice.objects
             .filter(status__in=["issued", "partial", "paid", "overdue"])
-            .prefetch_related("items", "concessions")
+            .prefetch_related(
+                "items",
+                "concessions",
+                "payments",
+                "payments__refunds",
+                "payments__reversals",
+            )
         )
         invoices = apply_campus_scope(
             invoices,
@@ -87,6 +93,7 @@ class CollectionTrendReportView(APIView):
             Payment.objects
             .filter(status="completed")
             .select_related("invoice__enrollment__campus")
+            .prefetch_related("refunds", "reversals")
         )
         payments = apply_campus_scope(
             payments,
@@ -1328,7 +1335,7 @@ class TopPerformersReportView(APIView):
         classes = {}
 
         cards = sorted(
-            queryset,
+            prefetch_reportcard_results(queryset),
             key=lambda card: card.percentage,
             reverse=True,
         )
