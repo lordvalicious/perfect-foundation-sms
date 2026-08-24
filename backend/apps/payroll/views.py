@@ -17,16 +17,29 @@ from .serializers import (
 )
 
 
-def payroll_queryset(model, request, teacher_path="teacher"):
-    queryset = model.objects.filter(
-        **{
-            f"{teacher_path}__membership__institution": request.institution,
-        },
-    )
+def payroll_queryset(queryset, request, teacher_path="teacher"):
+    """Scope a payroll-related queryset (already built by the caller,
+    e.g. ``SalaryStructure.objects.select_related("teacher")``) to the
+    active institution and the user's campus access."""
+    institution = getattr(request, "institution", None)
+
+    if institution is None:
+        from apps.accounts.access import get_institution
+
+        institution = get_institution(request)
+
+    if institution is not None:
+        queryset = queryset.filter(
+            **{
+                f"{teacher_path}__membership__institution": institution,
+            },
+        )
+
     return apply_campus_scope(
         queryset,
         request,
         f"{teacher_path}__primary_campus_id",
+        institution_field=None,
     )
 
 
