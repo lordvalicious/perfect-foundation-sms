@@ -129,6 +129,7 @@ export default function AssignmentsPage() {
     academic_year: "",
     class_obj: "",
     section: "",
+    roll_number: "",
     status: "active",
   };
 
@@ -371,6 +372,7 @@ export default function AssignmentsPage() {
           campus: enrollmentForm.campus,
           class_obj: enrollmentForm.class_obj,
           section: enrollmentForm.section,
+          roll_number: enrollmentForm.roll_number,
           status: enrollmentForm.status,
         }),
       });
@@ -612,6 +614,17 @@ export default function AssignmentsPage() {
                   required
                 >
                   <option value="">Select section</option>
+
+              <label>
+                Roll Number
+                <input
+                  name="roll_number"
+                  value={enrollmentForm.roll_number}
+                  onChange={handleEnrollmentChange}
+                  maxLength={20}
+                  placeholder="Optional"
+                />
+              </label>
 
                   {sectionsForClass(
                     assignmentForm.class_obj
@@ -914,6 +927,7 @@ export default function AssignmentsPage() {
                       <th>STUDENT</th>
                       <th>GRADE</th>
                       <th>SECTION</th>
+                      <th>ROLL NO.</th>
                       <th>YEAR</th>
                       <th>STATUS</th>
                       <th>DATE</th>
@@ -933,6 +947,8 @@ export default function AssignmentsPage() {
                         <td>{enrollment.class_name}</td>
 
                         <td>{enrollment.section_name}</td>
+
+                        <td>{enrollment.roll_number || "-"}</td>
 
                         <td>{enrollment.academic_year_name}</td>
 
