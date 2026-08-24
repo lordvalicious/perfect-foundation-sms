@@ -1,6 +1,7 @@
 from django.urls import path
 
 from .branding_views import SchoolBrandingView
+from .tenant_views import PublicTenantConfigView
 from .views import (
     AcademicUnitListView,
     AcademicYearListView,
@@ -25,4 +26,5 @@ urlpatterns = [
     path("subjects/", SubjectListView.as_view(), name="subject-list"),
     path("offerings/", SubjectOfferingListView.as_view(), name="subject-offering-list"),
     path("branding/", SchoolBrandingView.as_view(), name="school-branding"),
+    path("tenant-config/", PublicTenantConfigView.as_view(), name="public-tenant-config"),
 ]

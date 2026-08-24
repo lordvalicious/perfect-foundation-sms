@@ -1,11 +1,19 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.schools.models import AcademicYear, Campus, Class, Section, Subject
+from apps.schools.models import AcademicYear, Campus, Class, School, Section, Subject
 from apps.teachers.models import Teacher
 
 
 class Period(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="periods",
+        null=True,
+        blank=True,
+    )
+
     name = models.CharField(max_length=50)
     number = models.PositiveIntegerField()
     start_time = models.TimeField()
@@ -24,8 +32,8 @@ class Period(models.Model):
         ordering = ["number"]
         constraints = [
             models.UniqueConstraint(
-                fields=["number"],
-                name="unique_period_number",
+                fields=["institution", "number"],
+                name="unique_period_number_per_institution",
             ),
         ]
 

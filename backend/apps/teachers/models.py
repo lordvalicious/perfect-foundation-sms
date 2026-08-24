@@ -1,6 +1,8 @@
 from django.core.exceptions import ValidationError
 from django.db import models  # type: ignore[import]
 
+from apps.schools.models import School
+
 
 class Teacher(models.Model):
     GENDER_CHOICES = [
@@ -14,9 +16,16 @@ class Teacher(models.Model):
         ("inactive", "Inactive"),
     ]
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="teachers",
+        null=True,
+        blank=True,
+    )
+
     employee_number = models.CharField(
         max_length=50,
-        unique=True,
     )
 
     user = models.OneToOneField(
@@ -112,6 +121,12 @@ class Teacher(models.Model):
 
     class Meta:
         ordering = ["first_name", "last_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "employee_number"],
+                name="unique_teacher_employee_number_per_institution",
+            )
+        ]
 
     @property
     def full_name(self):

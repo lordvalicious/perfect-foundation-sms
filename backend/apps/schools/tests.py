@@ -1,7 +1,11 @@
 from datetime import date
 
+from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from rest_framework.test import APIClient
+
+from apps.accounts.models import InstitutionMembership, Role, RoleAssignment
 
 from .models import (
 	AcademicUnit,
@@ -35,6 +39,56 @@ class AcademicStructureModelTests(TestCase):
 
 		with self.assertRaises(ValidationError):
 			duplicate.full_clean()
+
+
+class TenantBrandingApiTests(TestCase):
+	def setUp(self):
+		self.school_a = School.objects.create(name="School A", code="school-a")
+		self.school_b = School.objects.create(name="School B", code="school-b")
+		self.user = get_user_model().objects.create_user(
+			username="admin-a",
+			email="admin-a@test.edu",
+			password="TestPass123!",
+		)
+		membership = InstitutionMembership.objects.create(
+			user=self.user,
+			institution=self.school_a,
+		)
+		RoleAssignment.objects.create(membership=membership, role=Role.ADMIN)
+		self.client = APIClient()
+
+	def test_branding_is_resolved_from_authenticated_tenant(self):
+		self.client.login(username="admin-a", password="TestPass123!")
+		response = self.client.get("/api/schools/branding/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["school_code"], "school-a")
+		self.assertEqual(response.data["school_name"], "School A")
+
+	def test_branding_update_cannot_touch_another_tenant(self):
+		self.client.login(username="admin-a", password="TestPass123!")
+		response = self.client.put(
+			"/api/schools/branding/",
+			{"school_name": "Changed A"},
+			format="multipart",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(School.objects.get(pk=self.school_a.pk).name, "Changed A")
+		self.assertEqual(School.objects.get(pk=self.school_b.pk).name, "School B")
+
+	def test_public_config_requires_a_valid_active_code(self):
+		response = self.client.get(
+			"/api/schools/tenant-config/?school_code=school-b"
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["school_name"], "School B")
+
+		missing = self.client.get(
+			"/api/schools/tenant-config/?school_code=missing"
+		)
+		self.assertEqual(missing.status_code, 404)
 
 	def test_subject_offering_is_unique_for_class_and_year(self):
 		SubjectOffering.objects.create(

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogIn, ShieldCheck } from "lucide-react";
 import { useAuth } from "../auth";
@@ -11,6 +11,30 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [branding, setBranding] = useState(null);
+  const schoolCode = new URLSearchParams(window.location.search).get("school_code") || "";
+
+  useEffect(() => {
+    if (!schoolCode) return undefined;
+
+    fetch(`/api/schools/tenant-config/?school_code=${encodeURIComponent(schoolCode)}`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (data) {
+          setBranding(data);
+          document.title = data.school_name;
+          if (data.favicon_url) {
+            const favicon = document.querySelector("link[rel='icon']") || document.createElement("link");
+            favicon.rel = "icon";
+            favicon.href = data.favicon_url;
+            document.head.appendChild(favicon);
+          }
+        }
+      })
+      .catch(() => {});
+
+    return undefined;
+  }, [schoolCode]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -19,7 +43,7 @@ export default function LoginPage() {
     setError("");
 
     try {
-      await login(identifier, password);
+      await login(identifier, password, schoolCode);
       navigate("/", { replace: true });
     } catch (err) {
       setError(err.message);
@@ -31,14 +55,14 @@ export default function LoginPage() {
   return (
     <div className="login-page">
       <div className="login-card">
-        <div className="login-emblem">
-          <ShieldCheck size={32} />
+        <div className="login-emblem" style={branding?.primary_color ? { background: branding.primary_color } : undefined}>
+          {branding?.logo_url ? <img src={branding.logo_url} alt="" /> : <ShieldCheck size={32} />}
         </div>
 
-        <h1>Perfect Foundation</h1>
+        <h1>{branding?.school_name || "School Management"}</h1>
 
         <p className="login-subtitle">
-          School Management Portal
+          {branding?.motto || "School Management Portal"}
         </p>
 
         <form onSubmit={handleSubmit}>
@@ -50,7 +74,7 @@ export default function LoginPage() {
               onChange={(event) =>
                 setIdentifier(event.target.value)
               }
-              placeholder="admin"
+              placeholder="Username or email"
               autoComplete="username"
               required
             />

@@ -1,6 +1,8 @@
 from django.contrib.auth import get_user_model
 from django.db import models
 
+from apps.schools.models import School
+
 
 class AuditLog(models.Model):
     ACTION_CHOICES = [
@@ -27,6 +29,14 @@ class AuditLog(models.Model):
         ("staff_leave_rejected", "Staff Leave Rejected"),
         ("other", "Other"),
     ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="audit_logs",
+    )
 
     user = models.ForeignKey(
         get_user_model(),

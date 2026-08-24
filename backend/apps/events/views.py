@@ -42,7 +42,7 @@ class EventListCreateView(generics.ListCreateAPIView):
         ):
             queryset = queryset.filter(status="published")
 
-        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+        queryset = apply_campus_scope(queryset, self.request, "campus_id", institution_field="school_id")
 
         status_param = self.request.query_params.get("status")
 

@@ -1,6 +1,6 @@
 from django.db import models
 
-from apps.schools.models import Campus
+from apps.schools.models import Campus, School
 
 
 class Book(models.Model):
@@ -17,6 +17,13 @@ class Book(models.Model):
         ("other", "Other"),
     ]
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="library_books_tenant",
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=255)
     campus = models.ForeignKey(
         Campus,
@@ -28,7 +35,6 @@ class Book(models.Model):
     author = models.CharField(max_length=255, blank=True)
     isbn = models.CharField(
         max_length=32,
-        unique=True,
         blank=True,
     )
     publisher = models.CharField(max_length=255, blank=True)

@@ -5,6 +5,8 @@ Implements the ERP permission rules:
 - Rule 1 — Campus isolation: a user may only access data for the campuses
   they belong to, unless their role has GLOBAL scope. Records with no
   campus value are school-wide and remain visible to every member.
+- Rule 1b — Institution isolation: every query is scoped to the user's
+  active institution. Cross-tenant data access is never permitted.
 - Rule 2 — Backend enforcement: every campus-scoped queryset goes through
   these helpers. The frontend never decides authorization.
 - Rule 3 — Role + scope: views combine a role-based permission class with
@@ -25,6 +27,34 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 
 GLOBAL_ROLES = ["super_admin", "admin", "academic"]
+
+
+# ---------------------------------------------------------------------------
+# Institution helpers
+# ---------------------------------------------------------------------------
+
+def get_institution(request):
+    """Return the active institution from the request.
+
+    Falls back to thread-local storage set by TenantMiddleware.
+    """
+    institution = getattr(request, "institution", None)
+    if institution is None:
+        from apps.accounts.managers import get_current_institution
+        institution = get_current_institution()
+    return institution
+
+
+def institution_scope(queryset, request, institution_field="institution_id"):
+    """Filter a queryset to the active institution.
+
+    ``institution_field`` is the ORM path to the institution FK on the model.
+    If the model already has an ``institution`` FK this works out of the box.
+    """
+    institution = get_institution(request)
+    if institution is not None:
+        return queryset.filter(**{institution_field: institution})
+    return queryset.none()
 
 
 def is_global(user):
@@ -218,18 +248,34 @@ def restrict_to_allowed_campuses(queryset, user, campus_field="campus_id"):
     return queryset
 
 
-def apply_campus_scope(queryset, request, campus_field="campus_id"):
+def apply_campus_scope(queryset, request, campus_field="campus_id", institution_field="institution_id"):
     """Restrict a campus-scoped queryset to the user's allowed campuses.
 
     ``campus_field`` is the ORM path to the campus relation, e.g.
     ``"campus_id"``, ``"unit__campus_id"``, ``"class_obj__unit__campus_id"``
     or ``"primary_campus_id"``.
 
+    ``institution_field`` is the ORM path to the institution relation, e.g.
+    ``"institution_id"`` or ``"school_id"``.  When ``None`` (the default),
+    institution scoping is skipped.  When set, records matching the active
+    institution OR records with no institution value (school-wide legacy data)
+    are included.
+
     Global users are filtered by the optional ``campus`` param (all when
     absent). Non-global users are always limited to their allowed campuses,
     and asking for another campus is rejected earlier in ``campus_access``.
     Records with no campus value are school-wide and stay visible.
     """
+    # --- Institution scoping (new) ---
+    if institution_field:
+        institution = get_institution(request)
+        if institution is not None:
+            queryset = queryset.filter(
+                Q(**{institution_field: institution})
+                | Q(**{f"{institution_field}__isnull": True})
+            )
+
+    # --- Campus scoping (existing) ---
     access = campus_access(request)
 
     if access["global"]:

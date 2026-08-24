@@ -1,22 +1,42 @@
 from django.db import models
 
-from apps.schools.models import Campus
+from apps.schools.models import Campus, School
 
 
 class AssetCategory(models.Model):
-    name = models.CharField(max_length=100, unique=True)
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="asset_categories",
+        null=True,
+        blank=True,
+    )
+    name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         ordering = ["name"]
         verbose_name_plural = "asset categories"
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "name"],
+                name="unique_asset_category_name_per_institution",
+            )
+        ]
 
     def __str__(self):
         return self.name
 
 
 class Supplier(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="suppliers",
+        null=True,
+        blank=True,
+    )
     name = models.CharField(max_length=200)
     contact_person = models.CharField(max_length=100, blank=True)
     phone = models.CharField(max_length=20, blank=True)
@@ -40,6 +60,13 @@ class Asset(models.Model):
         ("retired", "Retired"),
     ]
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="inventory_assets",
+        null=True,
+        blank=True,
+    )
     name = models.CharField(max_length=200)
     campus = models.ForeignKey(
         Campus,
@@ -48,7 +75,7 @@ class Asset(models.Model):
         blank=True,
         related_name="assets",
     )
-    code = models.CharField(max_length=50, unique=True, blank=True)
+    code = models.CharField(max_length=50, blank=True)
     category = models.ForeignKey(
         AssetCategory,
         on_delete=models.SET_NULL,
@@ -82,6 +109,12 @@ class Asset(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "code"],
+                name="unique_asset_code_per_institution",
+            )
+        ]
 
     @property
     def total_value(self):

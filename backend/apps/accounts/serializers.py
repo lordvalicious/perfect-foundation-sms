@@ -523,6 +523,7 @@ class StaffLeaveActionSerializer(serializers.Serializer):
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=False)
     email = serializers.EmailField(required=False)
+    school_code = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(
         trim_whitespace=False,
         style={"input_type": "password"},
@@ -555,6 +556,15 @@ class LoginSerializer(serializers.Serializer):
         if not user.is_active:
             raise serializers.ValidationError(
                 "This account has been deactivated."
+            )
+
+        school_code = attrs.get("school_code", "").strip().lower()
+        if school_code and not user.memberships.filter(
+            institution__code=school_code,
+            status="active",
+        ).exists():
+            raise serializers.ValidationError(
+                "This account is not a member of the selected school."
             )
 
         attrs["user"] = user

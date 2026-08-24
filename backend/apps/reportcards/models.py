@@ -5,6 +5,7 @@ from django.db import models
 from django.utils import timezone
 
 from apps.exams.models import Exam
+from apps.schools.models import School
 from apps.students.models import Student
 
 
@@ -524,9 +525,16 @@ class GradeScale(models.Model):
     is used for automated grade calculation.
     """
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="grade_scales",
+        null=True,
+        blank=True,
+    )
+
     name = models.CharField(
         max_length=100,
-        unique=True,
     )
 
     is_default = models.BooleanField(
@@ -539,6 +547,12 @@ class GradeScale(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "name"],
+                name="unique_grade_scale_name_per_institution",
+            )
+        ]
 
     def save(self, *args, **kwargs):
         if self.is_default:

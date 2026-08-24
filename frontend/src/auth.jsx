@@ -75,7 +75,7 @@ export function AuthProvider({ children }) {
   }, [fetchMe]);
 
   const login = useCallback(
-    async (username, password) => {
+    async (username, password, schoolCode = "") => {
       setError("");
 
       await fetch("/api/auth/csrf/", {
@@ -90,7 +90,7 @@ export function AuthProvider({ children }) {
           "Content-Type": "application/json",
           "X-CSRFToken": getCookie("csrftoken") || "",
         },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username, password, school_code: schoolCode }),
       });
 
       const data = await readJson(

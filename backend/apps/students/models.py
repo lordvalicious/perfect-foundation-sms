@@ -6,6 +6,14 @@ from apps.schools.models import AcademicYear, Campus, Class, Section
 
 
 class Guardian(models.Model):
+    institution = models.ForeignKey(
+        "schools.School",
+        on_delete=models.CASCADE,
+        related_name="guardians",
+        null=True,
+        blank=True,
+    )
+
     user = models.OneToOneField(
         "accounts.User",
         on_delete=models.SET_NULL,
@@ -60,6 +68,14 @@ class StudentGuardian(models.Model):
 
 
 class AdmissionApplication(models.Model):
+    institution = models.ForeignKey(
+        "schools.School",
+        on_delete=models.CASCADE,
+        related_name="admission_applications_tenant",
+        null=True,
+        blank=True,
+    )
+
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("submitted", "Submitted"),
@@ -151,6 +167,14 @@ class AdmissionApplication(models.Model):
 
 
 class StudentLifecycleEvent(models.Model):
+    institution = models.ForeignKey(
+        "schools.School",
+        on_delete=models.CASCADE,
+        related_name="student_lifecycle_events",
+        null=True,
+        blank=True,
+    )
+
     EVENT_CHOICES = [
         ("activated", "Activated"),
         ("inactive", "Marked inactive"),
@@ -209,9 +233,16 @@ class StudentLifecycleEvent(models.Model):
 
 
 class Student(models.Model):
+    institution = models.ForeignKey(
+        "schools.School",
+        on_delete=models.CASCADE,
+        related_name="students",
+        null=True,
+        blank=True,
+    )
+
     admission_number = models.CharField(
         max_length=50,
-        unique=True,
     )
 
     user = models.OneToOneField(
@@ -283,6 +314,14 @@ class Student(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "admission_number"],
+                name="unique_admission_number_per_institution",
+            )
+        ]
 
     def __str__(self):
         return f"{self.admission_number} - {self.full_name}"
@@ -420,6 +459,14 @@ class Enrollment(models.Model):
 
 
 class StudentDocument(models.Model):
+    institution = models.ForeignKey(
+        "schools.School",
+        on_delete=models.CASCADE,
+        related_name="student_documents",
+        null=True,
+        blank=True,
+    )
+
     student = models.ForeignKey(
         Student,
         on_delete=models.CASCADE,
@@ -466,6 +513,14 @@ class StudentDocument(models.Model):
 
 
 class StudentLeaveRequest(models.Model):
+    institution = models.ForeignKey(
+        "schools.School",
+        on_delete=models.CASCADE,
+        related_name="student_leave_requests",
+        null=True,
+        blank=True,
+    )
+
     STATUS_CHOICES = [
         ("pending", "Pending"),
         ("approved", "Approved"),

@@ -1,6 +1,5 @@
 """API views for school branding settings."""
 
-from django.test import RequestFactory
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -15,7 +14,7 @@ class SchoolBrandingView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def _get_settings(self, request):
-        school = School.objects.first()
+        school = getattr(request, "institution", None)
         if not school:
             return None, school
         settings, _ = SchoolSettings.objects.get_or_create(school=school)
@@ -37,6 +36,7 @@ class SchoolBrandingView(APIView):
             favicon_url = request.build_absolute_uri(settings.favicon.url) if request_build else settings.favicon.url
 
         return Response({
+            "school_code": school.code,
             "school_name": school.name,
             "motto": settings.motto,
             "logo_url": logo_url,
@@ -49,6 +49,8 @@ class SchoolBrandingView(APIView):
             "contact_website": settings.contact_website,
             "address_line": settings.address_line,
             "footer_text": settings.footer_text,
+            "sidebar_color": settings.sidebar_color,
+            "header_color": settings.header_color,
         })
 
     def put(self, request):
@@ -65,6 +67,8 @@ class SchoolBrandingView(APIView):
         settings.contact_website = request.data.get("contact_website", settings.contact_website)
         settings.address_line = request.data.get("address_line", settings.address_line)
         settings.footer_text = request.data.get("footer_text", settings.footer_text)
+        settings.sidebar_color = request.data.get("sidebar_color", settings.sidebar_color)
+        settings.header_color = request.data.get("header_color", settings.header_color)
 
         if "logo" in request.FILES:
             settings.logo = request.FILES["logo"]

@@ -1,7 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from apps.schools.models import Campus
+from apps.schools.models import Campus, School
 
 
 class Vehicle(models.Model):
@@ -11,9 +11,15 @@ class Vehicle(models.Model):
         ("out_of_service", "Out of Service"),
     ]
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="vehicles_tenant",
+        null=True,
+        blank=True,
+    )
     plate_number = models.CharField(
         max_length=32,
-        unique=True,
     )
     campus = models.ForeignKey(
         Campus,
@@ -34,12 +40,25 @@ class Vehicle(models.Model):
 
     class Meta:
         ordering = ["plate_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "plate_number"],
+                name="unique_vehicle_plate_per_institution",
+            )
+        ]
 
     def __str__(self):
         return self.plate_number
 
 
 class Driver(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="drivers_tenant",
+        null=True,
+        blank=True,
+    )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100, blank=True)
     license_number = models.CharField(max_length=64)
@@ -66,6 +85,13 @@ class Driver(models.Model):
 
 
 class Route(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="transport_routes_tenant",
+        null=True,
+        blank=True,
+    )
     name = models.CharField(max_length=100)
     description = models.CharField(max_length=255, blank=True)
     campus = models.ForeignKey(

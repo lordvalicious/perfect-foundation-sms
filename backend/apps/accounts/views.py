@@ -69,7 +69,11 @@ class LoginView(APIView):
 
         django_login(request, user)
 
-        membership = user.get_active_memberships().first()
+        school_code = serializer.validated_data.get("school_code", "").strip().lower()
+        memberships = user.get_active_memberships()
+        membership = memberships.filter(
+            institution__code=school_code
+        ).first() if school_code else memberships.first()
         if membership is not None:
             request.session["active_institution_id"] = membership.institution_id
 

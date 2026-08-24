@@ -2,7 +2,7 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
 
-from apps.schools.models import Campus, Class, Section
+from apps.schools.models import Campus, Class, School, Section
 
 
 class Message(models.Model):
@@ -12,6 +12,14 @@ class Message(models.Model):
     side (``sender_deleted`` / ``recipient_deleted``) so the other party
     keeps their copy of the conversation.
     """
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="messages",
+        null=True,
+        blank=True,
+    )
 
     sender = models.ForeignKey(
         "accounts.User",
@@ -90,6 +98,14 @@ class Announcement(models.Model):
         ("draft", "Draft"),
         ("published", "Published"),
     ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="announcements",
+        null=True,
+        blank=True,
+    )
 
     title = models.CharField(max_length=200)
     message = models.TextField()
@@ -370,6 +386,14 @@ class Notification(models.Model):
         ("system", "System"),
     ]
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="notifications",
+        null=True,
+        blank=True,
+    )
+
     recipient = models.ForeignKey(
         "accounts.User",
         on_delete=models.CASCADE,
@@ -421,6 +445,14 @@ class SMSLog(models.Model):
         ("sent", "Sent"),
         ("failed", "Failed"),
     ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="sms_logs_tenant",
+        null=True,
+        blank=True,
+    )
 
     recipient = models.ForeignKey(
         "accounts.User",
@@ -535,6 +567,14 @@ class MessageTemplate(models.Model):
         ("email", "Email"),
         ("both", "Both"),
     ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="message_templates",
+        null=True,
+        blank=True,
+    )
 
     name = models.CharField(max_length=200)
     channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES, default="sms")

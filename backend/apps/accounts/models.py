@@ -184,6 +184,14 @@ class StaffProfile(models.Model):
         ("inactive", "Inactive"),
     ]
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="staff_profiles",
+        null=True,
+        blank=True,
+    )
+
     user = models.OneToOneField(
         User,
         on_delete=models.SET_NULL,
@@ -197,7 +205,6 @@ class StaffProfile(models.Model):
 
     employee_number = models.CharField(
         max_length=50,
-        unique=True,
     )
 
     photo = models.ImageField(
@@ -264,6 +271,12 @@ class StaffProfile(models.Model):
 
     class Meta:
         ordering = ["first_name", "last_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "employee_number"],
+                name="unique_staff_employee_number_per_institution",
+            )
+        ]
 
     @property
     def full_name(self):
@@ -286,6 +299,14 @@ class StaffAttendance(models.Model):
         ("half_day", "Half Day"),
         ("leave", "On Leave"),
     ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="staff_attendance",
+        null=True,
+        blank=True,
+    )
 
     staff = models.ForeignKey(
         StaffProfile,
@@ -358,6 +379,14 @@ class StaffLeave(models.Model):
         ("rejected", "Rejected"),
         ("cancelled", "Cancelled"),
     ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="staff_leaves",
+        null=True,
+        blank=True,
+    )
 
     staff = models.ForeignKey(
         StaffProfile,

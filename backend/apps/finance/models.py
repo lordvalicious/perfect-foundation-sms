@@ -10,6 +10,14 @@ from apps.students.models import Enrollment, Student
 
 
 class FeeCategory(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="fee_categories",
+        null=True,
+        blank=True,
+    )
+
     FREQUENCY_CHOICES = [
         ("one_time", "One Time"),
         ("monthly", "Monthly"),
@@ -17,7 +25,7 @@ class FeeCategory(models.Model):
         ("annual", "Annual"),
     ]
 
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
     description = models.TextField(blank=True)
 
     frequency = models.CharField(
@@ -40,6 +48,12 @@ class FeeCategory(models.Model):
 
     class Meta:
         ordering = ["name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "name"],
+                name="unique_fee_category_name_per_institution",
+            )
+        ]
 
     def __str__(self):
         return self.name
@@ -150,6 +164,14 @@ class FeeStructure(models.Model):
 
 
 class Invoice(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="invoices",
+        null=True,
+        blank=True,
+    )
+
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("issued", "Issued"),
@@ -161,7 +183,6 @@ class Invoice(models.Model):
 
     invoice_number = models.CharField(
         max_length=50,
-        unique=True,
     )
 
     student = models.ForeignKey(
@@ -204,6 +225,12 @@ class Invoice(models.Model):
 
     class Meta:
         ordering = ["-issue_date", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "invoice_number"],
+                name="unique_invoice_number_per_institution",
+            )
+        ]
 
     @property
     def subtotal(self):
@@ -343,6 +370,14 @@ class InvoiceItem(models.Model):
 
 
 class Payment(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        null=True,
+        blank=True,
+    )
+
     PAYMENT_METHOD_CHOICES = [
         ("cash", "Cash"),
         ("bank", "Bank Transfer"),
@@ -361,7 +396,6 @@ class Payment(models.Model):
 
     receipt_number = models.CharField(
         max_length=50,
-        unique=True,
     )
 
     invoice = models.ForeignKey(
@@ -405,6 +439,14 @@ class Payment(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "receipt_number"],
+                name="unique_receipt_number_per_institution",
+            )
+        ]
 
     def clean(self):
         errors = {}
@@ -457,6 +499,14 @@ class PaymentReversal(models.Model):
     """An auditable correction to a completed payment; payments are never deleted."""
 
     STATUS_CHOICES = [("completed", "Completed"), ("cancelled", "Cancelled")]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="payment_reversals",
+        null=True,
+        blank=True,
+    )
 
     payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="reversals")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -649,6 +699,14 @@ class Expense(models.Model):
 class Concession(models.Model):
     STATUS_CHOICES = [("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")]
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="concessions",
+        null=True,
+        blank=True,
+    )
+
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="concessions")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reason = models.TextField()
@@ -670,6 +728,14 @@ class Concession(models.Model):
 
 class PaymentRefund(models.Model):
     STATUS_CHOICES = [("completed", "Completed"), ("cancelled", "Cancelled")]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="payment_refunds",
+        null=True,
+        blank=True,
+    )
 
     payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
     amount = models.DecimalField(max_digits=12, decimal_places=2)

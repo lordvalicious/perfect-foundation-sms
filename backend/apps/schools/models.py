@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils.text import slugify
 
 
 class School(models.Model):
@@ -11,6 +12,7 @@ class School(models.Model):
     ]
 
     name = models.CharField(max_length=200)
+    code = models.SlugField(max_length=50, unique=True, null=True, blank=True)
     institution_type = models.CharField(
         max_length=20,
         choices=INSTITUTION_TYPE_CHOICES,
@@ -37,6 +39,17 @@ class School(models.Model):
 
     def __str__(self):
         return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.code:
+            base = slugify(self.name)[:40] or "school"
+            candidate = base
+            suffix = 2
+            while type(self).objects.filter(code=candidate).exclude(pk=self.pk).exists():
+                candidate = f"{base[:40 - len(str(suffix)) - 1]}-{suffix}"
+                suffix += 1
+            self.code = candidate
+        return super().save(*args, **kwargs)
 
 
 class Campus(models.Model):
@@ -235,8 +248,15 @@ class Term(models.Model):
 
 
 class Subject(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="subjects",
+        null=True,
+        blank=True,
+    )
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20)
 
     SUBJECT_TYPE_CHOICES = [
         ("general", "General"),
@@ -267,6 +287,14 @@ class Subject(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "code"],
+                name="unique_subject_code_per_institution",
+            )
+        ]
 
     def __str__(self):
         return f"{self.code} - {self.name}"
@@ -324,6 +352,9 @@ class SchoolSettings(models.Model):
     contact_website = models.URLField(blank=True)
     address_line = models.TextField(blank=True)
     footer_text = models.TextField(blank=True)
+    sidebar_color = models.CharField(max_length=7, blank=True)
+    header_color = models.CharField(max_length=7, blank=True)
+    login_background = models.ImageField(upload_to="school/branding/", blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

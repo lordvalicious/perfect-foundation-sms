@@ -1250,6 +1250,416 @@ class StaffReportView(APIView):
             **kwargs,
         )
 
+
+class FeeDefaultersReportView(APIView):
+    """Students with outstanding invoice balances."""
+
+    permission_classes = [IsAccountantRole]
+
+    def _data(self, request):
+        from apps.finance.models import Invoice
+
+        queryset = (
+            Invoice.objects
+            .filter(status__in=["issued", "partial", "overdue"])
+            .select_related(
+                "student",
+                "enrollment__campus",
+                "academic_year",
+            )
+        )
+
+        queryset = apply_campus_scope(
+            queryset, request, "enrollment__campus_id",
+        )
+
+        academic_year = request.query_params.get("academic_year")
+        if academic_year:
+            queryset = queryset.filter(academic_year_id=academic_year)
+
+        students = {}
+
+        for invoice in queryset:
+            balance = invoice.balance
+            if balance <= 0:
+                continue
+
+            student_id = invoice.student_id
+            entry = students.setdefault(student_id, {
+                "student": invoice.student.full_name,
+                "admission_number": invoice.student.admission_number,
+                "campus": invoice.enrollment.campus.name if invoice.enrollment.campus_id else "-",
+                "total_invoiced": Decimal("0"),
+                "total_paid": Decimal("0"),
+                "total_outstanding": Decimal("0"),
+                "invoice_count": 0,
+            })
+
+            entry["total_invoiced"] += invoice.total_amount
+            entry["total_paid"] += invoice.paid_amount
+            entry["total_outstanding"] += balance
+            entry["invoice_count"] += 1
+
+        rows = sorted(
+            students.values(),
+            key=lambda item: item["total_outstanding"],
+            reverse=True,
+        )
+
+        total_outstanding = sum(
+            row["total_outstanding"] for row in rows
+        )
+
+        return {
+            "summary": {
+                "total_defaulters": len(rows),
+                "total_outstanding": quantize(total_outstanding),
+            },
+            "students": [
+                {
+                    **row,
+                    "total_invoiced": quantize(row["total_invoiced"]),
+                    "total_paid": quantize(row["total_paid"]),
+                    "total_outstanding": quantize(row["total_outstanding"]),
+                }
+                for row in rows
+            ],
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+        return to_csv(
+            "fee_defaulters_report.csv",
+            ["Student", "Admission No", "Campus", "Invoices", "Total Invoiced", "Total Paid", "Outstanding"],
+            [
+                [
+                    row["student"],
+                    row["admission_number"],
+                    row["campus"],
+                    row["invoice_count"],
+                    row["total_invoiced"],
+                    row["total_paid"],
+                    row["total_outstanding"],
+                ]
+                for row in data["students"]
+            ],
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
+class TeacherWorkloadReportView(APIView):
+    """Teacher workload: subjects, sections, and assignments."""
+
+    permission_classes = [IsAccountantRole]
+
+    def _data(self, request):
+        from apps.teachers.models import Teacher, TeacherAssignment
+
+        queryset = (
+            TeacherAssignment.objects
+            .filter(status="active")
+            .select_related(
+                "teacher",
+                "campus",
+                "class_obj",
+                "section",
+                "subject",
+                "academic_year",
+            )
+        )
+
+        queryset = apply_campus_scope(queryset, request, "campus_id")
+
+        academic_year = request.query_params.get("academic_year")
+        if academic_year:
+            queryset = queryset.filter(academic_year_id=academic_year)
+
+        teachers = {}
+
+        for assignment in queryset:
+            teacher_id = assignment.teacher_id
+            entry = teachers.setdefault(teacher_id, {
+                "teacher": assignment.teacher.full_name,
+                "employee_number": assignment.teacher.employee_number,
+                "campus": assignment.campus.name,
+                "assignments": 0,
+                "subjects": set(),
+                "classes": set(),
+                "sections": set(),
+            })
+
+            entry["assignments"] += 1
+            entry["subjects"].add(assignment.subject.name)
+            entry["classes"].add(assignment.class_obj.name)
+            entry["sections"].add(assignment.section.name)
+
+        rows = []
+        for entry in teachers.values():
+            entry["subjects"] = ", ".join(sorted(entry["subjects"]))
+            entry["classes"] = ", ".join(sorted(entry["classes"]))
+            entry["sections"] = ", ".join(sorted(entry["sections"]))
+            rows.append(entry)
+
+        rows.sort(key=lambda item: item["teacher"])
+
+        return {
+            "summary": {
+                "total_teachers": len(rows),
+                "total_assignments": sum(
+                    row["assignments"] for row in rows
+                ),
+            },
+            "teachers": rows,
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+        return to_csv(
+            "teacher_workload_report.csv",
+            ["Teacher", "Employee No", "Campus", "Assignments", "Subjects", "Classes", "Sections"],
+            [
+                [
+                    row["teacher"],
+                    row["employee_number"],
+                    row["campus"],
+                    row["assignments"],
+                    row["subjects"],
+                    row["classes"],
+                    row["sections"],
+                ]
+                for row in data["teachers"]
+            ],
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
+class ClassPerformanceReportView(APIView):
+    """Class-wise performance across all exams."""
+
+    permission_classes = [IsAccountantRole]
+
+    def _data(self, request):
+        from apps.reportcards.models import ReportCard
+
+        queryset = (
+            ReportCard.objects
+            .select_related(
+                "exam",
+                "exam__campus",
+                "exam__class_obj",
+            )
+        )
+
+        queryset = apply_campus_scope(
+            queryset, request, "exam__campus_id",
+        )
+
+        academic_year = request.query_params.get("academic_year")
+        if academic_year:
+            queryset = queryset.filter(exam__academic_year_id=academic_year)
+
+        classes = {}
+
+        for rc in queryset:
+            campus_name = rc.exam.campus.name if rc.exam.campus_id else "-"
+            class_name = rc.exam.class_obj.name if rc.exam.class_obj_id else "-"
+            key = (campus_name, class_name)
+
+            entry = classes.setdefault(key, {
+                "campus": campus_name,
+                "class": class_name,
+                "total_students": 0,
+                "total_exams": set(),
+                "passed": 0,
+                "total_percentage": Decimal("0"),
+                "highest": Decimal("0"),
+                "lowest": None,
+            })
+
+            entry["total_students"] += 1
+            entry["total_exams"].add(rc.exam_id)
+
+            if rc.is_pass:
+                entry["passed"] += 1
+
+            pct = rc.percentage
+            entry["total_percentage"] += pct
+
+            if pct > entry["highest"]:
+                entry["highest"] = pct
+
+            if entry["lowest"] is None or pct < entry["lowest"]:
+                entry["lowest"] = pct
+
+        rows = []
+        for entry in classes.values():
+            total = entry["total_students"]
+            exams = len(entry["total_exams"])
+            avg = entry["total_percentage"] / total if total else Decimal("0")
+            rows.append({
+                "campus": entry["campus"],
+                "class": entry["class"],
+                "total_students": total,
+                "exams_covered": exams,
+                "passed": entry["passed"],
+                "failed": total - entry["passed"],
+                "pass_rate": round(entry["passed"] / total * 100, 2) if total else 0,
+                "average_percentage": round(float(avg), 2),
+                "highest": round(float(entry["highest"]), 2),
+                "lowest": round(float(entry["lowest"]), 2) if entry["lowest"] is not None else 0,
+            })
+
+        rows.sort(key=lambda item: (item["campus"], item["class"]))
+
+        total = sum(r["total_students"] for r in rows)
+        passed = sum(r["passed"] for r in rows)
+        avg_pct = sum(r["average_percentage"] for r in rows) / len(rows) if rows else 0
+
+        return {
+            "summary": {
+                "total_students": total,
+                "overall_pass_rate": round(passed / total * 100, 2) if total else 0,
+                "overall_average": round(avg_pct, 2),
+            },
+            "classes": rows,
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+        return to_csv(
+            "class_performance_report.csv",
+            ["Campus", "Class", "Students", "Exams", "Passed", "Failed", "Pass Rate %", "Average %", "Highest %", "Lowest %"],
+            [
+                [
+                    row["campus"],
+                    row["class"],
+                    row["total_students"],
+                    row["exams_covered"],
+                    row["passed"],
+                    row["failed"],
+                    row["pass_rate"],
+                    row["average_percentage"],
+                    row["highest"],
+                    row["lowest"],
+                ]
+                for row in data["classes"]
+            ],
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
+class StudentProgressTrendReportView(APIView):
+    """Student performance trend across multiple exams."""
+
+    permission_classes = [IsAccountantRole]
+
+    def _data(self, request):
+        from apps.reportcards.models import ReportCard
+
+        student_id = request.query_params.get("student")
+        if not student_id:
+            return {"summary": {}, "exams": []}
+
+        queryset = (
+            ReportCard.objects
+            .filter(student_id=student_id)
+            .select_related(
+                "exam",
+                "exam__campus",
+                "exam__class_obj",
+            )
+            .order_by("exam__start_date")
+        )
+
+        exams = []
+        for rc in queryset:
+            exams.append({
+                "exam": rc.exam.name,
+                "exam_type": rc.exam.exam_type,
+                "campus": rc.exam.campus.name if rc.exam.campus_id else "-",
+                "class": rc.exam.class_obj.name if rc.exam.class_obj_id else "-",
+                "total_marks": float(rc.total_marks),
+                "maximum_marks": float(rc.maximum_marks),
+                "percentage": float(rc.percentage),
+                "grade": rc.grade,
+                "result": rc.overall_result,
+                "position": rc.position,
+            })
+
+        if not exams:
+            return {"summary": {}, "exams": []}
+
+        percentages = [e["percentage"] for e in exams]
+        passed = sum(1 for e in exams if e["result"] == "Pass")
+
+        trend = "improving" if len(percentages) >= 2 and percentages[-1] > percentages[0] else (
+            "declining" if len(percentages) >= 2 and percentages[-1] < percentages[0] else "stable"
+        )
+
+        return {
+            "summary": {
+                "total_exams": len(exams),
+                "average_percentage": round(sum(percentages) / len(percentages), 2),
+                "best_percentage": round(max(percentages), 2),
+                "worst_percentage": round(min(percentages), 2),
+                "pass_rate": round(passed / len(exams) * 100, 2),
+                "trend": trend,
+            },
+            "exams": exams,
+        }
+
+    def get(self, request):
+        return Response(self._data(request))
+
+    def _csv(self, request):
+        data = self._data(request)
+        return to_csv(
+            "student_progress_report.csv",
+            ["Exam", "Type", "Campus", "Class", "Total", "Max", "Percentage", "Grade", "Result", "Position"],
+            [
+                [
+                    row["exam"],
+                    row["exam_type"],
+                    row["campus"],
+                    row["class"],
+                    row["total_marks"],
+                    row["maximum_marks"],
+                    row["percentage"],
+                    row["grade"],
+                    row["result"],
+                    row["position"],
+                ]
+                for row in data["exams"]
+            ],
+        )
+
+    def finalize_response(self, request, response, *args, **kwargs):
+        if request.query_params.get("format") == "csv":
+            response = self._csv(request)
+        return super().finalize_response(request, response, *args, **kwargs)
+
+
 class ReportTemplateListView(APIView):
     permission_classes = [IsAccountantRole]
 
@@ -1369,6 +1779,10 @@ REPORT_VIEW_MAP = {
     "payments": "apps.reports.views.PaymentMethodsReportView",
     "student_status": "apps.reports.views.StudentStatusReportView",
     "fee_categories": "apps.reports.views.FeeCategoryReportView",
+    "fee_defaulters": "apps.reports.views.FeeDefaultersReportView",
+    "teacher_workload": "apps.reports.views.TeacherWorkloadReportView",
+    "class_performance": "apps.reports.views.ClassPerformanceReportView",
+    "student_progress": "apps.reports.views.StudentProgressTrendReportView",
 }
 
 
