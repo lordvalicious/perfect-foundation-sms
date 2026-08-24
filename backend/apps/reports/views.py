@@ -1400,6 +1400,7 @@ class ReportGenerateView(APIView):
         raw_req = factory.get(url)
         raw_req.user = request.user
         req = DRFRequest(raw_req)
+        req._user = request.user
 
         try:
             data = view_instance._data(req)
