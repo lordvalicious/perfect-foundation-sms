@@ -333,7 +333,7 @@ const navigation = [
 const systemNavigation = [
   { label: "Settings", path: "/settings", icon: Settings, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Branding", path: "/branding", icon: Palette, roles: ["super_admin", "admin"] },
-  { label: "Schools", path: "/tenants", icon: Building2, isPlatform: true },
+  { label: "Schools", path: "/tenants", icon: Building2, isPlatform: true, roles: [] },
   { label: "System Health", path: "/health", icon: Activity, roles: ["super_admin", "admin"] },
   { label: "Audit Logs", path: "/audit-logs", icon: ScrollText, roles: ["super_admin", "admin"] },
 ];
