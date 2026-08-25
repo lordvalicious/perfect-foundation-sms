@@ -124,6 +124,8 @@ class AcademicUnit(models.Model):
         choices=STATUS_CHOICES,
         default="active",
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
@@ -153,6 +155,9 @@ class Class(models.Model):
         default="active",
     )
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ["level", "name"]
 
@@ -179,6 +184,9 @@ class Section(models.Model):
         choices=STATUS_CHOICES,
         default="active",
     )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["class_obj__name", "name"]
@@ -208,6 +216,9 @@ class AcademicYear(models.Model):
         choices=STATUS_CHOICES,
         default="active",
     )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["-start_date"]
@@ -244,6 +255,9 @@ class Term(models.Model):
         default="active",
     )
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ["start_date"]
 
@@ -270,6 +284,8 @@ class Subject(models.Model):
         choices=STATUS_CHOICES,
         default="active",
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["name"]
@@ -312,6 +328,8 @@ class SubjectOffering(models.Model):
         choices=STATUS_CHOICES,
         default="active",
     )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         ordering = ["class_obj__name", "subject__name"]
