@@ -44,12 +44,13 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS("\nSeeding transport data...\n"))
 
-        school = School.objects.first()
-        if not school:
+        if not School.objects.exists():
             self.stderr.write(self.style.ERROR("No school found. Run seed setup first."))
             return
 
-        campuses = list(Campus.objects.filter(status="active"))
+        campuses = list(
+            Campus.objects.filter(status="active").select_related("school")
+        )
         if not campuses:
             self.stderr.write(self.style.ERROR("No active campuses found."))
             return
@@ -71,7 +72,7 @@ class Command(BaseCommand):
                 plate = f"LEA-{random.randint(10, 99)}-{random.randint(1000, 9999)}"
 
                 vehicle, created = Vehicle.objects.get_or_create(
-                    institution=school,
+                    institution=campus.school,
                     plate_number=plate,
                     defaults={
                         "campus": campus,
@@ -93,7 +94,7 @@ class Command(BaseCommand):
                 ln = random.choice(self.LAST_NAMES)
 
                 driver, created = Driver.objects.get_or_create(
-                    institution=school,
+                    institution=campus.school,
                     first_name=fn,
                     last_name=ln,
                     defaults={
@@ -115,7 +116,7 @@ class Command(BaseCommand):
                 driver = drivers[i % len(drivers)] if drivers else None
 
                 route, created = Route.objects.get_or_create(
-                    institution=school,
+                    institution=campus.school,
                     name=route_name,
                     defaults={
                         "campus": campus,

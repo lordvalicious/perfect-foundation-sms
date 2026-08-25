@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .device_views import GpsLiveView, GpsPingView
 from .views import (
     DriverDetailView,
     DriverListView,
@@ -40,5 +41,15 @@ urlpatterns = [
         "assignments/<int:pk>/",
         TransportAssignmentDetailView.as_view(),
         name="transport-assignment-detail",
+    ),
+    path(
+        "gps/ping/",
+        GpsPingView.as_view(),
+        name="gps-ping",
+    ),
+    path(
+        "gps/live/",
+        GpsLiveView.as_view(),
+        name="gps-live",
     ),
 ]

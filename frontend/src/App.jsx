@@ -53,6 +53,8 @@ import {
   Upload,
   Activity,
   AlertOctagon,
+  BedDouble,
+  MonitorPlay,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -100,6 +102,8 @@ import HomeworkPage from "./pages/HomeworkPage";
 import HealthRecordsPage from "./pages/HealthRecordsPage";
 import AdmissionsApplyPage from "./pages/AdmissionsApplyPage";
 import AlumniPage from "./pages/AlumniPage";
+import HostelPage from "./pages/HostelPage";
+import LMSPage from "./pages/LMSPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -321,6 +325,8 @@ const navigation = [
   { label: "Data Import", path: "/data-import", icon: Upload, roles: ["super_admin", "admin"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
   { label: "Alumni", path: "/alumni", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Hostel", path: "/hostel", icon: BedDouble, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Online Courses", path: "/lms", icon: MonitorPlay, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student"] },
 ];
 
 const systemNavigation = [
@@ -343,7 +349,7 @@ const navGroups = [
   },
   {
     label: "Academics",
-    items: ["/attendance", "/discipline", "/exams", "/homework", "/report-cards", "/timetable", "/assignments"]
+    items: ["/attendance", "/discipline", "/exams", "/homework", "/lms", "/report-cards", "/timetable", "/assignments"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -355,7 +361,7 @@ const navGroups = [
   },
   {
     label: "Resources",
-    items: ["/library", "/transport", "/inventory", "/documents", "/campuses", "/campus-dashboard", "/alumni"]
+    items: ["/library", "/transport", "/inventory", "/documents", "/campuses", "/campus-dashboard", "/alumni", "/hostel"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -798,6 +804,18 @@ function Shell() {
         <Route path="/alumni" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
             <AlumniPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/hostel" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin"]}>
+            <HostelPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/lms" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "student"]}>
+            <LMSPage isStudent={hasRole(["student"])} />
           </RequireRoles>
         } />
 

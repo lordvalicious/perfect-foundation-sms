@@ -56,6 +56,8 @@ INSTALLED_APPS = [
     "apps.homework",
     "apps.health",
     "apps.alumni",
+    "apps.hostel",
+    "apps.lms",
 
     "corsheaders",
     "rest_framework",

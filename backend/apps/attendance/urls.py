@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .device_sync import BiometricSyncView
 from .views import (
     AttendanceBulkMarkView,
     AttendanceListView,
@@ -24,5 +25,10 @@ urlpatterns = [
         "monthly/",
         AttendanceMonthlyView.as_view(),
         name="attendance-monthly",
+    ),
+    path(
+        "device-sync/",
+        BiometricSyncView.as_view(),
+        name="attendance-device-sync",
     ),
 ]

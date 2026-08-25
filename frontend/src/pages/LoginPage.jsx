@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [otpRequired, setOtpRequired] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [googleCfg, setGoogleCfg] = useState(null);
   const [branding, setBranding] = useState(null);
   const schoolCode = new URLSearchParams(window.location.search).get("school_code") || "";
 
@@ -39,6 +40,60 @@ export default function LoginPage() {
 
     return undefined;
   }, [schoolCode]);
+
+  useEffect(() => {
+    fetch("/api/auth/google/config/")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((cfg) => {
+        if (!cfg?.enabled) return;
+
+        setGoogleCfg(cfg);
+
+        const script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.async = true;
+        script.onload = () => {
+          if (!window.google?.accounts?.id) return;
+
+          window.google.accounts.id.initialize({
+            client_id: cfg.client_id,
+            callback: async (response) => {
+              setError("");
+              try {
+                const res = await fetch("/api/auth/google/login/", {
+                  method: "POST",
+                  credentials: "include",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ credential: response.credential }),
+                });
+
+                const data = await res.json().catch(() => ({}));
+
+                if (!res.ok) {
+                  setError(data.detail || "Google sign-in failed.");
+                  return;
+                }
+
+                window.location.assign("/");
+              } catch (err) {
+                setError(err.message);
+              }
+            },
+          });
+
+          window.google.accounts.id.renderButton(
+            document.getElementById("google-btn"),
+            { theme: "outline", size: "large", width: 320 }
+          );
+        };
+        document.body.appendChild(script);
+
+        return () => {
+          document.body.removeChild(script);
+        };
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
@@ -139,6 +194,27 @@ export default function LoginPage() {
                 autoFocus
               />
             </label>
+          )}
+
+          {googleCfg?.enabled && (
+            <>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  margin: "14px 0",
+                  color: "#94a3b8",
+                  fontSize: 12,
+                }}
+              >
+                <span style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+                OR
+                <span style={{ flex: 1, height: 1, background: "#e2e8f0" }} />
+              </div>
+
+              <div id="google-btn" style={{ display: "flex", justifyContent: "center" }} />
+            </>
           )}
 
           {error && (

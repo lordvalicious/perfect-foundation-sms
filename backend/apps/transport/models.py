@@ -205,3 +205,29 @@ class TransportAssignment(models.Model):
 
     def __str__(self):
         return f"{self.student.full_name} - {self.route.name}"
+
+
+class VehicleLocationLog(models.Model):
+    """A GPS ping from a vehicle tracker."""
+
+    vehicle = models.ForeignKey(
+        Vehicle,
+        on_delete=models.CASCADE,
+        related_name="location_logs",
+    )
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+    )
+    speed_kmh = models.PositiveSmallIntegerField(null=True, blank=True)
+    recorded_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-recorded_at"]
+
+    def __str__(self):
+        return f"{self.vehicle.plate_number} @ {self.recorded_at}"

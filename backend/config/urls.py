@@ -143,6 +143,16 @@ urlpatterns = [
         "api/alumni/",
         include("apps.alumni.urls"),
     ),
+
+    path(
+        "api/hostel/",
+        include("apps.hostel.urls"),
+    ),
+
+    path(
+        "api/lms/",
+        include("apps.lms.urls"),
+    ),
 ]
 
 urlpatterns += static(
