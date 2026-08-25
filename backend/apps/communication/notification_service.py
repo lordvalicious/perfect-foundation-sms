@@ -10,10 +10,28 @@ from datetime import timedelta
 
 from django.utils import timezone
 
-SCHOOL_NAME = "Perfect Foundation School"
-
 FEE_REMINDER_MIN_DAYS = 3
 FEE_REMINDER_REPEAT_DAYS = 7
+
+
+def _school_branding_for(obj_school):
+    """Return {'display', 'email_from_name', 'email_from_address'}."""
+    from apps.schools.branding_context import get_school_branding
+
+    if obj_school is None:
+        return {
+            "display": "School",
+            "email_from_name": "",
+            "email_from_address": "",
+        }
+
+    b = get_school_branding(obj_school)
+
+    return {
+        "display": b["short_name"] or b["name"],
+        "email_from_name": b["email_from_name"] or b["name"],
+        "email_from_address": b["email_from_address"],
+    }
 ABSENCE_ALERT_PREFIX = "[Absence]"
 
 
@@ -148,9 +166,17 @@ def send_fee_reminders(
 
         contacts, pref_user = _guardian_contacts(student)
 
+        campus = (
+            student.enrollments.filter(status="active")
+            .select_related("campus__school")
+            .first()
+        )
+        school = campus.campus.school if campus else None
+        brand = _school_branding_for(school)
+
         amount = int(entry["total"])
         sms_text = (
-            f"[{SCHOOL_NAME}] Fee reminder: Rs {amount:,} outstanding "
+            f"[{brand['display']}] Fee reminder: Rs {amount:,} outstanding "
             f"for {student.full_name} "
             f"({entry['count']} invoice(s), oldest due "
             f"{entry['oldest_due']:%d %b}). Kindly clear at your earliest."
@@ -162,7 +188,7 @@ def send_fee_reminders(
             f"Rs {amount:,} across {entry['count']} invoice(s), the "
             f"oldest due on {entry['oldest_due']:%d %B %Y}.\n\n"
             f"Please clear the dues at your earliest convenience.\n\n"
-            f"- {SCHOOL_NAME}"
+            f"- {brand['display']}"
         )
 
         if dry_run:
@@ -207,10 +233,15 @@ def send_fee_reminders(
             if not _dispatch_exists(
                 "fee_reminder", reference, "email"
             ):
+                from_name = brand["email_from_name"] or None
+                from_address = brand["email_from_address"] or None
+
                 ok, err = send_email_message(
                     email_target,
                     f"Fee reminder - {student.full_name}",
                     email_body,
+                    from_name=from_name,
+                    from_address=from_address,
                 )
 
                 from .models import EmailLog
@@ -260,7 +291,10 @@ def send_absence_alerts(dry_run=False):
     absentees = (
         Attendance.objects
         .filter(date=today, status="absent")
-        .select_related("student", "student__guardian", "class_obj")
+        .select_related(
+            "student", "student__guardian", "class_obj",
+            "campus__school",
+        )
     )
 
     sent = {"sms": 0, "email": 0}
@@ -272,8 +306,10 @@ def send_absence_alerts(dry_run=False):
         student = record.student
         contacts, pref_user = _guardian_contacts(student)
 
+        brand = _school_branding_for(record.campus.school)
+
         sms_text = (
-            f"[{SCHOOL_NAME}] Attendance notice: {student.full_name} "
+            f"[{brand['display']}] Attendance notice: {student.full_name} "
             f"was marked ABSENT today ({today:%d %b}). If this is "
             f"unexpected, please contact the school office."
         )
@@ -319,10 +355,15 @@ def send_absence_alerts(dry_run=False):
             ref = f"{reference_day}:email"
 
             if not _dispatch_exists("absence_alert", ref, "email"):
+                from_name = brand["email_from_name"] or None
+                from_address = brand["email_from_address"] or None
+
                 ok, err = send_email_message(
                     email_target,
                     f"Absence notice - {student.full_name}",
-                    sms_text.replace("[{}] ".format(SCHOOL_NAME), ""),
+                    sms_text,
+                    from_name=from_name,
+                    from_address=from_address,
                 )
 
                 from .models import EmailLog

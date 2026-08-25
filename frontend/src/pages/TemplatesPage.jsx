@@ -200,7 +200,7 @@ function SendFromTemplateModal({ template, onClose, onSent }) {
   useEffect(() => {
     const ctx = {};
     template.variables.forEach((v) => { ctx[v] = variables[v] || `[${v}]`; });
-    ctx.school_name = ctx.school_name || "Perfect Foundation";
+        ctx.school_name = ctx.school_name || "School";
     ctx.date = ctx.date || new Date().toLocaleDateString();
     let text = template.body;
     for (const [key, value] of Object.entries(ctx)) {

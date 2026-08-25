@@ -1,4 +1,4 @@
-import {
+﻿import {
   useEffect,
   useState,
 } from "react";
@@ -104,6 +104,7 @@ import AdmissionsApplyPage from "./pages/AdmissionsApplyPage";
 import AlumniPage from "./pages/AlumniPage";
 import HostelPage from "./pages/HostelPage";
 import LMSPage from "./pages/LMSPage";
+import TenantsPage from "./pages/TenantsPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -292,46 +293,47 @@ const navigation = [
   { label: "Dashboard", path: "/", icon: LayoutDashboard, roles: [] },
   { label: "My Profile", path: "/profile", icon: UserRound, roles: [] },
   { label: "Parent Portal", path: "/parent-portal", icon: HeartHandshake, roles: ["parent"] },
-  { label: "Students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
-  { label: "Admissions", path: "/admissions", icon: FilePlus2, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Students", module: "students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
+  { label: "Admissions", module: "students", path: "/admissions", icon: FilePlus2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "vice_principal", "campus_admin", "hr"] },
   { label: "Staff Leave & Attendance", path: "/staff-operations", icon: CalendarClock, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr"] },
-  { label: "Health Records", path: "/health-records", icon: HeartPulse, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
+  { label: "Health Records", module: "health", path: "/health-records", icon: HeartPulse, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
   { label: "Human Resources", path: "/hr", icon: Briefcase, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr", "accountant"] },
   { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
-  { label: "Homework", path: "/homework", icon: BookOpenCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student", "parent"] },
-  { label: "Attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
-  { label: "Discipline", path: "/discipline", icon: AlertOctagon, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
-  { label: "Finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
-  { label: "Bulk Finance", path: "/finance/bulk", icon: Layers, roles: ["super_admin", "admin", "accountant"] },
-  { label: "Exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
-  { label: "Report Cards", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
+  { label: "Homework", module: "homework", path: "/homework", icon: BookOpenCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student", "parent"] },
+  { label: "Attendance", module: "attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
+  { label: "Discipline", module: "discipline", path: "/discipline", icon: AlertOctagon, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
+  { label: "Finance", module: "finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
+  { label: "Bulk Finance", module: "finance", path: "/finance/bulk", icon: Layers, roles: ["super_admin", "admin", "accountant"] },
+  { label: "Exams", module: "exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
+  { label: "Report Cards", module: "exams", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Campus Dashboard", path: "/campus-dashboard", icon: Building2, roles: ["super_admin", "admin", "principal"] },
   { label: "Announcements", path: "/announcements", icon: Megaphone, roles: [] },
-  { label: "Messages", path: "/messages", icon: Mail, roles: [] },
-  { label: "SMS", path: "/sms", icon: MessageSquare, roles: ["super_admin", "admin"] },
-  { label: "Templates", path: "/templates", icon: FileText, roles: ["super_admin", "admin"] },
-  { label: "Library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
-  { label: "Transport", path: "/transport", icon: Bus, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
-  { label: "Inventory", path: "/inventory", icon: Boxes, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Messages", module: "communication", path: "/messages", icon: Mail, roles: [] },
+  { label: "SMS", module: "communication", path: "/sms", icon: MessageSquare, roles: ["super_admin", "admin"] },
+  { label: "Templates", module: "communication", path: "/templates", icon: FileText, roles: ["super_admin", "admin"] },
+  { label: "Library", module: "library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Transport", module: "transport", path: "/transport", icon: Bus, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Inventory", module: "inventory", path: "/inventory", icon: Boxes, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Documents", path: "/documents", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
-  { label: "Payroll", path: "/payroll", icon: Banknote, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
-  { label: "Reports", path: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
-  { label: "Report Builder", path: "/report-builder", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
-  { label: "Data Export", path: "/data-export", icon: Download, roles: ["super_admin", "admin"] },
-  { label: "Data Import", path: "/data-import", icon: Upload, roles: ["super_admin", "admin"] },
-  { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
-  { label: "Alumni", path: "/alumni", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
-  { label: "Hostel", path: "/hostel", icon: BedDouble, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Payroll", module: "payroll", path: "/payroll", icon: Banknote, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Reports", module: "reports", path: "/reports", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Report Builder", module: "reports", path: "/report-builder", icon: BarChart3, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Data Export", module: "reports", path: "/data-export", icon: Download, roles: ["super_admin", "admin"] },
+  { label: "Data Import", module: "reports", path: "/data-import", icon: Upload, roles: ["super_admin", "admin"] },
+  { label: "Events", module: "events", path: "/events", icon: CalendarClock, roles: [] },
+  { label: "Alumni", module: "alumni", path: "/alumni", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Hostel", module: "hostel", path: "/hostel", icon: BedDouble, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Online Courses", path: "/lms", icon: MonitorPlay, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student"] },
 ];
 
 const systemNavigation = [
   { label: "Settings", path: "/settings", icon: Settings, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Branding", path: "/branding", icon: Palette, roles: ["super_admin", "admin"] },
+  { label: "Schools", path: "/tenants", icon: Building2, isPlatform: true },
   { label: "System Health", path: "/health", icon: Activity, roles: ["super_admin", "admin"] },
   { label: "Audit Logs", path: "/audit-logs", icon: ScrollText, roles: ["super_admin", "admin"] },
 ];
@@ -381,21 +383,34 @@ const navGroups = [
    LAYOUT — Top navigation
    ========================= */
 
-function Layout({ children, hasRole }) {
+function Layout({ children, hasRole, modules = { loaded: false, enabled: [], isPlatformAdmin: false } }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { t } = useLang();
 
+  const moduleAllows = (item) => {
+    if (!item.module) return true;
+    if (!modules.loaded) return true;
+    if (modules.enabled.length === 0) return true;
+    return modules.enabled.includes(item.module);
+  };
+
   const visibleNavigation = navigation.filter(
-    (item) => item.roles.length === 0 || hasRole(item.roles)
+    (item) =>
+      moduleAllows(item) &&
+      (item.roles.length === 0 || hasRole(item.roles))
   );
   const visibleSystemNavigation = systemNavigation.filter(
-    (item) => item.roles.length === 0 || hasRole(item.roles)
+    (item) =>
+      (!item.isPlatform || modules.isPlatformAdmin) &&
+      (item.roles.length === 0 || hasRole(item.roles))
   );
 
   const visibleNavGroups = navGroups.map((group) => ({
     ...group,
     items: group.items.filter(
-      (item) => item.roles.length === 0 || hasRole(item.roles)
+      (item) =>
+        moduleAllows(item) &&
+        (item.roles.length === 0 || hasRole(item.roles))
     ),
   })).filter((group) => group.items.length > 0);
 
@@ -579,6 +594,32 @@ function RequireRoles({ roles, children }) {
 function Shell() {
   const { user, loading, hasRole } = useAuth();
   const location = useLocation();
+  const [modules, setModules] = useState({
+    loaded: false,
+    enabled: [],
+    isPlatformAdmin: false,
+  });
+
+  useEffect(() => {
+    if (!user) return;
+
+    fetch("/api/schools/modules/current/", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) {
+          setModules({
+            loaded: true,
+            enabled: data.enabled || [],
+            isPlatformAdmin: !!data.is_platform_admin,
+          });
+        } else {
+          setModules({ loaded: true, enabled: [], isPlatformAdmin: false });
+        }
+      })
+      .catch(() =>
+        setModules({ loaded: true, enabled: [], isPlatformAdmin: false })
+      );
+  }, [user]);
 
   if (loading) {
     return (
@@ -597,7 +638,7 @@ function Shell() {
   if (!user) return <LoginPage />;
 
   return (
-    <Layout hasRole={hasRole}>
+    <Layout hasRole={hasRole} modules={modules}>
       <Routes>
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/" element={<Dashboard />} />
@@ -806,6 +847,10 @@ function Shell() {
             <AlumniPage />
           </RequireRoles>
         } />
+
+        {modules.isPlatformAdmin && (
+          <Route path="/tenants" element={<TenantsPage />} />
+        )}
 
         <Route path="/hostel" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin"]}>

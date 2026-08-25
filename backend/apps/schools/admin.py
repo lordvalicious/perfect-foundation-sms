@@ -15,8 +15,8 @@ from .models import (
 
 @admin.register(School)
 class SchoolAdmin(admin.ModelAdmin):
-    list_display = ("name", "institution_type", "city", "status")
-    search_fields = ("name", "city")
+    list_display = ("name", "code", "institution_type", "city", "status")
+    search_fields = ("name", "code", "city")
     list_filter = ("institution_type", "status")
 
 
@@ -29,9 +29,9 @@ class CampusAdmin(admin.ModelAdmin):
 
 @admin.register(AcademicUnit)
 class AcademicUnitAdmin(admin.ModelAdmin):
-    list_display = ("name", "campus", "unit_type", "status")
+    list_display = ("name", "campus", "status")
     search_fields = ("name", "campus__name")
-    list_filter = ("unit_type", "status")
+    list_filter = ("status",)
 
 
 @admin.register(Class)
@@ -48,49 +48,29 @@ class SectionAdmin(admin.ModelAdmin):
     list_filter = ("status",)
 
 
+@admin.register(Subject)
+class SubjectAdmin(admin.ModelAdmin):
+    list_display = ("name", "code", "institution", "status")
+    search_fields = ("name", "code")
+    list_filter = ("status",)
+
+
+@admin.register(SubjectOffering)
+class SubjectOfferingAdmin(admin.ModelAdmin):
+    list_display = ("class_obj", "subject", "teacher", "status")
+    search_fields = ("class_obj__name", "subject__name")
+    list_filter = ("status", "academic_year")
+
+
 @admin.register(AcademicYear)
 class AcademicYearAdmin(admin.ModelAdmin):
     list_display = ("name", "school", "start_date", "end_date", "status")
     search_fields = ("name", "school__name")
-    list_filter = ("status",)
+    list_filter = ("status", "school")
 
 
 @admin.register(Term)
 class TermAdmin(admin.ModelAdmin):
-    list_display = ("name", "academic_year", "start_date", "end_date")
+    list_display = ("name", "academic_year", "start_date", "end_date", "status")
     search_fields = ("name", "academic_year__name")
-
-
-@admin.register(Subject)
-class SubjectAdmin(admin.ModelAdmin):
-    list_display = (
-        "name",
-        "code",
-        "subject_type",
-        "practical_required",
-        "status",
-    )
-    search_fields = ("name", "code")
-    list_filter = (
-        "subject_type",
-        "practical_required",
-        "status",
-    )
-
-@admin.register(SubjectOffering)
-class SubjectOfferingAdmin(admin.ModelAdmin):
-    list_display = (
-        "subject",
-        "class_obj",
-        "academic_year",
-    )
-    search_fields = (
-        "subject__name",
-        "subject__code",
-        "class_obj__name",
-        "academic_year__name",
-    )
-    list_filter = (
-        "academic_year",
-        "subject",
-    )
+    list_filter = ("status", "academic_year")

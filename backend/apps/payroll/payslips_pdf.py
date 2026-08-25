@@ -30,12 +30,17 @@ class PayrollPayslipPdfView(APIView):
     def get(self, request, pk):
         from .models import PayrollRecord
         from .views import payroll_queryset
+        from apps.schools.branding_context import (
+            get_school_branding,
+            school_logo_flowable,
+        )
 
         record = get_object_or_404(
             payroll_queryset(
                 PayrollRecord.objects.select_related(
                     "teacher",
                     "teacher__primary_campus",
+                    "teacher__primary_campus__school",
                     "structure",
                 ),
                 request,
@@ -43,16 +48,12 @@ class PayrollPayslipPdfView(APIView):
             pk=pk,
         )
 
-        campus = (
-            record.teacher.primary_campus.name
-            if record.teacher.primary_campus_id
-            else "-"
-        )
+        campus_obj = record.teacher.primary_campus
+        campus = campus_obj.name if campus_obj else "-"
         school_name = (
-            record.teacher.primary_campus.school.name
-            if record.teacher.primary_campus_id
-            and record.teacher.primary_campus.school_id
-            else "Perfect Foundation School"
+            campus_obj.school.name
+            if campus_obj and campus_obj.school_id
+            else "School"
         )
 
         buffer = BytesIO()
@@ -173,10 +174,37 @@ class PayrollPayslipPdfView(APIView):
             )
         )
 
+        logo_flowable = None
+
+        if campus_obj and campus_obj.school_id:
+            branding = get_school_branding(campus_obj.school)
+            logo_flowable = school_logo_flowable(branding)
+
+        header_row = []
+
+        if logo_flowable is not None:
+            header_row.append(logo_flowable)
+            header_row.append(
+                Paragraph(school_name.upper(), school_style)
+            )
+        else:
+            header_row.append(Paragraph(school_name.upper(), school_style))
+
+        header_table = Table(
+            [header_row],
+            colWidths=[18 * mm, 122 * mm] if logo_flowable else [140 * mm],
+        )
+        header_table.setStyle(
+            TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (0, -1), 0),
+            ])
+        )
+
         story = [
-            Paragraph(school_name.upper(), school_style),
+            header_table,
             Paragraph(
-                f"PAYSLP — {campus}".upper().replace("PAYSLP", "Payslip"),
+                f"Payslip — {campus}".title(),
                 title_style,
             ),
             info_table,

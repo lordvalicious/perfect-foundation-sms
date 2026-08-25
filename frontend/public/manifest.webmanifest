@@ -1,7 +1,7 @@
-{
-  "name": "Perfect Foundation SMS",
-  "short_name": "PF SMS",
-  "description": "School management for Perfect Foundation School.",
+﻿{
+  "name": "School Management System",
+  "short_name": "SMS",
+  "description": "White-label school management platform.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

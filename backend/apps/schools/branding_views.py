@@ -38,6 +38,7 @@ class SchoolBrandingView(APIView):
         return Response({
             "school_code": school.code,
             "school_name": school.name,
+            "short_name": settings.short_name,
             "motto": settings.motto,
             "logo_url": logo_url,
             "favicon_url": favicon_url,
@@ -51,6 +52,16 @@ class SchoolBrandingView(APIView):
             "footer_text": settings.footer_text,
             "sidebar_color": settings.sidebar_color,
             "header_color": settings.header_color,
+            # tenant-level localization/settings
+            "currency": school.currency,
+            "timezone": school.timezone,
+            "date_format": settings.date_format,
+            "language": settings.language,
+            "working_days": settings.working_days or [
+                "mon", "tue", "wed", "thu", "fri",
+            ],
+            "email_from_name": settings.email_from_name,
+            "email_from_address": settings.email_from_address,
         })
 
     def put(self, request):
@@ -69,6 +80,76 @@ class SchoolBrandingView(APIView):
         settings.footer_text = request.data.get("footer_text", settings.footer_text)
         settings.sidebar_color = request.data.get("sidebar_color", settings.sidebar_color)
         settings.header_color = request.data.get("header_color", settings.header_color)
+
+        # --- tenant-level localization / white-label email ---
+        if "short_name" in request.data:
+            settings.short_name = (request.data.get("short_name") or "").strip()[:50]
+
+        valid_formats = {choice[0] for choice in SchoolSettings.DATE_FORMAT_CHOICES}
+
+        if "date_format" in request.data:
+            value = request.data.get("date_format")
+
+            settings.date_format = value if value in valid_formats else settings.date_format
+
+        valid_languages = {choice[0] for choice in SchoolSettings.LANGUAGE_CHOICES}
+
+        if "language" in request.data:
+            value = request.data.get("language")
+
+            settings.language = value if value in valid_languages else settings.language
+
+        working_days = request.data.get("working_days")
+
+        if isinstance(working_days, str):
+            import json as _json
+
+            try:
+                working_days = _json.loads(working_days)
+            except ValueError:
+                working_days = None
+
+        if isinstance(working_days, list):
+            valid_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+            cleaned = [str(day).lower()[:3] for day in working_days if str(day).lower()[:3] in valid_days]
+            settings.working_days = cleaned
+
+        if "email_from_name" in request.data:
+            settings.email_from_name = (
+                request.data.get("email_from_name") or ""
+            ).strip()[:120]
+
+        if "email_from_address" in request.data:
+            from django.core.validators import validate_email
+            from django.core.exceptions import ValidationError as DjangoValidationError
+
+            address = (request.data.get("email_from_address") or "").strip()
+
+            try:
+                if address:
+                    validate_email(address)
+
+                settings.email_from_address = address
+            except DjangoValidationError:
+                return Response(
+                    {"detail": "email_from_address is not a valid email."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # school-level currency/timezone live on the School row
+        if "currency" in request.data and school:
+            currency = (request.data.get("currency") or "").strip().upper()
+
+            if 3 <= len(currency) <= 3:
+                school.currency = currency
+                school.save(update_fields=["currency"])
+
+        if "timezone" in request.data and school:
+            timezone_value = (request.data.get("timezone") or "").strip()
+
+            if timezone_value:
+                school.timezone = timezone_value
+                school.save(update_fields=["timezone"])
 
         if "logo" in request.FILES:
             settings.logo = request.FILES["logo"]

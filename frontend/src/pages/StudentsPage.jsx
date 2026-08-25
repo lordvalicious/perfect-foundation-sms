@@ -504,10 +504,9 @@ function StudentsPage() {
             <div className="breadcrumb">Home / My Profile</div>
             <h2>My Profile</h2>
 
-            <p className="subtitle">
-              Your student information at Perfect Foundation
-              School.
-            </p>
+          <p className="subtitle">
+            Your student information at your school.
+          </p>
           </div>
         </div>
 
@@ -717,7 +716,7 @@ function StudentsPage() {
               <p className="campus-card-sub">
                 {[item.city, item.address]
                   .filter(Boolean)
-                  .join(", ") || "Perfect Foundation School"}
+                  .join(", ") || "Your School"}
               </p>
 
               <div className="campus-card-stats">

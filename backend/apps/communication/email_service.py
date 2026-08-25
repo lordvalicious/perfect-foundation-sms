@@ -12,17 +12,29 @@ def email_configured():
     return bool(getattr(settings, "EMAIL_HOST", ""))
 
 
-def send_email_message(recipient_email, subject, body):
-    """Send one email. Returns (ok: bool, error: str)."""
+def send_email_message(recipient_email, subject, body,
+                       from_name=None, from_address=None):
+    """Send one email. Returns (ok: bool, error: str).
+
+    ``from_name`` / ``from_address`` optionally override the platform
+    DEFAULT_FROM_EMAIL for white-label sending (per-school branding).
+    """
     if not email_configured():
         return False, "Email is not configured (DJANGO_EMAIL_HOST missing)."
+
+    sender = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+
+    if from_address:
+        sender = (
+            f'"{from_name}" <{from_address}>' if from_name else from_address
+        )
 
     try:
         connection = get_connection(fail_silently=False)
         sent = send_mail(
             subject=subject,
             message=body,
-            from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+            from_email=sender,
             recipient_list=[recipient_email],
             fail_silently=False,
             connection=connection,

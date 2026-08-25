@@ -20,8 +20,23 @@ from reportlab.platypus import (
 
 def payment_receipt_pdf(payment):
     """Return the bytes of a printable receipt PDF for a payment."""
+    from apps.schools.branding_context import (
+        get_school_branding,
+        school_logo_flowable,
+    )
+
     invoice = payment.invoice
     student = invoice.student
+
+    campus = invoice.enrollment.campus if invoice.enrollment_id else None
+    school = getattr(campus, "school", None)
+
+    branding = get_school_branding(school) if school else {
+        "name": "School",
+        "logo_bytes": None,
+        "primary_color": "#1a73e8",
+        "footer_text": "",
+    }
 
     buffer = io.BytesIO()
 
@@ -78,7 +93,24 @@ def payment_receipt_pdf(payment):
 
     story = []
 
-    story.append(Paragraph("Perfect Foundation School", title))
+    logo = school_logo_flowable(branding, width=16 * mm, height=16 * mm)
+
+    if logo:
+        logo_table = Table(
+            [[logo, Paragraph(branding["name"], title)]],
+            colWidths=[20 * mm, 116 * mm],
+        )
+        logo_table.setStyle(
+            TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (0, -1), 0),
+                ("RIGHTPADDING", (-1, 0), (-1, -1), 0),
+            ])
+        )
+        story.append(logo_table)
+    else:
+        story.append(Paragraph(branding["name"], title))
+
     story.append(Paragraph("Official Payment Receipt", subtitle))
 
     meta = Table(

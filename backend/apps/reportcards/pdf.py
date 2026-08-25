@@ -76,7 +76,14 @@ def _style():
 
 def build_report_card_pdf(report_card):
     """Return the bytes of a formatted report card PDF."""
+    from apps.schools.branding_context import (
+        get_school_branding,
+        school_logo_flowable,
+    )
+
     s = _style()
+
+    branding = get_school_branding(report_card.exam.campus.school)
 
     buffer = BytesIO()
 
@@ -88,7 +95,7 @@ def build_report_card_pdf(report_card):
         topMargin=16 * mm,
         bottomMargin=16 * mm,
         title=f"Report Card - {report_card.student.full_name}",
-        author="Perfect Foundation School",
+        author=branding["name"],
     )
 
     enrollment = (
@@ -105,8 +112,30 @@ def build_report_card_pdf(report_card):
 
     flow = []
 
-    flow.append(Paragraph("PERFECT FOUNDATION SCHOOL", s["title"]))
-    flow.append(Paragraph("Academic Progress Report", s["subtitle"]))
+    logo = school_logo_flowable(branding)
+
+    if logo:
+        header_table = Table(
+            [[logo, Paragraph(f"<b>{branding['name'].upper()}</b>", s["title"])]],
+            colWidths=[26 * mm, 148 * mm],
+        )
+        header_table.setStyle(
+            TableStyle([
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+                ("LEFTPADDING", (0, 0), (0, -1), 0),
+            ])
+        )
+        flow.append(header_table)
+    else:
+        flow.append(Paragraph(branding["name"].upper(), s["title"]))
+
+    primary_hex = branding["primary_color"].replace("#", "")
+    flow.append(
+        Paragraph(
+            f'<font color="#{primary_hex}">Academic Progress Report</font>',
+            s["subtitle"],
+        )
+    )
 
     info_data = [
         [

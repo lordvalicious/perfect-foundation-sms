@@ -34,7 +34,11 @@ class TwoFASetupView(APIView):
 
         uri = pyotp.totp.TOTP(user.twofa_secret).provisioning_uri(
             name=user.email or user.username,
-            issuer_name="Perfect Foundation SMS",
+            issuer_name=(
+                getattr(request, "institution", None).name
+                if getattr(request, "institution", None)
+                else "School Management"
+            ),
         )
 
         return Response({

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import {
   Users,
   GraduationCap,
@@ -70,6 +70,16 @@ function Dashboard() {
   const [enrollmentByCampus, setEnrollmentByCampus] = useState([]);
   const [attendanceRows, setAttendanceRows] = useState([]);
   const [collectionTrend, setCollectionTrend] = useState([]);
+  const [schoolName, setSchoolName] = useState("");
+
+  useEffect(() => {
+    fetch("/api/schools/branding/", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) =>
+        setSchoolName(data?.school_name || data?.short_name || "")
+      )
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch(API_URL, { credentials: "include" })
@@ -190,8 +200,7 @@ function Dashboard() {
           <h2>Dashboard Overview</h2>
 
           <p className="subtitle">
-            Welcome back. Here's what's happening at Perfect Foundation
-            School.
+            Welcome back. Here's what's happening across your school.
           </p>
         </div>
 
@@ -377,7 +386,7 @@ function Dashboard() {
                 <GraduationCap size={30} />
               </div>
 
-              <h3>Perfect Foundation School</h3>
+              <h3>{schoolName || "Welcome"}</h3>
 
               <p>
                 Manage students, teachers, attendance, examinations,

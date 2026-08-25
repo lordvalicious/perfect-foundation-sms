@@ -20,6 +20,7 @@ export default function BrandingPage() {
 
   const [form, setForm] = useState({
     school_name: "",
+    short_name: "",
     motto: "",
     primary_color: DEFAULT_COLORS.primary_color,
     secondary_color: DEFAULT_COLORS.secondary_color,
@@ -29,6 +30,13 @@ export default function BrandingPage() {
     contact_website: "",
     address_line: "",
     footer_text: "",
+    currency: "PKR",
+    timezone: "UTC",
+    date_format: "dd-mm-yyyy",
+    language: "en",
+    working_days: ["mon", "tue", "wed", "thu", "fri"],
+    email_from_name: "",
+    email_from_address: "",
   });
 
   const [logoPreview, setLogoPreview] = useState(null);
@@ -43,6 +51,7 @@ export default function BrandingPage() {
         const data = await response.json();
         setForm({
           school_name: data.school_name || "",
+          short_name: data.short_name || "",
           motto: data.motto || "",
           primary_color: data.primary_color || DEFAULT_COLORS.primary_color,
           secondary_color: data.secondary_color || DEFAULT_COLORS.secondary_color,
@@ -52,6 +61,16 @@ export default function BrandingPage() {
           contact_website: data.contact_website || "",
           address_line: data.address_line || "",
           footer_text: data.footer_text || "",
+          currency: data.currency || "PKR",
+          timezone: data.timezone || "UTC",
+          date_format: data.date_format || "dd-mm-yyyy",
+          language: data.language || "en",
+          working_days:
+            data.working_days?.length > 0
+              ? data.working_days
+              : ["mon", "tue", "wed", "thu", "fri"],
+          email_from_name: data.email_from_name || "",
+          email_from_address: data.email_from_address || "",
         });
         if (data.logo_url) setLogoPreview(data.logo_url);
       }
@@ -94,7 +113,11 @@ export default function BrandingPage() {
 
     const formData = new FormData();
     Object.entries(form).forEach(([key, value]) => {
-      formData.append(key, value);
+      if (key === "working_days") {
+        formData.append("working_days", JSON.stringify(value));
+      } else {
+        formData.append(key, value);
+      }
     });
     if (logoFile) formData.append("logo", logoFile);
     if (faviconFile) formData.append("favicon", faviconFile);
@@ -185,6 +208,91 @@ export default function BrandingPage() {
                       </div>
                     </label>
                   </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="teacher-list-header">
+                  <h3>Localization & Settings</h3>
+                </div>
+                <div className="form-section">
+                  <div className="form-grid">
+                    <label>
+                      Short Name
+                      <input name="short_name" value={form.short_name} onChange={handleChange} placeholder="e.g. PFS" />
+                    </label>
+                    <label>
+                      Currency (3-letter)
+                      <input name="currency" maxLength={3} value={form.currency} onChange={handleChange} placeholder="PKR" />
+                    </label>
+                    <label>
+                      Timezone
+                      <input name="timezone" value={form.timezone} onChange={handleChange} placeholder="Asia/Karachi" />
+                    </label>
+                    <label>
+                      Date Format
+                      <select name="date_format" value={form.date_format} onChange={handleChange}>
+                        {["dd-mm-yyyy", "dd MMM yyyy", "mm/dd/yyyy", "yyyy-mm-dd"].map((f) => (
+                          <option key={f} value={f}>{f}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Default Language
+                      <select name="language" value={form.language} onChange={handleChange}>
+                        <option value="en">English</option>
+                        <option value="ur">اردو</option>
+                      </select>
+                    </label>
+                    <label style={{ gridColumn: "1 / -1" }}>
+                      Working Days
+                      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 13 }}>
+                        {[
+                          ["mon", "Mon"], ["tue", "Tue"], ["wed", "Wed"],
+                          ["thu", "Thu"], ["fri", "Fri"], ["sat", "Sat"], ["sun", "Sun"],
+                        ].map(([key, label]) => (
+                          <label key={key} style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <input
+                              type="checkbox"
+                              checked={form.working_days.includes(key)}
+                              onChange={(e) =>
+                                setForm((p) => ({
+                                  ...p,
+                                  working_days: e.target.checked
+                                    ? [...p.working_days, key]
+                                    : p.working_days.filter((d) => d !== key),
+                                }))
+                              }
+                            />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="teacher-list-header">
+                  <h3>White-Label Email Sender</h3>
+                </div>
+                <div className="form-section">
+                  <div className="form-grid">
+                    <label>
+                      From Name (on outgoing emails)
+                      <input name="email_from_name" value={form.email_from_name} onChange={handleChange}
+                        placeholder={`e.g. ${form.school_name || "School"} Office`} />
+                    </label>
+                    <label>
+                      From Address override
+                      <input type="email" name="email_from_address" value={form.email_from_address} onChange={handleChange}
+                        placeholder="no-reply@yourdomain.edu" />
+                    </label>
+                  </div>
+                  <p style={{ fontSize: 12, color: "#888" }}>
+                    Leave blank to use the platform default sender. Custom domains need SPF/DKIM verification with your email provider.
+                  </p>
                 </div>
               </div>
 
