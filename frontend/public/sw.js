@@ -2,7 +2,7 @@
    - API calls: network only (data must be fresh).
    - App shell + assets: cache-first, refreshed in the background. */
 
-const CACHE = "pf-sms-v1";
+const CACHE = "pf-sms-v2";
 const SHELL = ["/", "/index.html", "/manifest.webmanifest", "/icon.svg"];
 
 self.addEventListener("install", (event) => {
