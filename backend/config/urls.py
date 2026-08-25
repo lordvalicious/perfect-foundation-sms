@@ -1,8 +1,7 @@
 from django.conf import settings  # type: ignore[reportMissingModuleSource]
-from django.conf.urls.static import static  # type: ignore[reportMissingModuleSource]
 from django.contrib import admin  # type: ignore[reportMissingModuleSource]
 from django.http import JsonResponse
-from django.urls import include, path  # type: ignore[reportMissingModuleSource]
+from django.urls import include, path, re_path  # type: ignore[reportMissingModuleSource]
 
 
 def health_check(request):
@@ -155,7 +154,18 @@ urlpatterns = [
     ),
 ]
 
-urlpatterns += static(
-    settings.MEDIA_URL,
-    document_root=settings.MEDIA_ROOT,
-)
+# Protected media serving (replaces public static() serving)
+from apps.schools.media_views import ProtectedMediaView, PublicBrandingMediaView  # noqa: E402
+
+urlpatterns += [
+    path(
+        settings.MEDIA_URL.lstrip("/") + "school/branding/<path:file_path>",
+        PublicBrandingMediaView.as_view(),
+        name="public-branding-media",
+    ),
+    re_path(
+        r"^" + settings.MEDIA_URL.lstrip("/") + "(?P<file_path>.+)$",
+        ProtectedMediaView.as_view(),
+        name="protected-media",
+    ),
+]

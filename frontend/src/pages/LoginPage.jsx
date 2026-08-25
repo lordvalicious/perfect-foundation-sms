@@ -20,12 +20,16 @@ export default function LoginPage() {
   const schoolCode = new URLSearchParams(window.location.search).get("school_code") || "";
 
   useEffect(() => {
-    if (!schoolCode) return undefined;
+    // Try school_code param first, then fall back to hostname resolution
+    let url = `/api/schools/tenant-config/`;
+    if (schoolCode) {
+      url += `?school_code=${encodeURIComponent(schoolCode)}`;
+    }
 
-    fetch(`/api/schools/tenant-config/?school_code=${encodeURIComponent(schoolCode)}`)
+    fetch(url)
       .then((response) => (response.ok ? response.json() : null))
       .then((data) => {
-        if (data) {
+        if (data && !data.detail) {
           setBranding(data);
           document.title = data.school_name;
           if (data.favicon_url) {
