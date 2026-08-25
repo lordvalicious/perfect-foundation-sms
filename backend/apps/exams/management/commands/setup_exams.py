@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.core.management.base import BaseCommand
 
@@ -13,7 +13,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(
             self.style.SUCCESS(
-                "\nSetting up Perfect Foundation exam data...\n"
+                "\nSetting up exam data...\n"
             )
         )
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { Search, Building2 } from "lucide-react";
 import { useAuth } from "../auth";
 import { useLang } from "../i18n";
@@ -689,7 +689,7 @@ function StudentsPage() {
           <h2>{t("Students")}</h2>
 
           <p className="subtitle">
-            {t("Manage students enrolled at Perfect Foundation School.")}
+            {t("Manage students enrolled at your school.")}
           </p>
         </div>
 

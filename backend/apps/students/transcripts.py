@@ -1,4 +1,4 @@
-"""Consolidated multi-year transcript PDF for a student (ReportLab)."""
+﻿"""Consolidated multi-year transcript PDF for a student (ReportLab)."""
 
 from io import BytesIO
 
@@ -136,7 +136,7 @@ class StudentTranscriptPdfView(APIView):
                 (
                     exam_campus.school.name.upper()
                     if first.exam.campus_id and exam_campus.school_id
-                    else "PERFECT FOUNDATION SCHOOL"
+                    else "SCHOOL"
                 ),
                 school_style,
             ),

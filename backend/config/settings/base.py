@@ -1,5 +1,5 @@
-"""
-Shared Django settings for the Perfect Foundation School Management System.
+﻿"""
+Shared Django settings for the School Management System.
 
 All environments import from this module.
 """

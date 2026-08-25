@@ -1,4 +1,4 @@
-
+﻿
 from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 
@@ -21,7 +21,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(
             self.style.SUCCESS(
-                "\nSetting up Perfect Foundation finance data...\n"
+                "\nSetting up finance data...\n"
             )
         )
 

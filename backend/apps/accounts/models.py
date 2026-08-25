@@ -1,4 +1,4 @@
-from django.contrib.auth.models import AbstractUser
+﻿from django.contrib.auth.models import AbstractUser
 from django.db import models
 
 from apps.schools.models import School
@@ -22,7 +22,7 @@ class Role(models.TextChoices):
 
 class User(AbstractUser):
     """
-    Base user account for the Perfect Foundation School Management System.
+    Base user account for the School Management System.
 
     Staff and students will be connected to this account through
     their respective profiles.

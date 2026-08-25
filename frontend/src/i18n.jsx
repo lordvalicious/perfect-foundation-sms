@@ -94,7 +94,7 @@ const URDU = {
 
   // ---------- Students page ----------
   "Home / Students": "ہوم / طلبہ",
-  "Manage students enrolled at Perfect Foundation School.":
+  "Manage students enrolled at your school.":
     "پرفیکٹ فاؤنڈیشن اسکول میں داخل شدہ طلبہ کا انتظام۔",
   "+ Add Student": "+ نیا طالب علم",
   "Search by name, admission number or phone...":

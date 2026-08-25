@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Q, Sum
@@ -678,7 +678,7 @@ class PaymentReceiptHTMLView(APIView):
 </style>
 </head>
 <body>
-  <h1>Perfect Foundation School</h1>
+  <h1>School</h1>
   <h2>Official Payment Receipt</h2>
 
   <table class="meta">

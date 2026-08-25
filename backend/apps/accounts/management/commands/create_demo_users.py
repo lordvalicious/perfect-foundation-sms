@@ -1,4 +1,4 @@
-from django.core.management.base import BaseCommand
+﻿from django.core.management.base import BaseCommand
 from django.db import transaction
 
 from apps.accounts.models import (
@@ -107,7 +107,7 @@ class Command(BaseCommand):
 
         if school is None:
             school = School.objects.create(
-                name="Perfect Foundation School",
+                name="Demo School",
                 address="Default Campus Address",
                 city="Default City",
             )

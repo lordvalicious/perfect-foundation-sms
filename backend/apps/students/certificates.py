@@ -1,4 +1,4 @@
-"""Printable student certificates (ReportLab).
+﻿"""Printable student certificates (ReportLab).
 
 Supported types:
 - bonafide    — certificate of enrolment / study
@@ -93,7 +93,7 @@ class StudentCertificatePdfView(APIView):
         except ValueError:
             issue_date = timezone.localdate()
 
-        school_name = campus.school.name if campus.school_id else "Perfect Foundation School"
+        school_name = campus.school.name if campus.school_id else "School"
         son_daughter = "son" if (student.gender or "") == "male" else "daughter"
 
         details = [
