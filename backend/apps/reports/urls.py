@@ -36,6 +36,7 @@ from .export_views import (
     DataExportListView,
     DataExportView,
 )
+from .cron_views import WeeklyReportEmailCronView
 from .import_views import (
     ImportCommitView,
     ImportPreviewView,
@@ -209,6 +210,11 @@ urlpatterns = [
         "import/commit/",
         ImportCommitView.as_view(),
         name="import-commit",
+    ),
+    path(
+        "cron/email-weekly/",
+        WeeklyReportEmailCronView.as_view(),
+        name="email-weekly-cron",
     ),
     path(
         "health/",

@@ -26,6 +26,7 @@ import {
   CalendarDays,
   MessageSquare,
   Trophy,
+  Table2,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
@@ -183,6 +184,8 @@ const REPORTS = [
   },
 ];
 
+const GRADEBOOK_KEY = "gradebook";
+
 export default function ReportsPage() {
   const [active, setActive] = useState("enrollment");
   const [data, setData] = useState({});
@@ -194,6 +197,17 @@ export default function ReportsPage() {
   const [studentId, setStudentId] = useState("");
   const [threshold, setThreshold] = useState("75");
   const [downloading, setDownloading] = useState(false);
+  const [gradebook, setGradebook] = useState(null);
+  const [gbLoading, setGbLoading] = useState(false);
+  const [gbError, setGbError] = useState("");
+  const [gbFilters, setGbFilters] = useState({
+    class_obj: "",
+    section: "",
+    subject: "",
+  });
+  const [classList, setClassList] = useState([]);
+  const [sectionList, setSectionList] = useState([]);
+  const [subjectList, setSubjectList] = useState([]);
 
   const needsExam = EXAM_REPORTS.includes(active);
   const needsStudent = STUDENT_REPORTS.includes(active);
@@ -273,6 +287,47 @@ export default function ReportsPage() {
   }, []);
 
   useEffect(() => {
+    Promise.all([
+      fetch("/api/schools/classes/", { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : [])),
+      fetch("/api/schools/sections/", { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : [])),
+      fetch("/api/schools/subjects/", { credentials: "include" })
+        .then((r) => (r.ok ? r.json() : [])),
+    ])
+      .then(([classes, sections, subjects]) => {
+        const arr = (v) => (Array.isArray(v) ? v : v.results || []);
+        setClassList(arr(classes));
+        setSectionList(arr(sections));
+        setSubjectList(arr(subjects));
+      })
+      .catch(() => {});
+  }, []);
+
+  const loadGradebook = useCallback(() => {
+    if (!gbFilters.class_obj || !gbFilters.subject) return;
+
+    setGbLoading(true);
+    setGbError("");
+
+    const params = new URLSearchParams({
+      class_obj: gbFilters.class_obj,
+      subject: gbFilters.subject,
+    });
+    if (gbFilters.section) params.append("section", gbFilters.section);
+
+    fetch(`/api/exams/gradebook/?${params.toString()}`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : r.json().then((b) => Promise.reject(b))))
+      .then(setGradebook)
+      .catch((err) =>
+        setGbError(err.detail || err.message || "Could not load gradebook.")
+      )
+      .finally(() => setGbLoading(false));
+  }, [gbFilters]);
+
+  useEffect(() => {
     if ((needsExam && exam) || (needsStudent && studentId)) {
       load(active);
     }
@@ -325,11 +380,23 @@ export default function ReportsPage() {
             </button>
           );
         })}
+
+        <button
+          className={`tab-button ${active === GRADEBOOK_KEY ? "active" : ""}`}
+          onClick={() => setActive(GRADEBOOK_KEY)}
+        >
+          <Table2 size={15} />
+          Gradebook
+        </button>
       </div>
 
       <div className="panel">
         <PanelHeader
-          title={REPORTS.find((item) => item.key === active).title}
+          title={
+            active === GRADEBOOK_KEY
+              ? "Gradebook"
+              : REPORTS.find((item) => item.key === active)?.title || "Report"
+          }
           subtitle="generated from live data"
           action={
             <button
@@ -954,6 +1021,90 @@ export default function ReportsPage() {
                 `${row.success_rate}%`,
               ])}
             />
+          )}
+
+          {active === GRADEBOOK_KEY && (
+            <>
+              <div className="filter-row">
+                <select
+                  value={gbFilters.class_obj}
+                  onChange={(e) =>
+                    setGbFilters({ ...gbFilters, class_obj: e.target.value, section: "" })
+                  }
+                >
+                  <option value="">Class...</option>
+                  {classList.map((cls) => (
+                    <option key={cls.id} value={cls.id}>{cls.name}</option>
+                  ))}
+                </select>
+
+                <select
+                  value={gbFilters.section}
+                  onChange={(e) => setGbFilters({ ...gbFilters, section: e.target.value })}
+                  disabled={!gbFilters.class_obj}
+                >
+                  <option value="">All sections</option>
+                  {sectionList
+                    .filter((s) => String(s.class_obj) === String(gbFilters.class_obj))
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                </select>
+
+                <select
+                  value={gbFilters.subject}
+                  onChange={(e) => setGbFilters({ ...gbFilters, subject: e.target.value })}
+                >
+                  <option value="">Subject...</option>
+                  {subjectList.map((sub) => (
+                    <option key={sub.id} value={sub.id}>{sub.name}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  className="primary-button"
+                  onClick={loadGradebook}
+                  disabled={!gbFilters.class_obj || !gbFilters.subject || gbLoading}
+                >
+                  Load
+                </button>
+              </div>
+
+              {gbError && <div className="state-card error">{gbError}</div>}
+
+              {gradebook && (
+                <ReportContent
+                  summary={[
+                    { label: "Exams", value: gradebook.exams?.length ?? 0 },
+                    { label: "Students", value: gradebook.students?.length ?? 0 },
+                  ]}
+                  headers={[
+                    "Student",
+                    ...((gradebook.exams || []).map((exam) => exam.name.slice(0, 12))),
+                    "Average",
+                    "Grade",
+                  ]}
+                  rows={(gradebook.students || []).map((student) => [
+                    `${student.name} (${student.admission_number})`,
+                    ...(gradebook.exams || []).map((exam) => {
+                      const score = student.scores[String(exam.id)];
+                      return score ? `${score.percentage}%` : "—";
+                    }),
+                    student.average_percentage != null ? `${student.average_percentage}%` : "—",
+                    student.grade || "—",
+                  ])}
+                />
+              )}
+
+              {!gradebook && !gbLoading && !gbError && (
+                <div className="empty-state">
+                  <Table2 size={42} />
+                  <h3>Pick a class and subject</h3>
+                  <p>The gradebook matrix will appear here.</p>
+                </div>
+              )}
+            </>
           )}
         </StateArea>
       </div>

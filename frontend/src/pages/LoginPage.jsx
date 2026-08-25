@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogIn, ShieldCheck } from "lucide-react";
 import { useAuth } from "../auth";
+import { useLang } from "../i18n";
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { t, lang, setLang } = useLang();
   const navigate = useNavigate();
 
   const [identifier, setIdentifier] = useState("");
@@ -58,8 +60,29 @@ export default function LoginPage() {
     }
   };
 
+  const toggleLang = () => {
+    const next = lang === "en" ? "ur" : "en";
+    setLang(next);
+
+    document
+      .querySelectorAll("input")
+      .forEach((input) => {
+        input.dir = next === "ur" ? "rtl" : "ltr";
+      });
+  };
+
   return (
-    <div className="login-page">
+    <div className="login-page" dir={lang === "ur" ? "rtl" : "ltr"}>
+      <div style={{ position: "absolute", top: 16, insetInlineEnd: 16 }}>
+        <button
+          className="theme-toggle"
+          onClick={toggleLang}
+          title={lang === "en" ? "اردو میں دیکھیں" : "Switch to English"}
+        >
+          {lang === "en" ? "اردو" : "EN"}
+        </button>
+      </div>
+
       <div className="login-card">
         <div className="login-emblem" style={branding?.primary_color ? { background: branding.primary_color } : undefined}>
           {branding?.logo_url ? <img src={branding.logo_url} alt="" /> : <ShieldCheck size={32} />}
@@ -68,26 +91,28 @@ export default function LoginPage() {
         <h1>{branding?.school_name || "School Management"}</h1>
 
         <p className="login-subtitle">
-          {branding?.motto || "School Management Portal"}
+          {lang === "ur"
+            ? "اسکول مینجمنٹ پورٹل"
+            : branding?.motto || "School Management Portal"}
         </p>
 
         <form onSubmit={handleSubmit}>
           <label>
-            Username or Email
+            {t("Username or Email")}
             <input
               type="text"
               value={identifier}
               onChange={(event) =>
                 setIdentifier(event.target.value)
               }
-              placeholder="Username or email"
+              placeholder={t("Username or Email")}
               autoComplete="username"
               required
             />
           </label>
 
           <label>
-            Password
+            {t("Password")}
             <input
               type="password"
               value={password}
@@ -102,7 +127,7 @@ export default function LoginPage() {
 
           {otpRequired && (
             <label>
-              Authenticator code
+              {t("Authenticator code")}
               <input
                 type="text"
                 inputMode="numeric"
@@ -126,7 +151,7 @@ export default function LoginPage() {
             disabled={submitting}
           >
             <LogIn size={17} />
-            {submitting ? "Signing in..." : "Sign In"}
+            {submitting ? t("Signing in...") : t("Sign In")}
           </button>
         </form>
 

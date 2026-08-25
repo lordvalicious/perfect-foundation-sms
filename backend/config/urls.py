@@ -138,6 +138,11 @@ urlpatterns = [
         "api/health-records/",
         include("apps.health.urls"),
     ),
+
+    path(
+        "api/alumni/",
+        include("apps.alumni.urls"),
+    ),
 ]
 
 urlpatterns += static(

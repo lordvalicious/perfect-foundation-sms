@@ -105,6 +105,17 @@ class Teacher(models.Model):
         blank=True,
     )
 
+    bank_name = models.CharField(
+        max_length=120,
+        blank=True,
+    )
+
+    account_number = models.CharField(
+        max_length=40,
+        blank=True,
+        help_text="Bank account number or IBAN for payroll transfers.",
+    )
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,

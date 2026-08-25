@@ -56,6 +56,8 @@ import {
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
+import { LanguageProvider, useLang } from "./i18n";
+import LanguageToggle from "./components/LanguageToggle";
 import LoginPage from "./pages/LoginPage";
 import AttendancePage from "./pages/AttendancePage";
 import FinancePage from "./pages/FinancePage";
@@ -97,6 +99,7 @@ import StaffOperationsPage from "./pages/StaffOperationsPage";
 import HomeworkPage from "./pages/HomeworkPage";
 import HealthRecordsPage from "./pages/HealthRecordsPage";
 import AdmissionsApplyPage from "./pages/AdmissionsApplyPage";
+import AlumniPage from "./pages/AlumniPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -317,6 +320,7 @@ const navigation = [
   { label: "Data Export", path: "/data-export", icon: Download, roles: ["super_admin", "admin"] },
   { label: "Data Import", path: "/data-import", icon: Upload, roles: ["super_admin", "admin"] },
   { label: "Events", path: "/events", icon: CalendarClock, roles: [] },
+  { label: "Alumni", path: "/alumni", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
 ];
 
 const systemNavigation = [
@@ -351,7 +355,7 @@ const navGroups = [
   },
   {
     label: "Resources",
-    items: ["/library", "/transport", "/inventory", "/documents", "/campuses", "/campus-dashboard"]
+    items: ["/library", "/transport", "/inventory", "/documents", "/campuses", "/campus-dashboard", "/alumni"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -373,6 +377,7 @@ const navGroups = [
 
 function Layout({ children, hasRole }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { t } = useLang();
 
   const visibleNavigation = navigation.filter(
     (item) => item.roles.length === 0 || hasRole(item.roles)
@@ -408,7 +413,7 @@ function Layout({ children, hasRole }) {
                 className={({ isActive }) => `topbar-link ${isActive ? "active" : ""}`}
               >
                 <dashItem.icon size={15} />
-                <span>Dashboard</span>
+                <span>{t("Dashboard")}</span>
               </NavLink>
             )}
             {visibleNavGroups.filter((g) => g.label !== "System").map((group) => (
@@ -426,7 +431,7 @@ function Layout({ children, hasRole }) {
                       className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
                     >
                       <item.icon size={14} />
-                      {item.label}
+                      {t(item.label)}
                     </NavLink>
                   ))}
                 </div>
@@ -446,7 +451,7 @@ function Layout({ children, hasRole }) {
                       className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
                     >
                       <item.icon size={14} />
-                      {item.label}
+                      {t(item.label)}
                     </NavLink>
                   ))}
                 </div>
@@ -458,6 +463,7 @@ function Layout({ children, hasRole }) {
         <div className="topbar-right">
           <GlobalSearch />
           <NotificationsBell />
+          <LanguageToggle />
           <ThemeToggle />
 
           <TopbarProfile />
@@ -789,6 +795,12 @@ function Shell() {
           </RequireRoles>
         } />
 
+        <Route path="/alumni" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <AlumniPage />
+          </RequireRoles>
+        } />
+
         <Route path="/settings" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
             <SettingsPage />
@@ -821,11 +833,13 @@ function Shell() {
 
 function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Shell />
-      </BrowserRouter>
-    </AuthProvider>
+    <LanguageProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Shell />
+        </BrowserRouter>
+      </AuthProvider>
+    </LanguageProvider>
   );
 }
 

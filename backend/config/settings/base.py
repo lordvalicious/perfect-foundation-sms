@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     "apps.discipline",
     "apps.homework",
     "apps.health",
+    "apps.alumni",
 
     "corsheaders",
     "rest_framework",

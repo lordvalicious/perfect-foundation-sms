@@ -118,10 +118,22 @@ class PayrollPayslipPdfView(APIView):
                 deduction_rows.append(
                     [name.replace("_", " ").title(), f"{value:,.2f}"]
                 )
-        else:
+
+        from .tax import monthly_withholding
+
+        withholding = monthly_withholding(record.gross_salary)
+
+        if withholding > 0:
+            deduction_rows.append(
+                ["Income Tax (WHT)", f"{withholding:,.2f}"]
+            )
+
+        if len(deduction_rows) == 1:
             deduction_rows.append(["-", "-"])
 
-        deduction_rows.append(["Total", f"{record.total_deductions:,.2f}"])
+        total_deductions = record.total_deductions + withholding
+
+        deduction_rows.append(["Total", f"{total_deductions:,.2f}"])
 
         def money_table(data, highlight_last=True):
             table = Table(data, colWidths=[80 * mm, 60 * mm])
@@ -145,7 +157,7 @@ class PayrollPayslipPdfView(APIView):
             return table
 
         net_table = Table(
-            [["Net Salary", f"Rs {record.net_salary:,.2f}"]],
+            [["Net Salary", f"Rs {record.net_salary - withholding:,.2f}"]],
             colWidths=[140 * mm],
         )
         net_table.setStyle(

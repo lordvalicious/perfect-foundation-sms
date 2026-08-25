@@ -3599,3 +3599,40 @@ select {
 .spin {
   animation: spin 1s linear infinite;
 }
+
+/* ==========================================================================
+   RTL (URDU) SUPPORT
+   ========================================================================== */
+
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="rtl"] .data-table th,
+[dir="rtl"] .data-table td {
+  text-align: right;
+}
+
+[dir="rtl"] .nav-dropdown,
+[dir="rtl"] .nav-dropdown-item {
+  text-align: right;
+}
+
+[dir="rtl"] input,
+[dir="rtl"] select,
+[dir="rtl"] textarea {
+  text-align: right;
+}
+
+[dir="rtl"] .login-card label {
+  text-align: right;
+}
+
+[dir="rtl"] .stat-card,
+[dir="rtl"] .stat-info {
+  text-align: right;
+}
+
+[dir="rtl"] .panel-header {
+  text-align: right;
+}

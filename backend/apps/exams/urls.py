@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .gradebook import ClassGradebookView
 from .views import (
     ExamListView,
     ExamSubjectListView,
@@ -28,5 +29,10 @@ urlpatterns = [
         "practical/<int:pk>/",
         PracticalResultDetailView.as_view(),
         name="practical-result-detail",
+    ),
+    path(
+        "gradebook/",
+        ClassGradebookView.as_view(),
+        name="class-gradebook",
     ),
 ]

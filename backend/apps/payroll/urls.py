@@ -1,5 +1,6 @@
 from django.urls import path
 
+from .bank_file import PayrollBankFileView
 from .payslips_pdf import PayrollPayslipPdfView
 from .views import (
     PayrollProcessView,
@@ -41,6 +42,11 @@ urlpatterns = [
         "records/<int:pk>/payslip.pdf",
         PayrollPayslipPdfView.as_view(),
         name="payroll-payslip-pdf",
+    ),
+    path(
+        "records/bank-file/",
+        PayrollBankFileView.as_view(),
+        name="payroll-bank-file",
     ),
     path("payslips/", PayslipListView.as_view(), name="payslip-list"),
 ]
