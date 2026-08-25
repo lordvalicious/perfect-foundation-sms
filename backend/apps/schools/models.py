@@ -49,6 +49,16 @@ class School(models.Model):
                     "Used for domain-based tenant resolution.",
     )
 
+    enabled_modules = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "List of enabled module keys from schools.modules.ALL_MODULES. "
+            "An empty list means ALL modules are enabled (backwards "
+            "compatible default)."
+        ),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -336,130 +346,6 @@ class SubjectOffering(models.Model):
         return f"{self.subject.name} ({self.class_obj.name})"
 
 
-class SubjectOffering(models.Model):
-    academic_year = models.ForeignKey(
-        AcademicYear,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    class_obj = models.ForeignKey(
-        Class,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    subject = models.ForeignKey(
-        Subject,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    teacher = models.ForeignKey(
-        "teachers.Teacher",
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-        null=True,
-        blank=True,
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="active",
-    )
-
-    class Meta:
-        ordering = ["class_obj__name", "subject__name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["academic_year", "class_obj", "subject"],
-                name="unique_subject_offering_per_class_per_year",
-            ),
-        ]
-
-    def clean(self):
-        from django.core.exceptions import ValidationError
-
-        errors = {}
-
-        if self.class_obj_id:
-            class_school = self.class_obj.unit.campus.school
-            if self.subject_id and self.subject.institution_id != class_school.pk:
-                errors["subject"] = (
-                    "Subject must belong to the same school as the class."
-                )
-
-            if self.teacher_id:
-                teacher_school = self.teacher.primary_campus.school
-                if teacher_school.pk != class_school.pk:
-                    errors["teacher"] = "Teacher must belong to the same school."
-
-        if errors:
-            raise ValidationError(errors)
-
-    def __str__(self):
-        return f"{self.subject.name} ({self.class_obj.name})"
-
-
-class SubjectOffering(models.Model):
-    academic_year = models.ForeignKey(
-        AcademicYear,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    class_obj = models.ForeignKey(
-        Class,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    subject = models.ForeignKey(
-        Subject,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    teacher = models.ForeignKey(
-        "teachers.Teacher",
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-        null=True,
-        blank=True,
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="active",
-    )
-
-    class Meta:
-        ordering = ["class_obj__name", "subject__name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["academic_year", "class_obj", "subject"],
-                name="unique_subject_offering_per_class_per_year",
-            ),
-        ]
-
-    def clean(self):
-        from django.core.exceptions import ValidationError
-
-        errors = {}
-
-        if self.class_obj_id:
-            class_school = self.class_obj.unit.campus.school
-            if self.subject_id and self.subject.institution_id != class_school.pk:
-                errors["subject"] = (
-                    "Subject must belong to the same school as the class."
-                )
-
-            if self.teacher_id:
-                teacher_school = self.teacher.primary_campus.school
-                if teacher_school.pk != class_school.pk:
-                    errors["teacher"] = "Teacher must belong to the same school."
-
-        if errors:
-            raise ValidationError(errors)
-
-    def __str__(self):
-        return f"{self.subject.name} ({self.class_obj.name})"
-
-
 class SchoolSettings(models.Model):
     school = models.OneToOneField(
         School,
@@ -469,7 +355,7 @@ class SchoolSettings(models.Model):
     logo = models.ImageField(upload_to="school/branding/", blank=True, null=True)
     favicon = models.ImageField(upload_to="school/branding/", blank=True, null=True)
     primary_color = models.CharField(max_length=7, default="#1a73e8")
-    second_color = models.CharField(max_length=7, default="#34a853")
+    secondary_color = models.CharField(max_length=7, default="#34a853")
     accent_color = models.CharField(max_length=7, default="#fbbc04")
     motto = models.CharField(max_length=300, blank=True)
     contact_email = models.EmailField(blank=True)
@@ -531,72 +417,3 @@ class SchoolSettings(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
 
-class SchoolSettings(models.Model):
-    school = models.OneToOneField(
-        School,
-        on_delete=models.CASCADE,
-        related_name="settings",
-    )
-    logo = models.ImageField(upload_to="school/branding/", blank=True, null=True)
-    favicon = models.ImageField(upload_to="school/branding/", blank=True, null=True)
-    primary_color = models.CharField(max_length=7, default="#1a73e8")
-    second_color = models.CharField(max_length=7, default="#34a853")
-    accent_color = models.CharField(max_length=7, default="#fbbc04")
-    motto = models.CharField(max_length=300, blank=True)
-    contact_email = models.EmailField(blank=True)
-    contact_phone = models.CharField(max_length=20, blank=True)
-    contact_website = models.URLField(blank=True)
-    address_line = models.TextField(blank=True)
-    footer_text = models.TextField(blank=True)
-    sidebar_color = models.CharField(max_length=7, blank=True)
-    header_color = models.CharField(max_length=7, blank=True)
-    login_background = models.ImageField(
-        upload_to="school/branding/", blank=True, null=True
-    )
-
-    SHORT_NAME_HELP = "Compact name used in tight UI spaces."
-    short_name = models.CharField(max_length=50, blank=True, help_text=SHORT_NAME_HELP)
-
-    DATE_FORMAT_CHOICES = [
-        ("dd-mm-yyyy", "31-12-2026"),
-        ("dd MMM yyyy", "31 Dec 2026"),
-        ("mm/dd/yyyy", "12/31/2026"),
-        ("yyyy-mm-dd", "2026-12-31"),
-    ]
-    date_format = models.CharField(
-        max_length=20,
-        choices=DATE_FORMAT_CHOICES,
-        default="dd-mm-yyyy",
-    )
-
-    LANGUAGE_CHOICES = [
-        ("en", "English"),
-        ("ur", "اردو"),
-    ]
-    language = models.CharField(
-        max_length=5,
-        choices=LANGUAGE_CHOICES,
-        default="en",
-    )
-
-    working_days = models.JSONField(
-        default=list,
-        blank=True,
-        help_text=(
-            "List of working day keys, e.g. "
-            '["mon","tue","wed","thu","fri"]. Empty = Mon-Fri.'
-        ),
-    )
-
-    email_from_name = models.CharField(
-        max_length=120,
-        blank=True,
-        help_text="White-label display name on outgoing emails.",
-    )
-    email_from_address = models.EmailField(
-        blank=True,
-        help_text="Per-school from address override for outgoing emails.",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
