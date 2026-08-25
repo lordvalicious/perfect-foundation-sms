@@ -19,9 +19,23 @@ Phase 3 forever.
 
 ## PHASE 1 — Credentials (one-time, ~30 minutes)
 
-**Where:** Vercel → `perfect-foundation-api` → Settings → Environment
-Variables → Add. Set scope = Production. After ALL variables are added:
-Deployments → latest → ⋯ → **Redeploy**.
+**Where, exactly:**
+
+1. **vercel.com** → log in → Dashboard.
+2. Click the **`perfect-foundation-api`** project card.
+3. Project top tabs → **Settings** → left sidebar → **Environment Variables**.
+4. For EACH variable below: paste Key + Value → tick **Production**
+   → **Save**.
+5. After the LAST one: **Deployments** tab → latest → **⋯ → Redeploy**.
+   Variables are NOT live until this redeploy.
+
+**Generate secrets locally:**
+
+```
+python -c "import secrets; print(secrets.token_urlsafe(50))"   # DJANGO_SECRET_KEY
+python -c "import secrets; print(secrets.token_urlsafe(32))"   # CRON_SECRET
+python -c "import secrets; print(secrets.token_urlsafe(24))"   # device keys
+```
 
 ### 1.1 Required basics
 
