@@ -81,7 +81,7 @@ class SchoolListView(NoPaginationMixin, generics.ListAPIView):
         ).order_by("name")
 
 
-class CampusListView(NoPaginationMixin, generics.ListAPIView):
+class CampusListView(NoPaginationMixin, generics.ListCreateAPIView):
     serializer_class = CampusSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -104,6 +104,9 @@ class CampusListView(NoPaginationMixin, generics.ListAPIView):
             queryset = queryset.filter(status=status)
 
         return populate_campus_counts(queryset)
+
+    def perform_create(self, serializer):
+        serializer.save(school=self.request.institution)
 
 
 class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
