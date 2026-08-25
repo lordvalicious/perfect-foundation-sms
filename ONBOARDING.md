@@ -33,10 +33,13 @@ See `backend/.env.example` for a copy-paste reference of every variable.
 ### 1.2 Scheduled jobs (already wired in `backend/vercel.json`)
 
 - **Daily 06:00 UTC** — late fees applied to overdue invoices
+- **Mon–Sat 08:00 UTC** — absence alerts (SMS/email guardians of today's absentees)
+- **Mon–Sat 08:30 UTC** — fee reminders (consolidated, weekly per student)
 - **Mondays 07:00 UTC** — weekly summary email to every admin
 
-Both activate automatically once `CRON_SECRET` (+ email config for the
-digest) exists. No further action needed.
+All activate automatically once `CRON_SECRET` exists (SMS needs Twilio
+vars; email digest/emails need SMTP). Manual triggers: Settings →
+Parent Notifications.
 
 ### 1.3 Frontend
 

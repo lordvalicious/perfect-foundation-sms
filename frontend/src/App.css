@@ -3636,3 +3636,8 @@ select {
 [dir="rtl"] .panel-header {
   text-align: right;
 }
+
+/* Risk level badges (at-risk report) */
+.badge-green { background: var(--success-soft, #dcfce7); color: #15803d; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge-amber { background: var(--warning-soft, #fef3c7); color: #b45309; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+.badge-red { background: #fee2e2; color: #b91c1c; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }

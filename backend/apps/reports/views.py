@@ -1819,6 +1819,7 @@ REPORT_VIEW_MAP = {
     "event_participation": "apps.reports.extended_views.EventParticipationReportView",
     "sms_usage": "apps.reports.extended_views.SmsUsageReportView",
     "top_performers": "apps.reports.extended_views.TopPerformersReportView",
+    "at_risk": "apps.reports.at_risk_views.AtRiskReportView",
 }
 
 

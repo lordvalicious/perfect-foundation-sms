@@ -112,3 +112,91 @@ class LessonCompletion(models.Model):
                 name="unique_completion_per_student_lesson",
             )
         ]
+
+
+class Quiz(models.Model):
+    """An auto-graded MCQ quiz attached to a course."""
+
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="quizzes",
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+
+    is_published = models.BooleanField(default=False)
+    due_date = models.DateField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.title} ({self.course.title})"
+
+    @property
+    def total_marks(self):
+        return sum(q.marks for q in self.questions.all())
+
+
+class Question(models.Model):
+    OPTION_CHOICES = [
+        ("a", "A"),
+        ("b", "B"),
+        ("c", "C"),
+        ("d", "D"),
+    ]
+
+    quiz = models.ForeignKey(
+        Quiz,
+        on_delete=models.CASCADE,
+        related_name="questions",
+    )
+    text = models.TextField()
+    option_a = models.CharField(max_length=300)
+    option_b = models.CharField(max_length=300)
+    option_c = models.CharField(max_length=300)
+    option_d = models.CharField(max_length=300)
+    correct_option = models.CharField(
+        max_length=1,
+        choices=OPTION_CHOICES,
+    )
+    marks = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"Q{self.pk}: {self.text[:50]}"
+
+
+class QuizAttempt(models.Model):
+    quiz = models.ForeignKey(
+        Quiz,
+        on_delete=models.CASCADE,
+        related_name="attempts",
+    )
+    student = models.ForeignKey(
+        "students.Student",
+        on_delete=models.CASCADE,
+        related_name="quiz_attempts",
+    )
+    answers = models.JSONField(default=dict)
+    score = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        default=0,
+    )
+    total_marks = models.PositiveSmallIntegerField(default=0)
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["quiz", "student"],
+                name="unique_attempt_per_quiz_student",
+            )
+        ]

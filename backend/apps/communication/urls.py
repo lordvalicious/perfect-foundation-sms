@@ -12,6 +12,7 @@ from .views import (
     NotificationMarkAllReadView,
     NotificationMarkReadView,
 )
+from .cron_views import FeeReminderCronView
 from .email_views import EmailBroadcastView, EmailLogListView
 from .sms_views import (
     NotificationPreferenceView,
@@ -100,6 +101,11 @@ urlpatterns = [
         "email/logs/",
         EmailLogListView.as_view(),
         name="email-logs",
+    ),
+    path(
+        "cron/fee-reminders/",
+        FeeReminderCronView.as_view(),
+        name="fee-reminder-cron",
     ),
     path(
         "templates/",

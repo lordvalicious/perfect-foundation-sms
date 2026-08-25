@@ -10,6 +10,7 @@ import {
   StatusBadge,
 } from "./ui";
 import { formatDate } from "./format";
+import { useLang } from "../i18n";
 import { jsonHeaders } from "../api";
 
 const API_URL = "/api/attendance/";
@@ -44,6 +45,7 @@ function buildParams(search, status, date, page) {
 }
 
 function MarkAttendance({ onSaved }) {
+  const { t } = useLang();
   const [campus, setCampus] = useState("");
   const [classObj, setClassObj] = useState("");
   const [section, setSection] = useState("");
@@ -258,8 +260,8 @@ function MarkAttendance({ onSaved }) {
   return (
     <div className="panel">
       <PanelHeader
-        title="Mark Attendance"
-        subtitle="Select a class and date to mark attendance"
+        title={t("Mark Attendance")}
+        subtitle={t("Select a class and date to mark attendance")}
       />
 
       <div className="form-section">
@@ -442,6 +444,7 @@ function MarkAttendance({ onSaved }) {
 }
 
 export default function AttendancePage() {
+  const { t } = useLang();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
   const [date, setDate] = useState("");
@@ -474,9 +477,9 @@ export default function AttendancePage() {
   return (
     <section className="content">
       <PageHeader
-        crumb="Home / Attendance"
-        title="Attendance"
-        subtitle="Mark and view daily attendance records for students."
+        crumb={t("Home / Attendance")}
+        title={t("Attendance")}
+        subtitle={t("Mark and view daily attendance records for students.")}
       />
 
       <MarkAttendance onSaved={() => applyFilters(1)} />
@@ -538,8 +541,8 @@ export default function AttendancePage() {
 
       <div className="panel">
         <PanelHeader
-          title="Attendance Records"
-          subtitle="records found"
+          title={t("Attendance Records")}
+          subtitle={t("records found")}
           count={count}
         />
 
@@ -551,7 +554,7 @@ export default function AttendancePage() {
           {rows.length === 0 ? (
             <EmptyState
               icon={CalendarCheck}
-              title="No attendance records found"
+              title={t("No attendance records found")}
               message="No attendance records match the current filters."
             />
           ) : (
@@ -560,13 +563,13 @@ export default function AttendancePage() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>STUDENT</th>
-                      <th>ADMISSION NO.</th>
-                      <th>CAMPUS</th>
-                      <th>CLASS</th>
-                      <th>SECTION</th>
-                      <th>DATE</th>
-                      <th>STATUS</th>
+                      <th>{t("STUDENT")}</th>
+                      <th>{t("ADMISSION NO.")}</th>
+                      <th>{t("CAMPUS")}</th>
+                      <th>{t("CLASS")}</th>
+                      <th>{t("SECTION")}</th>
+                      <th>{t("DATE")}</th>
+                      <th>{t("STATUS")}</th>
                     </tr>
                   </thead>
 

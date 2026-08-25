@@ -28,6 +28,7 @@ class ReportTemplate(models.Model):
         ("event_participation", "Event Participation"),
         ("sms_usage", "SMS Usage"),
         ("top_performers", "Top Performers"),
+        ("at_risk", "At-Risk Students"),
     ]
 
     name = models.CharField(max_length=200)

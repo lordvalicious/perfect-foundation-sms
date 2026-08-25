@@ -1,4 +1,4 @@
-/* eslint-disable react-refresh/only-export-components */
+﻿/* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useEffect, useState } from "react";
 
 /* Urdu translations. Keys are the English source strings; anything
@@ -91,6 +91,71 @@ const URDU = {
   "Fee Collection Trend": "فیس وصولی کا رجحان",
   "Enrollment by Campus": "کیمپس کے لحاظ سے داخلے",
   "Attendance Rate by Class": "جماعت کے لحاظ سے حاضری",
+
+  // ---------- Students page ----------
+  "Home / Students": "ہوم / طلبہ",
+  "Manage students enrolled at Perfect Foundation School.":
+    "پرفیکٹ فاؤنڈیشن اسکول میں داخل شدہ طلبہ کا انتظام۔",
+  "+ Add Student": "+ نیا طالب علم",
+  "Search by name, admission number or phone...":
+    "نام، داخلہ نمبر یا فون سے تلاش کریں...",
+  "Admission No.": "داخلہ نمبر",
+  "Admission No": "داخلہ نمبر",
+  "Date of Birth": "تاریخِ پیدائش",
+  Gender: "جنس",
+  Phone: "فون",
+  "First name": "پہلا نام",
+  "Middle name": "درمیانی نام",
+  "Last name": "آخری نام",
+  "Home address": "گھر کا پتہ",
+  "Full name": "پورا نام",
+  "Alternate phone": "متبادل فون",
+  Guardian2: "سرپرست",
+
+  // ---------- Attendance page ----------
+  "Home / Attendance": "ہوم / حاضری",
+  "Mark Attendance": "حاضری لگائیں",
+  "Select a class and date to mark attendance":
+    "حاضری کے لیے جماعت اور تاریخ منتخب کریں",
+  "Mark and view daily attendance records for students.":
+    "طلبہ کی روزانہ حاضری درج کریں اور دیکھیں۔",
+  "Attendance Records": "حاضری کے ریکارڈز",
+  "records found": "ریکارڈز ملے",
+  "No attendance records found": "کوئی حاضری ریکارڈ نہیں ملا",
+  STUDENT: "طالب علم",
+  "ADMISSION NO.": "داخلہ نمبر",
+  CAMPUS: "کیمپس",
+  CLASS: "جماعت",
+  SECTION: "سیکشن",
+  DATE: "تاریخ",
+  STATUS: "صورتِ حال",
+
+  // ---------- Finance page ----------
+  "Track invoices, payments and fee categories.":
+    "انوائسز، ادائیگیاں اور فیس کی اقسام کا انتظام۔",
+  "Fee Structures": "فیس ڈھانچے",
+  "structures configured": "فیس ڈھانچے ترتیب دیے گئے",
+  "No fee structures": "کوئی فیس ڈھانچہ نہیں",
+  Invoices: "انوائسز",
+  "invoices found": "انوائسز ملیں",
+  "No invoices found": "کوئی انوائس نہیں ملی",
+  Payments: "ادائیگیاں",
+  "ACADEMIC YEAR": "تعلیمی سال",
+  CATEGORY: "قسم",
+  AMOUNT: "رقم",
+  "DUE DAY": "آخری تاریخ",
+  TOTAL: "کل",
+  PAID: "ادا شدہ",
+  BALANCE: "بقایا",
+  "INVOICE NO.": "انوائس نمبر",
+  "ISSUE DATE": "جاری کی تاریخ",
+  "DUE DATE": "آخری تاریخ",
+  METHOD: "طریقہ",
+  "RECEIPT NO.": "رسید نمبر",
+  RECEIPT: "رسید",
+  INVOICE: "انوائس",
+  "Accounting overview": "اکاؤنٹنگ جائزہ",
+  "ledger accounts and balances": "لیجر اکاؤنٹس اور بیلنس",
 };
 
 const DICT = { ur: URDU };

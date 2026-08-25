@@ -1,5 +1,15 @@
 from django.urls import path
 
+from .quiz_views import (
+    MyQuizAttemptView,
+    QuizAttemptListView,
+    QuizDetailView,
+    QuizListCreateView,
+    QuizQuestionCreateView,
+    QuizQuestionDeleteView,
+    QuizQuestionListView,
+    SubmitQuizAttemptView,
+)
 from .views import (
     CourseDetailView,
     CourseListCreateView,
@@ -33,5 +43,45 @@ urlpatterns = [
         "my-progress/",
         MyProgressView.as_view(),
         name="my-progress",
+    ),
+    path(
+        "quizzes/",
+        QuizListCreateView.as_view(),
+        name="quiz-list",
+    ),
+    path(
+        "quizzes/<int:pk>/",
+        QuizDetailView.as_view(),
+        name="quiz-detail",
+    ),
+    path(
+        "quizzes/<int:quiz_id>/questions/",
+        QuizQuestionListView.as_view(),
+        name="quiz-question-list",
+    ),
+    path(
+        "quizzes/<int:quiz_id>/questions/new/",
+        QuizQuestionCreateView.as_view(),
+        name="quiz-question-create",
+    ),
+    path(
+        "questions/<int:pk>/",
+        QuizQuestionDeleteView.as_view(),
+        name="quiz-question-delete",
+    ),
+    path(
+        "quizzes/<int:quiz_id>/submit/",
+        SubmitQuizAttemptView.as_view(),
+        name="quiz-submit",
+    ),
+    path(
+        "quizzes/<int:quiz_id>/attempts/",
+        QuizAttemptListView.as_view(),
+        name="quiz-attempts",
+    ),
+    path(
+        "quizzes/<int:quiz_id>/my-attempt/",
+        MyQuizAttemptView.as_view(),
+        name="quiz-my-attempt",
     ),
 ]

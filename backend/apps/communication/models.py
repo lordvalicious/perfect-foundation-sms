@@ -561,6 +561,45 @@ class NotificationPreference(models.Model):
         return f"Notification prefs for {self.user.username}"
 
 
+class NotificationDispatch(models.Model):
+    """Idempotency record for automated parent notifications.
+
+    One row per (kind, reference, channel) so scheduled jobs can run
+    repeatedly without double-messaging the same guardian.
+    """
+
+    KIND_CHOICES = [
+        ("fee_reminder", "Fee Reminder"),
+        ("absence_alert", "Absence Alert"),
+        ("result_published", "Result Published"),
+    ]
+
+    CHANNEL_CHOICES = [
+        ("sms", "SMS"),
+        ("email", "Email"),
+    ]
+
+    kind = models.CharField(max_length=24, choices=KIND_CHOICES)
+    reference = models.CharField(
+        max_length=120,
+        help_text="Stable per-target key, e.g. 'fee:{student}:{isoweek}'.",
+    )
+    channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
+    recipient = models.CharField(max_length=200)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["kind", "reference", "channel"],
+                name="unique_dispatch_per_kind_ref_channel",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.kind}/{self.channel} -> {self.recipient}"
+
+
 class EmailLog(models.Model):
     """Log of every outbound email sent through the system."""
 

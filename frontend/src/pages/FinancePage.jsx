@@ -18,6 +18,7 @@ import {
   StatusBadge,
 } from "./ui";
 import { formatCurrency, formatDate } from "./format";
+import { useLang } from "../i18n";
 import { jsonHeaders } from "../api";
 
 const INVOICES_API_URL = "/api/finance/invoices/";
@@ -683,6 +684,7 @@ function FeeStructureModal({
 }
 
 function FeeStructureSection({ categories }) {
+  const { t } = useLang();
   const structures = useApiList(FEE_STRUCTURES_API_URL);
 
   const [academicYears, setAcademicYears] = useState([]);
@@ -762,8 +764,8 @@ function FeeStructureSection({ categories }) {
   return (
     <div className="panel">
       <PanelHeader
-        title="Fee Structures"
-        subtitle="structures configured"
+        title={t("Fee Structures")}
+        subtitle={t("structures configured")}
         count={structures.count}
         action={
           <button
@@ -793,7 +795,7 @@ function FeeStructureSection({ categories }) {
         {structures.rows.length === 0 ? (
           <EmptyState
             icon={PlusCircle}
-            title="No fee structures"
+            title={t("No fee structures")}
             message="Configure the amount charged per fee category for each class."
           />
         ) : (
@@ -801,13 +803,13 @@ function FeeStructureSection({ categories }) {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>ACADEMIC YEAR</th>
-                  <th>CAMPUS</th>
-                  <th>CLASS</th>
-                  <th>CATEGORY</th>
-                  <th>AMOUNT</th>
-                  <th>DUE DAY</th>
-                  <th>STATUS</th>
+                  <th>{t("ACADEMIC YEAR")}</th>
+                  <th>{t("CAMPUS")}</th>
+                  <th>{t("CLASS")}</th>
+                  <th>{t("CATEGORY")}</th>
+                  <th>{t("AMOUNT")}</th>
+                  <th>{t("DUE DAY")}</th>
+                  <th>{t("STATUS")}</th>
                   <th></th>
                 </tr>
               </thead>
@@ -885,6 +887,7 @@ function FeeStructureSection({ categories }) {
 }
 
 function AccountingOverview() {
+  const { t } = useLang();
   const [accounts, setAccounts] = useState([]);
   const [report, setReport] = useState(null);
   const [receivables, setReceivables] = useState(null);
@@ -916,7 +919,7 @@ function AccountingOverview() {
 
   return (
     <div className="panel">
-      <PanelHeader title="Accounting overview" subtitle="ledger accounts and balances" count={accounts.length} />
+      <PanelHeader title={t("Accounting overview")} subtitle={t("ledger accounts and balances")} count={accounts.length} />
       <div className="stats-grid">
         <div className="stat-card"><div className="stat-icon"><Wallet size={20} /></div><div className="stat-info"><span>Income</span><strong>{formatCurrency(report?.income || 0)}</strong></div></div>
         <div className="stat-card"><div className="stat-icon"><Receipt size={20} /></div><div className="stat-info"><span>Expenses</span><strong>{formatCurrency(report?.expense || 0)}</strong></div></div>
@@ -935,6 +938,7 @@ function AccountingOverview() {
 }
 
 export default function FinancePage() {
+  const { t } = useLang();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("");
 
@@ -992,9 +996,9 @@ export default function FinancePage() {
   return (
     <section className="content">
       <PageHeader
-        crumb="Home / Finance"
-        title="Finance"
-        subtitle="Track invoices, payments and fee categories."
+        crumb={t("Home / Finance")}
+        title={t("Finance")}
+        subtitle={t("Track invoices, payments and fee categories.")}
         action={<Link to="/finance/bulk" className="primary-button">Bulk Operations</Link>}
       />
 
@@ -1018,8 +1022,8 @@ export default function FinancePage() {
 
       <div className="panel">
         <PanelHeader
-          title="Invoices"
-          subtitle="invoices found"
+          title={t("Invoices")}
+          subtitle={t("invoices found")}
           count={invoices.count}
         />
 
@@ -1031,7 +1035,7 @@ export default function FinancePage() {
           {invoices.rows.length === 0 ? (
             <EmptyState
               icon={Wallet}
-              title="No invoices found"
+              title={t("No invoices found")}
               message="No invoices match the current filters."
             />
           ) : (
@@ -1040,15 +1044,15 @@ export default function FinancePage() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>INVOICE NO.</th>
+                      <th>{t("INVOICE NO.")}</th>
                       <th>STUDENT</th>
-                      <th>CLASS</th>
-                      <th>ISSUE DATE</th>
-                      <th>DUE DATE</th>
-                      <th>TOTAL</th>
-                      <th>PAID</th>
-                      <th>BALANCE</th>
-                      <th>STATUS</th>
+                      <th>{t("CLASS")}</th>
+                      <th>{t("ISSUE DATE")}</th>
+                      <th>{t("DUE DATE")}</th>
+                      <th>{t("TOTAL")}</th>
+                      <th>{t("PAID")}</th>
+                      <th>{t("BALANCE")}</th>
+                      <th>{t("STATUS")}</th>
                       <th></th>
                     </tr>
                   </thead>
@@ -1165,14 +1169,14 @@ export default function FinancePage() {
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>RECEIPT NO.</th>
+                      <th>{t("RECEIPT NO.")}</th>
                       <th>STUDENT</th>
-                      <th>INVOICE</th>
-                      <th>DATE</th>
-                      <th>METHOD</th>
-                      <th>AMOUNT</th>
-                      <th>STATUS</th>
-                      <th>RECEIPT</th>
+                      <th>{t("INVOICE")}</th>
+                      <th>{t("DATE")}</th>
+                      <th>{t("METHOD")}</th>
+                      <th>{t("AMOUNT")}</th>
+                      <th>{t("STATUS")}</th>
+                      <th>{t("RECEIPT")}</th>
                     </tr>
                   </thead>
 

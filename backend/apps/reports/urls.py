@@ -37,6 +37,7 @@ from .export_views import (
     DataExportView,
 )
 from .cron_views import WeeklyReportEmailCronView
+from .at_risk_views import AtRiskReportView
 from .import_views import (
     ImportCommitView,
     ImportPreviewView,
@@ -165,6 +166,11 @@ urlpatterns = [
         "top-performers/",
         TopPerformersReportView.as_view(),
         name="report-top-performers",
+    ),
+    path(
+        "at-risk/",
+        AtRiskReportView.as_view(),
+        name="report-at-risk",
     ),
     path(
         "templates/",

@@ -7,6 +7,14 @@
     {
       "path": "/api/reports/cron/email-weekly/",
       "schedule": "0 7 * * 1"
+    },
+    {
+      "path": "/api/attendance/cron/absence-alerts/",
+      "schedule": "0 8 * * 1-6"
+    },
+    {
+      "path": "/api/communication/cron/fee-reminders/",
+      "schedule": "30 8 * * 1-6"
     }
   ]
 }

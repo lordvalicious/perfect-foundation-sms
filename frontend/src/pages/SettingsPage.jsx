@@ -29,6 +29,7 @@ const SUBJECTS_API_URL = "/api/schools/subjects/";
 const OFFERINGS_API_URL = "/api/schools/offerings/";
 
 import TwoFASection from "./TwoFASection";
+import NotificationsPanel from "./NotificationsPanel";
 
 function StatCard({ icon: Icon, label, value }) {
   return (
@@ -71,6 +72,8 @@ export default function SettingsPage() {
       />
 
       <TwoFASection />
+
+      <NotificationsPanel />
 
       <div className="stats-grid">
         <StatCard

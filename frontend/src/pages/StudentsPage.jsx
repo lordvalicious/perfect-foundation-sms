@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { Search, Building2 } from "lucide-react";
 import { useAuth } from "../auth";
+import { useLang } from "../i18n";
 import ProfileModal from "./ProfileModal";
 
 const STUDENTS_API_URL = "/api/students/";
@@ -26,6 +27,7 @@ function authHeaders(extra = {}) {
 }
 
 function StudentsPage() {
+  const { t } = useLang();
   const { hasRole } = useAuth();
   const campusSectionRefs = useRef({});
 
@@ -683,12 +685,12 @@ function StudentsPage() {
     <section className="page">
       <div className="page-header">
         <div>
-          <div className="breadcrumb">Home / Students</div>
+          <div className="breadcrumb">{t("Home / Students")}</div>
 
-          <h2>Students</h2>
+          <h2>{t("Students")}</h2>
 
           <p className="subtitle">
-            Manage students enrolled at Perfect Foundation School.
+            {t("Manage students enrolled at Perfect Foundation School.")}
           </p>
         </div>
 
@@ -697,7 +699,7 @@ function StudentsPage() {
             className="primary-button"
             onClick={openAddStudent}
           >
-            + Add Student
+            {t("+ Add Student")}
           </button>
         )}
       </div>
@@ -755,7 +757,7 @@ function StudentsPage() {
 
               <input
                 type="text"
-                placeholder="Search by name, admission number or phone..."
+                placeholder={t("Search by name, admission number or phone...")}
                 value={search}
                 onChange={(event) =>
                   setSearch(event.target.value)
@@ -896,15 +898,15 @@ function StudentsPage() {
                         <table className="data-table">
                           <thead>
                             <tr>
-                              <th>Student</th>
-                              <th>Admission No.</th>
-                              <th>Class</th>
-                              <th>Section</th>
-                              <th>Date of Birth</th>
-                              <th>Gender</th>
-                              <th>Guardian</th>
-                              <th>Phone</th>
-                              <th>Status</th>
+                  <th>{t("Student")}</th>
+                  <th>{t("Admission No.")}</th>
+                  <th>{t("Class")}</th>
+                  <th>{t("Section")}</th>
+                  <th>{t("Date of Birth")}</th>
+                  <th>{t("Gender")}</th>
+                  <th>{t("Guardian")}</th>
+                  <th>{t("Phone")}</th>
+                  <th>{t("Status")}</th>
                               <th></th>
                             </tr>
                           </thead>

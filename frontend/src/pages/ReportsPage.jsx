@@ -27,6 +27,7 @@ import {
   MessageSquare,
   Trophy,
   Table2,
+  Siren,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
@@ -185,6 +186,7 @@ const REPORTS = [
 ];
 
 const GRADEBOOK_KEY = "gradebook";
+const AT_RISK_KEY = "at-risk";
 
 export default function ReportsPage() {
   const [active, setActive] = useState("enrollment");
@@ -208,6 +210,32 @@ export default function ReportsPage() {
   const [classList, setClassList] = useState([]);
   const [sectionList, setSectionList] = useState([]);
   const [subjectList, setSubjectList] = useState([]);
+
+  const [atRisk, setAtRisk] = useState(null);
+  const [arLoading, setArLoading] = useState(false);
+  const [arError, setArError] = useState("");
+  const [arFilters, setArFilters] = useState({
+    attendance_threshold: "75",
+    days: "30",
+    points: "3",
+  });
+
+  const loadAtRisk = useCallback(() => {
+    setArLoading(true);
+    setArError("");
+
+    const params = new URLSearchParams({
+      attendance_threshold: arFilters.attendance_threshold || "75",
+      days: arFilters.days || "30",
+      points: arFilters.points || "3",
+    });
+
+    fetch(`${BASE}at-risk/?${params.toString()}`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject("Could not load.")))
+      .then(setAtRisk)
+      .catch((err) => setArError(String(err)))
+      .finally(() => setArLoading(false));
+  }, [arFilters]);
 
   const needsExam = EXAM_REPORTS.includes(active);
   const needsStudent = STUDENT_REPORTS.includes(active);
@@ -388,6 +416,18 @@ export default function ReportsPage() {
           <Table2 size={15} />
           Gradebook
         </button>
+
+        <button
+          className={`tab-button ${active === AT_RISK_KEY ? "active" : ""}`}
+          onClick={() => {
+            setActive(AT_RISK_KEY);
+
+            if (!atRisk) loadAtRisk();
+          }}
+        >
+          <Siren size={15} />
+          At-Risk
+        </button>
       </div>
 
       <div className="panel">
@@ -395,7 +435,9 @@ export default function ReportsPage() {
           title={
             active === GRADEBOOK_KEY
               ? "Gradebook"
-              : REPORTS.find((item) => item.key === active)?.title || "Report"
+              : active === AT_RISK_KEY
+                ? "At-Risk Students"
+                : REPORTS.find((item) => item.key === active)?.title || "Report"
           }
           subtitle="generated from live data"
           action={
@@ -416,6 +458,85 @@ export default function ReportsPage() {
           error={error}
           onRetry={() => load(active)}
         >
+          {active === AT_RISK_KEY && (
+            <>
+              <div className="filter-row">
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Attendance below
+                  <input
+                    type="number" min="1" max="100"
+                    style={{ width: 70 }}
+                    value={arFilters.attendance_threshold}
+                    onChange={(e) =>
+                      setArFilters({ ...arFilters, attendance_threshold: e.target.value })
+                    }
+                  />
+                  %
+                </label>
+
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Window
+                  <input
+                    type="number" min="7" max="180"
+                    style={{ width: 70 }}
+                    value={arFilters.days}
+                    onChange={(e) => setArFilters({ ...arFilters, days: e.target.value })}
+                  />
+                  days
+                </label>
+
+                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  Discipline pts ≥
+                  <input
+                    type="number" min="1" max="50"
+                    style={{ width: 60 }}
+                    value={arFilters.points}
+                    onChange={(e) => setArFilters({ ...arFilters, points: e.target.value })}
+                  />
+                </label>
+
+                <button type="button" className="primary-button" onClick={loadAtRisk} disabled={arLoading}>
+                  Recalculate
+                </button>
+              </div>
+
+              {arError && <div className="state-card error">{arError}</div>}
+
+              {atRisk && (
+                <ReportContent
+                  summary={[
+                    { label: "Tracked", value: atRisk.summary?.tracked ?? 0 },
+                    {
+                      label: "High Risk",
+                      value: atRisk.summary?.high ?? 0,
+                    },
+                    { label: "Medium Risk", value: atRisk.summary?.medium ?? 0 },
+                  ]}
+                  headers={[
+                    "Student",
+                    "Campus",
+                    "Class",
+                    "Attendance",
+                    "Outstanding",
+                    "Discipline Pts",
+                    "Signals",
+                    "Risk",
+                  ]}
+                  rows={(atRisk.students || []).map((row) => [
+                    `${row.name} (${row.admission_number})`,
+                    row.campus,
+                    row.class,
+                    row.attendance_rate != null ? `${row.attendance_rate}%` : "—",
+                    formatCurrency(row.outstanding),
+                    row.discipline_points,
+                    (row.signals || []).join(", ").replace(/_/g, " "),
+                    row.risk_level.toUpperCase(),
+                  ])}
+                />
+              )}
+            </>
+          )}
+
           {(needsExam || needsStudent || active === "chronic-absentee") && (
             <div className="filter-row">
               {needsExam && (
