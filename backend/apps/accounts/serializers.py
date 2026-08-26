@@ -411,6 +411,16 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
         return None
 
 
+class OptionalTimeField(serializers.TimeField):
+    """TimeField that maps empty strings (blank form inputs) to None."""
+
+    def to_internal_value(self, value):
+        if value in ("", None):
+            return None
+
+        return super().to_internal_value(value)
+
+
 class StaffAttendanceSerializer(serializers.ModelSerializer):
     staff_name = serializers.CharField(
         source="staff.full_name",
@@ -425,6 +435,8 @@ class StaffAttendanceSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     marked_by_name = serializers.SerializerMethodField()
+    check_in = OptionalTimeField(required=False, allow_null=True)
+    check_out = OptionalTimeField(required=False, allow_null=True)
 
     class Meta:
         model = StaffAttendance

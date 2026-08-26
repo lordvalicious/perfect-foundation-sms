@@ -135,7 +135,12 @@ export default function StaffOperationsPage({ canReview }) {
     apiFetch(`${BASE}attendance/`, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ ...attForm, date: attDate }),
+      body: JSON.stringify({
+        ...attForm,
+        check_in: attForm.check_in || null,
+        check_out: attForm.check_out || null,
+        date: attDate,
+      }),
     })
       .then(() => {
         setAttForm({ ...attForm, notes: "" });

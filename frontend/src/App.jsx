@@ -425,7 +425,7 @@ function Layout({ children, hasRole, modules = { loaded: false, enabled: [], isP
     <div className="app">
       <header className="topbar">
         <div className="topbar-left">
-          <div className="brand-logo">PF</div>
+          <div className="brand-logo">S</div>
           <nav className="topbar-nav">
             {dashItem && (
               <NavLink
@@ -624,7 +624,7 @@ function Shell() {
   if (loading) {
     return (
       <div className="auth-loading">
-        <div className="brand-logo">PF</div>
+        <div className="brand-logo">S</div>
         <span>Loading...</span>
       </div>
     );
