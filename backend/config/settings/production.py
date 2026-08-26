@@ -22,14 +22,8 @@ ALLOWED_HOSTS = [
     if host
 ]
 
-CSRF_TRUSTED_ORIGINS = [
-    origin
-    for origin in os.environ.get(
-        "DJANGO_CSRF_TRUSTED_ORIGINS",
-        "",
-    ).split(",")
-    if origin
-]
+# CSRF trusted origins are set in base.py for reliability;
+# production.py inherits them from base.py rather than reading from env vars.
 
 SESSION_COOKIE_SECURE = (
     os.environ.get("DJANGO_SESSION_COOKIE_SECURE", "1") == "1"

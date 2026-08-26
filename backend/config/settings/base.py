@@ -216,6 +216,11 @@ CSRF_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SECURE = False
 CSRF_COOKIE_HTTPONLY = False
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://perfect-foundation-sms.vercel.app",
+    "https://perfect-foundation-dkwc53gbi-lordvalicious-projects.vercel.app",
+]
+
 # Email
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
