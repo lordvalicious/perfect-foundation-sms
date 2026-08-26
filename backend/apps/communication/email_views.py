@@ -1,6 +1,9 @@
 """Email broadcast + log views. Mirrors the SMS views' targeting."""
 
+import time
+
 from django.contrib.auth import get_user_model
+from django.core.mail import get_connection
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -138,9 +141,24 @@ class EmailBroadcastView(APIView):
 
         sent = 0
         failed = 0
+        skipped = 0
+
+        # One shared SMTP session + a hard time budget so the request
+        # always answers with JSON inside the serverless time limit.
+        deadline = time.monotonic() + 8.0
+        connection = None
+
+        if email_configured():
+            connection = get_connection(fail_silently=False, timeout=10)
 
         for email in sorted(emails):
-            ok, err = send_email_message(email, subject, message)
+            if time.monotonic() > deadline:
+                skipped += 1
+                ok, err = False, "Skipped: time budget reached, send again."
+            else:
+                ok, err = send_email_message(
+                    email, subject, message, connection=connection
+                )
 
             EmailLog.objects.create(
                 recipient_email=email,
@@ -159,6 +177,7 @@ class EmailBroadcastView(APIView):
         return Response({
             "sent": sent,
             "failed": failed,
+            "skipped": skipped,
             "total_recipients": len(emails),
             "configured": True,
         })

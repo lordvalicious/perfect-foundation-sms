@@ -13,11 +13,14 @@ def email_configured():
 
 
 def send_email_message(recipient_email, subject, body,
-                       from_name=None, from_address=None):
+                       from_name=None, from_address=None,
+                       connection=None):
     """Send one email. Returns (ok: bool, error: str).
 
     ``from_name`` / ``from_address`` optionally override the platform
     DEFAULT_FROM_EMAIL for white-label sending (per-school branding).
+    ``connection`` lets callers reuse one SMTP session for a batch,
+    which keeps bulk sends well inside serverless time limits.
     """
     if not email_configured():
         return False, "Email is not configured (DJANGO_EMAIL_HOST missing)."
@@ -30,14 +33,14 @@ def send_email_message(recipient_email, subject, body,
         )
 
     try:
-        connection = get_connection(fail_silently=False)
+        conn = connection or get_connection(timeout=10)
         sent = send_mail(
             subject=subject,
             message=body,
             from_email=sender,
             recipient_list=[recipient_email],
             fail_silently=False,
-            connection=connection,
+            connection=conn,
         )
         return sent > 0, "" if sent else "No email was sent."
     except Exception as exc:
