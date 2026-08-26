@@ -4,7 +4,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsAccountantRole
+from apps.accounts.permissions import IsAccountantRole, IsLibrarianRole
 from apps.accounts.access import apply_campus_scope
 
 from .models import Book, BookIssue
@@ -13,7 +13,7 @@ from .serializers import BookIssueSerializer, BookSerializer
 
 class BookListView(generics.ListCreateAPIView):
     serializer_class = BookSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsLibrarianRole]
 
     def get_queryset(self):
         queryset = apply_campus_scope(
@@ -49,7 +49,7 @@ class BookListView(generics.ListCreateAPIView):
 
 class BookDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BookSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsLibrarianRole]
     def get_queryset(self):
         return apply_campus_scope(Book.objects.all(), self.request, "campus_id")
 
@@ -62,7 +62,7 @@ class BookDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class BookIssueListView(generics.ListCreateAPIView):
     serializer_class = BookIssueSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsLibrarianRole]
 
     def get_queryset(self):
         queryset = apply_campus_scope(BookIssue.objects.select_related(
@@ -86,7 +86,7 @@ class BookIssueListView(generics.ListCreateAPIView):
 
 class BookIssueDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BookIssueSerializer
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsLibrarianRole]
 
     def get_queryset(self):
         return apply_campus_scope(
@@ -107,7 +107,7 @@ class BookIssueDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 
 class BookReturnView(APIView):
-    permission_classes = [IsAccountantRole]
+    permission_classes = [IsLibrarianRole]
 
     def post(self, request, pk):
         issue = apply_campus_scope(

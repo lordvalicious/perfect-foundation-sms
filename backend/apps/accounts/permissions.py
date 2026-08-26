@@ -139,6 +139,31 @@ class IsTeacherRole(BasePermission):
         )
 
 
+class IsLibrarianRole(BasePermission):
+    """
+    Librarians and teachers who can manage library resources.
+    """
+    roles = [
+        "super_admin",
+        "admin",
+        "principal",
+        "vice_principal",
+        "campus_admin",
+        "academic",
+        "librarian",
+        "teacher",
+    ]
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
+
+
 class IsStaffRole(BasePermission):
     roles = [
         "super_admin",
