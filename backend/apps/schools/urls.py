@@ -10,19 +10,23 @@ from .tenant_views import PublicTenantConfigView
 from .views import (
     AcademicUnitListView,
     AcademicYearListView,
-    CampusListView,
+    CampusViewSet,
     ClassListView,
-    SchoolListView,
+    SchoolViewSet,
     SectionListView,
     SubjectListView,
     SubjectOfferingListView,
     TermListView,
 )
 
-
 urlpatterns = [
-    path("schools/", SchoolListView.as_view(), name="school-list"),
-    path("campuses/", CampusListView.as_view(), name="campus-list"),
+    path("", SchoolViewSet.as_view({"get": "list"}), name="school-list"),
+    path("<int:pk>/pause/", SchoolViewSet.as_view({"post": "pause"}), name="school-pause"),
+    path("<int:pk>/activate/", SchoolViewSet.as_view({"post": "activate"}), name="school-activate"),
+    path("<int:pk>/archive/", SchoolViewSet.as_view({"post": "archive"}), name="school-archive"),
+    path("<int:pk>/unarchive/", SchoolViewSet.as_view({"post": "unarchive"}), name="school-unarchive"),
+    path("", CampusViewSet.as_view({"get": "list", "post": "create"}), name="campus-list"),
+    path("<int:pk>/", CampusViewSet.as_view({"delete": "delete"}), name="campus-delete"),
     path("units/", AcademicUnitListView.as_view(), name="academic-unit-list"),
     path("classes/", ClassListView.as_view(), name="class-list"),
     path("sections/", SectionListView.as_view(), name="section-list"),

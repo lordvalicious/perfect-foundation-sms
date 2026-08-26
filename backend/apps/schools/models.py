@@ -1,4 +1,5 @@
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 
@@ -32,12 +33,27 @@ class School(models.Model):
     STATUS_CHOICES = [
         ("active", "Active"),
         ("inactive", "Inactive"),
+        ("archived", "Archived"),
     ]
 
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="active",
+    )
+
+    is_paused = models.BooleanField(
+        default=False,
+        help_text="Pause all operations for this school (login, attendance, fees, etc.)",
+    )
+
+    paused_at = models.DateTimeField(null=True, blank=True)
+    paused_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="paused_schools",
     )
 
     custom_domain = models.CharField(
@@ -82,6 +98,41 @@ class School(models.Model):
 
     def __str__(self):
         return self.name
+
+    def pause(self, user):
+        """Pause the school - prevents login, attendance, fees, etc."""
+        from django.utils import timezone
+        self.is_paused = True
+        self.paused_at = timezone.now()
+        self.paused_by = user
+        self.save(update_fields=["is_paused", "paused_at", "paused_by"])
+
+    def activate(self):
+        """Activate the school - resume all operations."""
+        self.is_paused = False
+        self.paused_at = None
+        self.paused_by = None
+        self.save(update_fields=["is_paused", "paused_at", "paused_by"])
+
+    def archive(self, user):
+        """Archive the school - sets status to archived."""
+        self.status = "archived"
+        self.is_paused = True
+        self.paused_at = timezone.now()
+        self.paused_by = user
+        self.save(update_fields=["status", "is_paused", "paused_at", "paused_by"])
+
+    def unarchive(self):
+        """Unarchive the school - sets status back to active."""
+        self.status = "active"
+        self.is_paused = False
+        self.paused_at = None
+        self.paused_by = None
+        self.save(update_fields=["status", "is_paused", "paused_at", "paused_by"])
+
+    def is_operational(self):
+        """Check if school is operational (not paused or archived)."""
+        return self.status == "active" and not self.is_paused
 
 
 class Campus(models.Model):

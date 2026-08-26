@@ -285,3 +285,16 @@ class IsAnnouncementRole(BasePermission):
             roles,
             institution=getattr(request, "institution", None),
         )
+
+
+class IsSuperAdmin(BasePermission):
+    """Require super_admin role."""
+    
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+        
+        return request.user.has_any_role(
+            ["super_admin"],
+            institution=getattr(request, "institution", None),
+        )

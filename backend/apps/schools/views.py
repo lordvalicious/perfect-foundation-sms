@@ -1,8 +1,10 @@
 from django.db.models import Count, Q
-from rest_framework import generics
+from rest_framework import generics, status, viewsets
+from rest_framework.response import Response
+from rest_framework.decorators import action
 
 from apps.accounts.access import apply_campus_scope
-from apps.accounts.permissions import HasActiveInstitution, IsAdminOrReadOnly
+from apps.accounts.permissions import HasActiveInstitution, IsAdminOrReadOnly, IsSuperAdmin
 from apps.students.models import Enrollment
 from .models import (
     AcademicUnit,
@@ -71,7 +73,7 @@ def populate_campus_counts(queryset):
     return queryset
 
 
-class SchoolListView(NoPaginationMixin, generics.ListAPIView):
+class SchoolViewSet(NoPaginationMixin, viewsets.GenericViewSet, generics.ListAPIView):
     serializer_class = SchoolSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -80,8 +82,36 @@ class SchoolListView(NoPaginationMixin, generics.ListAPIView):
             pk=self.request.institution.pk
         ).order_by("name")
 
+    @action(detail=True, methods=["post"], permission_classes=[HasActiveInstitution, IsSuperAdmin])
+    def pause(self, request, pk=None):
+        """Pause the school - prevents login, attendance, fees, etc."""
+        school = self.get_object()
+        school.pause(request.user)
+        return Response({"detail": "School paused successfully."})
 
-class CampusListView(NoPaginationMixin, generics.ListCreateAPIView):
+    @action(detail=True, methods=["post"], permission_classes=[HasActiveInstitution, IsSuperAdmin])
+    def activate(self, request, pk=None):
+        """Activate the school - resume all operations."""
+        school = self.get_object()
+        school.activate()
+        return Response({"detail": "School activated successfully."})
+
+    @action(detail=True, methods=["post"], permission_classes=[HasActiveInstitution, IsSuperAdmin])
+    def archive(self, request, pk=None):
+        """Archive the school."""
+        school = self.get_object()
+        school.archive(request.user)
+        return Response({"detail": "School archived successfully."})
+
+    @action(detail=True, methods=["post"], permission_classes=[HasActiveInstitution, IsSuperAdmin])
+    def unarchive(self, request, pk=None):
+        """Unarchive the school."""
+        school = self.get_object()
+        school.unarchive()
+        return Response({"detail": "School unarchived successfully."})
+
+
+class CampusViewSet(NoPaginationMixin, viewsets.GenericViewSet, generics.ListCreateAPIView):
     serializer_class = CampusSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -107,6 +137,13 @@ class CampusListView(NoPaginationMixin, generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.institution)
+
+    @action(detail=True, methods=["delete"], permission_classes=[HasActiveInstitution, IsSuperAdmin])
+    def delete(self, request, pk=None):
+        """Delete campus - Super Admin only."""
+        campus = self.get_object()
+        campus.delete()
+        return Response({"detail": "Campus deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
 
 
 class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
