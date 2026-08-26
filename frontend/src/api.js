@@ -44,9 +44,17 @@ export async function readJson(response, fallback) {
 }
 
 export async function apiFetch(url, options = {}, fallback = "Request failed.") {
+  const csrfToken = getCookie("csrftoken");
+
+  const headers = {
+    ...(csrfToken ? { "X-CSRFToken": csrfToken } : {}),
+    ...(options.headers || {}),
+  };
+
   const response = await fetch(url, {
     credentials: "include",
     ...options,
+    headers,
   });
 
   const data = await readJson(response, fallback).catch(() => ({}));

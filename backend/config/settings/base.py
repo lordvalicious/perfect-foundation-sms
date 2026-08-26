@@ -229,7 +229,7 @@ CSRF_TRUSTED_ORIGINS = [
 # Email
 DEFAULT_FROM_EMAIL = os.environ.get(
     "DEFAULT_FROM_EMAIL",
-    "no-reply@perfectfoundation.edu",
+    "no-reply@school.local",
 )
 
 # Development default: print emails to the console.
