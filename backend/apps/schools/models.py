@@ -275,6 +275,11 @@ class Subject(models.Model):
     )
     name = models.CharField(max_length=100)
     code = models.CharField(max_length=20, unique=True)
+    subject_type = models.CharField(
+        max_length=20,
+        choices=[("theory", "Theory"), ("practical", "Practical")],
+        default="theory",
+    )
     STATUS_CHOICES = [
         ("active", "Active"),
         ("inactive", "Inactive"),
@@ -284,6 +289,7 @@ class Subject(models.Model):
         choices=STATUS_CHOICES,
         default="active",
     )
+    practical_required = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
