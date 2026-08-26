@@ -50,6 +50,7 @@ class ReportCardListView(generics.ListAPIView):
         queryset = (
             ReportCard.objects
             .select_related("student", "exam", "exam__campus", "exam__class_obj")
+            .prefetch_related("exam__exam_subjects")
             .order_by("exam", "position", "student__first_name")
         )
         user = self.request.user
@@ -142,9 +143,6 @@ class ReportCardListView(generics.ListAPIView):
                 card._cached_results = grouped.get(
                     (card.exam_id, card.student_id), []
                 )
-
-            for exam in {card.exam for card in cards}:
-                list(exam.exam_subjects.all())
 
         serializer = self.get_serializer(cards, many=True)
 

@@ -239,7 +239,7 @@ class ReportCard(models.Model):
         included in the exam.
         """
 
-        expected = self.exam.exam_subjects.count()
+        expected = len(self.exam.exam_subjects.all())
 
         return (
             expected > 0
@@ -637,36 +637,57 @@ class GradeBand(models.Model):
         return super().save(*args, **kwargs)
 
     @classmethod
+    def _default_bands(cls):
+        """Load and cache the default scale's bands (tiny, rarely changes)."""
+        cache = getattr(cls, "_band_cache", None)
+        if cache is None:
+            scale = GradeScale.objects.filter(is_default=True).first()
+            cache = (
+                list(
+                    cls.objects.filter(scale=scale).order_by(
+                        "-minimum_percentage"
+                    )
+                )
+                if scale
+                else []
+            )
+            cls._band_cache = cache
+        return cache
+
+    @classmethod
     def band_for_percentage(cls, percentage, scale=None):
         """Return the band matching a percentage on a scale."""
         if scale is None:
-            scale = GradeScale.objects.filter(
-                is_default=True,
-            ).first()
-
-        if scale is None:
-            return None
-
-        band = cls.objects.filter(
-            scale=scale,
-            minimum_percentage__lte=percentage,
-            maximum_percentage__gt=percentage,
-        ).first()
-
-        if band is None:
-            # A perfect score sits exactly on the upper edge of
-            # the top band (its maximum is exclusive), so fall back
-            # to the highest band that reaches this percentage.
-            band = (
-                cls.objects.filter(
-                    scale=scale,
-                    maximum_percentage__gte=percentage,
+            bands = cls._default_bands()
+        else:
+            bands = list(
+                cls.objects.filter(scale=scale).order_by(
+                    "-minimum_percentage"
                 )
-                .order_by("-maximum_percentage")
-                .first()
             )
 
-        return band
+        for band in bands:
+            if (
+                band.minimum_percentage <= percentage
+                < band.maximum_percentage
+            ):
+                return band
+
+        if not bands:
+            return None
+
+        # A perfect score sits exactly on the upper edge of
+        # the top band (its maximum is exclusive), so fall back
+        # to the highest band that reaches this percentage.
+        eligible = [
+            band for band in bands if band.maximum_percentage >= percentage
+        ]
+
+        return max(
+            eligible,
+            key=lambda band: band.maximum_percentage,
+            default=None,
+        ) if eligible else None
 
     def __str__(self):
         return (
