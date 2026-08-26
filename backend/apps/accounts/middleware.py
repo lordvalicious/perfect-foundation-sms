@@ -105,9 +105,13 @@ class ActiveInstitutionMiddleware:
         from apps.schools.models import School
 
         # 1) Exact custom_domain match
-        school = School.objects.filter(
-            custom_domain__iexact=host, status="active"
-        ).select_related("settings").first()
+        try:
+            school = School.objects.filter(
+                custom_domain__iexact=host, status="active"
+            ).select_related("settings").first()
+        except Exception:
+            # Handle case where migration hasn't been applied yet (e.g., is_paused column missing)
+            school = None
 
         if school:
             return school
@@ -115,9 +119,12 @@ class ActiveInstitutionMiddleware:
         # 2) Subdomain pattern: <code>.platform-host
         if host.endswith(f".{platform_host}"):
             subdomain = host[: -len(platform_host) - 1]
-            school = School.objects.filter(
-                code__iexact=subdomain, status="active"
-            ).select_related("settings").first()
+            try:
+                school = School.objects.filter(
+                    code__iexact=subdomain, status="active"
+                ).select_related("settings").first()
+            except Exception:
+                school = None
 
             if school:
                 return school
