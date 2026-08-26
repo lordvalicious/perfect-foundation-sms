@@ -21,13 +21,12 @@ from datetime import datetime, timedelta
 
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.audit.models import record_audit
 
+from .decorators import require_post_json
 from .models import Invoice, Payment
 from .services import next_receipt_number
 
@@ -170,8 +169,7 @@ class JazzCashCheckoutView(APIView):
         })
 
 
-@csrf_exempt
-@require_POST
+@require_post_json
 def jazzcash_callback(request):
     """Server-to-server response from JazzCash.
 

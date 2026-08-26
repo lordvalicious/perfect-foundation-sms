@@ -6,14 +6,13 @@ import logging
 from django.conf import settings
 from django.http import JsonResponse
 from django.utils import timezone
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.audit.models import record_audit
 from apps.students.models import Student
 
+from .decorators import require_post_json
 from .models import Invoice, Payment
 from .services import next_receipt_number
 from .stripe_service import construct_webhook_event, create_checkout_session
@@ -78,8 +77,7 @@ class StripeCheckoutView(APIView):
         })
 
 
-@csrf_exempt
-@require_POST
+@require_post_json
 def stripe_webhook(request):
     """Handle Stripe webhook events.
 
