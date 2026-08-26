@@ -13,17 +13,32 @@ if not SECRET_KEY or SECRET_KEY.startswith("django-insecure-"):
         "DJANGO_SECRET_KEY must be set to a secure value in production."
     )
 
-ALLOWED_HOSTS = [
-    host
-    for host in os.environ.get(
-        "DJANGO_ALLOWED_HOSTS",
-        "*",
-    ).split(",")
-    if host
-]
+def _clean_host(value):
+    """Accept bare hostnames or full origins and return a bare hostname."""
+    host = value.strip()
+    if "://" in host:
+        host = host.split("://", 1)[1]
+    return host.split("/", 1)[0]
 
-# CSRF trusted origins are set in base.py for reliability;
-# production.py inherits them from base.py rather than reading from env vars.
+
+ALLOWED_HOSTS = []
+for _raw in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(","):
+    _host = _clean_host(_raw)
+    if _host and _host not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_host)
+for _fallback in (".vercel.app", "localhost", "127.0.0.1"):
+    if _fallback not in ALLOWED_HOSTS:
+        ALLOWED_HOSTS.append(_fallback)
+
+# Merge code defaults (base.py) with any env-provided origins.
+_env_origins = [
+    origin.strip()
+    for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
+CSRF_TRUSTED_ORIGINS = list(
+    dict.fromkeys([*CSRF_TRUSTED_ORIGINS, *_env_origins])
+)
 
 SESSION_COOKIE_SECURE = (
     os.environ.get("DJANGO_SESSION_COOKIE_SECURE", "1") == "1"

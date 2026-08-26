@@ -217,8 +217,13 @@ CSRF_COOKIE_SECURE = False
 CSRF_COOKIE_HTTPONLY = False
 
 CSRF_TRUSTED_ORIGINS = [
+    "https://*.vercel.app",
     "https://perfect-foundation-sms.vercel.app",
-    "https://perfect-foundation-dkwc53gbi-lordvalicious-projects.vercel.app",
+    "https://perfect-foundation-api.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
 ]
 
 # Email
