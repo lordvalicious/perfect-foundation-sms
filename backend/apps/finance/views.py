@@ -230,7 +230,11 @@ class ReceivablesReportView(APIView):
     permission_classes = [IsAccountantRole]
 
     def get(self, request):
-        invoices = scoped_invoice_queryset(request).select_related("student")
+        invoices = (
+            scoped_invoice_queryset(request)
+            .select_related("student")
+            .prefetch_related("items", "concessions", "payments")
+        )
         rows = [{"invoice": invoice.invoice_number, "student": invoice.student.full_name, "balance": str(invoice.balance)} for invoice in invoices if invoice.balance > 0]
         return Response({"rows": rows, "total": str(sum((Decimal(row["balance"]) for row in rows), Decimal("0.00")))})
 
@@ -248,7 +252,11 @@ class InvoiceListView(generics.ListAPIView):
                 "enrollment__class_obj",
                 "academic_year",
             )
-            .prefetch_related("items__category")
+            .prefetch_related(
+                "items__category",
+                "payments",
+                "concessions",
+            )
             .order_by("-issue_date", "-id")
         )
         queryset = queryset.filter(

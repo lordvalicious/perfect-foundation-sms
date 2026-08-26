@@ -81,7 +81,6 @@ class AcademicUnitSerializer(serializers.ModelSerializer):
             "campus",
             "campus_name",
             "name",
-            "unit_type",
             "status",
             "class_count",
             "created_at",

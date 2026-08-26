@@ -52,7 +52,6 @@ class ReportCardListView(generics.ListAPIView):
             .select_related("student", "exam", "exam__campus", "exam__class_obj")
             .order_by("exam", "position", "student__first_name")
         )
-
         user = self.request.user
 
         if not is_manager(user):
@@ -107,6 +106,52 @@ class ReportCardListView(generics.ListAPIView):
             queryset = queryset.filter(status=report_status)
 
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        """
+        Serialize a page of report cards with bulk-loaded results.
+
+        ``ReportCard.results`` and ``is_complete`` each query per
+        instance; bulk-populating them here keeps the list view at a
+        handful of queries instead of dozens per page.
+        """
+        from apps.exams.models import StudentResult
+
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        cards = page if page is not None else list(queryset)
+
+        if cards:
+            exam_ids = {card.exam_id for card in cards}
+            pairs = {
+                (card.exam_id, card.student_id) for card in cards
+            }
+
+            grouped = {}
+            for result in (
+                StudentResult.objects
+                .filter(exam_id__in=exam_ids)
+                .select_related("exam_subject__subject")
+            ):
+                if (result.exam_id, result.student_id) in pairs:
+                    grouped.setdefault(
+                        (result.exam_id, result.student_id), []
+                    ).append(result)
+
+            for card in cards:
+                card._cached_results = grouped.get(
+                    (card.exam_id, card.student_id), []
+                )
+
+            for exam in {card.exam for card in cards}:
+                list(exam.exam_subjects.all())
+
+        serializer = self.get_serializer(cards, many=True)
+
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+
+        return Response(serializer.data)
 
 
 class ReportCardDetailView(generics.RetrieveAPIView):

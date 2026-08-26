@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from django.http import HttpResponse
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .tax import monthly_withholding
@@ -41,8 +42,8 @@ class PayrollBankFileView(APIView):
             queryset = queryset.filter(month=month)
 
         if not year or not month:
-            return HttpResponse(
-                "Provide ?year= and ?month=.", status=400
+            return Response(
+                {"detail": "Provide ?year= and ?month=."}, status=400
             )
 
         response = HttpResponse(content_type="text/csv; charset=utf-8")
