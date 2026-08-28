@@ -93,19 +93,15 @@ class SalaryStructure(models.Model):
     institution = models.ForeignKey(
         "schools.School",
         on_delete=models.CASCADE,
-        related_name="salary_structures",
-        null=True,
-        blank=True
+        related_name="salary_structures"
     )
     employee = models.ForeignKey(
         "hr.Employee",
         on_delete=models.CASCADE,
-        related_name="salary_structures",
-        null=True,
-        blank=True
+        related_name="salary_structures"
     )
-    name = models.CharField(max_length=100, blank=True, null=True)
-    code = models.CharField(max_length=20, blank=True, null=True)
+    name = models.CharField(max_length=100)
+    code = models.CharField(max_length=20)
     basic_salary = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -178,23 +174,17 @@ class PayrollRecord(models.Model):
     employee = models.ForeignKey(
         "hr.Employee",
         on_delete=models.CASCADE,
-        related_name="payroll_records",
-        null=True,
-        blank=True
+        related_name="payroll_records"
     )
     salary_structure = models.ForeignKey(
         SalaryStructure,
         on_delete=models.PROTECT,
-        related_name="payroll_records",
-        null=True,
-        blank=True
+        related_name="payroll_records"
     )
     payroll_period = models.ForeignKey(
         "hr.PayrollPeriod",
         on_delete=models.PROTECT,
-        related_name="payroll_records",
-        null=True,
-        blank=True
+        related_name="payroll_records"
     )
     month = models.PositiveSmallIntegerField()
     year = models.PositiveIntegerField()
