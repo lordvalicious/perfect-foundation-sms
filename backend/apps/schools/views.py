@@ -2,13 +2,18 @@ from django.db.models import Count, Q
 from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework import serializers
+from django.db import transaction
+from django.shortcuts import get_object_or_404
+from datetime import date
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed
 from apps.accounts.permissions import HasActiveInstitution, IsAdminOrReadOnly, IsSuperAdmin
-from apps.students.models import Enrollment
+from apps.students.models import Student, Enrollment
 from .models import (
     AcademicUnit,
     AcademicYear,
+    AcademicCalendar,
     Campus,
     Class,
     School,
@@ -18,6 +23,7 @@ from .models import (
     Term,
 )
 from .serializers import (
+    AcademicCalendarSerializer,
     AcademicUnitSerializer,
     AcademicYearSerializer,
     CampusSerializer,
