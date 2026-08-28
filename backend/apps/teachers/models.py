@@ -1,10 +1,12 @@
 from django.core.exceptions import ValidationError
 from django.db import models  # type: ignore[import]
 
+from apps.core.models import SoftDeleteMixin, SoftDeleteManager
 from apps.schools.models import School
 
 
-class Teacher(models.Model):
+class Teacher(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     GENDER_CHOICES = [
         ("male", "Male"),
         ("female", "Female"),
@@ -138,6 +140,20 @@ class Teacher(models.Model):
                 name="unique_teacher_employee_number_per_institution",
             )
         ]
+        indexes = [
+            models.Index(
+                fields=["institution", "status"],
+                name="teacher_inst_status_idx",
+            ),
+            models.Index(
+                fields=["primary_campus", "status"],
+                name="teacher_campus_status_idx",
+            ),
+            models.Index(
+                fields=["last_name", "first_name"],
+                name="teacher_name_idx",
+            ),
+        ]
 
     @property
     def full_name(self):
@@ -239,6 +255,20 @@ class TeacherAssignment(models.Model):
                 ],
                 name="unique_teacher_assignment",
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["teacher", "academic_year", "status"],
+                name="tassign_teacher_yr_status_idx",
+            ),
+            models.Index(
+                fields=["campus", "class_obj", "section", "status"],
+                name="tassign_campus_cls_sec_idx",
+            ),
+            models.Index(
+                fields=["academic_year", "status"],
+                name="tassign_year_status_idx",
+            ),
         ]
 
     def clean(self):

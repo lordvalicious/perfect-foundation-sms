@@ -5,11 +5,18 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.core.campus_validation import (
+    CampusAssignmentValidationMixin,
+    CampusValidationMixin,
+)
+from apps.core.models import SoftDeleteMixin, SoftDeleteManager
 from apps.schools.models import AcademicYear, Campus, Class, School
 from apps.students.models import Enrollment, Student
 
 
-class FeeCategory(models.Model):
+class FeeCategory(SoftDeleteMixin):
+    objects = SoftDeleteManager()
+
     institution = models.ForeignKey(
         School,
         on_delete=models.CASCADE,
@@ -59,7 +66,8 @@ class FeeCategory(models.Model):
         return self.name
 
 
-class FeeStructure(models.Model):
+class FeeStructure(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     academic_year = models.ForeignKey(
         AcademicYear,
         on_delete=models.PROTECT,
@@ -149,6 +157,9 @@ class FeeStructure(models.Model):
 
         if errors:
             raise ValidationError(errors)
+        
+        # Run campus validation
+        # super().clean()  # Removed CampusValidationMixin
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -163,9 +174,10 @@ class FeeStructure(models.Model):
         )
 
 
-class Invoice(models.Model):
+class Invoice(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     institution = models.ForeignKey(
-        School,
+        "schools.School",
         on_delete=models.CASCADE,
         related_name="invoices",
         null=True,
@@ -186,13 +198,13 @@ class Invoice(models.Model):
     )
 
     student = models.ForeignKey(
-        Student,
+        "students.Student",
         on_delete=models.PROTECT,
         related_name="invoices",
     )
 
     enrollment = models.ForeignKey(
-        Enrollment,
+        "students.Enrollment",
         on_delete=models.PROTECT,
         related_name="invoices",
     )
@@ -230,6 +242,24 @@ class Invoice(models.Model):
                 fields=["institution", "invoice_number"],
                 name="unique_invoice_number_per_institution",
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["student", "status"],
+                name="invoice_student_status_idx",
+            ),
+            models.Index(
+                fields=["institution", "status"],
+                name="invoice_inst_status_idx",
+            ),
+            models.Index(
+                fields=["due_date", "status"],
+                name="invoice_due_status_idx",
+            ),
+            models.Index(
+                fields=["academic_year", "status"],
+                name="invoice_year_status_idx",
+            ),
         ]
 
     @property
@@ -369,7 +399,8 @@ class InvoiceItem(models.Model):
         return f"{self.category.name} - {self.amount}"
 
 
-class Payment(models.Model):
+class Payment(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     institution = models.ForeignKey(
         School,
         on_delete=models.CASCADE,
@@ -446,6 +477,20 @@ class Payment(models.Model):
                 fields=["institution", "receipt_number"],
                 name="unique_receipt_number_per_institution",
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["invoice", "status"],
+                name="payment_invoice_status_idx",
+            ),
+            models.Index(
+                fields=["institution", "payment_date"],
+                name="payment_inst_date_idx",
+            ),
+            models.Index(
+                fields=["payment_method", "status"],
+                name="payment_method_status_idx",
+            ),
         ]
 
     def clean(self):
@@ -531,7 +576,8 @@ class PaymentReversal(models.Model):
         self.payment.invoice.refresh_status()
 
 
-class Account(models.Model):
+class Account(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     ACCOUNT_TYPES = [
         ("asset", "Asset"),
         ("liability", "Liability"),
@@ -580,7 +626,8 @@ class Account(models.Model):
         return f"{self.code} - {self.name}"
 
 
-class JournalEntry(models.Model):
+class JournalEntry(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     STATUS_CHOICES = [("posted", "Posted"), ("void", "Void")]
 
     institution = models.ForeignKey(
@@ -655,7 +702,8 @@ class JournalLine(models.Model):
         return super().save(*args, **kwargs)
 
 
-class Expense(models.Model):
+class Expense(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("approved", "Approved"),
@@ -696,7 +744,8 @@ class Expense(models.Model):
         return super().save(*args, **kwargs)
 
 
-class Concession(models.Model):
+class Concession(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     STATUS_CHOICES = [("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")]
 
     institution = models.ForeignKey(
@@ -726,7 +775,8 @@ class Concession(models.Model):
         return super().save(*args, **kwargs)
 
 
-class PaymentRefund(models.Model):
+class PaymentRefund(SoftDeleteMixin):
+    objects = SoftDeleteManager()
     STATUS_CHOICES = [("completed", "Completed"), ("cancelled", "Cancelled")]
 
     institution = models.ForeignKey(

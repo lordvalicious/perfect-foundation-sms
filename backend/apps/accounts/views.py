@@ -3,8 +3,10 @@ from django.contrib.auth import logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
+from django.db import models
 from django.db.models import Q
 from django.http import JsonResponse
+from django.utils import timezone
 from django.utils.encoding import force_bytes, force_str
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -25,21 +27,35 @@ from apps.accounts.permissions import (
 )
 
 from .models import (
+    FailedLoginAttempt,
     InstitutionMembership,
+    PasswordHistory,
+    Permission,
     Role,
+    RoleAssignment,
+    RolePermission,
     StaffAttendance,
     StaffLeave,
     StaffProfile,
     User,
+    UserPermission,
+    UserSession,
 )
 from .serializers import (
     LoginSerializer,
+    PasswordChangeSerializer,
     PasswordResetConfirmSerializer,
     PasswordResetRequestSerializer,
+    PermissionSerializer,
+    RolePermissionCreateSerializer,
+    RolePermissionSerializer,
     StaffAttendanceSerializer,
     StaffLeaveActionSerializer,
     StaffLeaveSerializer,
     StaffProfileCRUDSerializer,
+    UserPermissionCreateSerializer,
+    UserPermissionSerializer,
+    UserPermissionsSummarySerializer,
     UserProfileSerializer,
     UserSerializer,
 )
@@ -48,6 +64,54 @@ from .serializers import (
 @ensure_csrf_cookie
 def csrf_token(request):
     return JsonResponse({"detail": "CSRF cookie set."})
+
+
+# Account lockout configuration
+MAX_FAILED_ATTEMPTS = 5
+LOCKOUT_DURATION_MINUTES = 15
+
+
+def get_client_ip(request):
+    """Extract client IP from request."""
+    forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.META.get("REMOTE_ADDR")
+
+
+def record_failed_login(request, user, username_or_email):
+    """Record a failed login attempt and apply lockout if threshold exceeded."""
+    ip = get_client_ip(request)
+    user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
+
+    FailedLoginAttempt.objects.create(
+        user=user,
+        ip_address=ip,
+        user_agent=user_agent,
+        username_or_email=username_or_email,
+    )
+
+    user.failed_login_attempts += 1
+    user.last_failed_login_ip = ip
+    user.last_failed_login_at = timezone.now()
+
+    if user.failed_login_attempts >= MAX_FAILED_ATTEMPTS:
+        user.locked_until = timezone.now() + timezone.timedelta(minutes=LOCKOUT_DURATION_MINUTES)
+
+    user.save(update_fields=[
+        "failed_login_attempts",
+        "locked_until",
+        "last_failed_login_ip",
+        "last_failed_login_at",
+    ])
+
+
+def clear_failed_logins(user):
+    """Clear failed login attempts on successful login."""
+    if user.failed_login_attempts > 0:
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.save(update_fields=["failed_login_attempts", "locked_until"])
 
 
 class LoginView(APIView):
@@ -66,6 +130,18 @@ class LoginView(APIView):
         serializer.is_valid(raise_exception=True)
 
         user = serializer.validated_data["user"]
+        username_or_email = serializer.validated_data.get("username") or serializer.validated_data.get("email", "")
+
+        # Check if account is locked (belt-and-suspenders, backend also checks)
+        if user.locked_until and user.locked_until > timezone.now():
+            lockout_remaining = int((user.locked_until - timezone.now()).total_seconds() / 60) + 1
+            return Response(
+                {
+                    "detail": f"Account temporarily locked. Try again in {lockout_remaining} minutes.",
+                    "locked_until": user.locked_until.isoformat(),
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
         if user.twofa_enabled and user.twofa_secret:
             import pyotp
@@ -75,6 +151,7 @@ class LoginView(APIView):
             if not code or not pyotp.TOTP(user.twofa_secret).verify(
                 code, valid_window=1
             ):
+                record_failed_login(request, user, username_or_email)
                 return Response(
                     {
                         "detail": (
@@ -88,6 +165,20 @@ class LoginView(APIView):
 
         django_login(request, user)
 
+        # Create user session record
+        session_key = request.session.session_key
+        if session_key:
+            from django.conf import settings
+            session_age = getattr(settings, "SESSION_COOKIE_AGE", 1209600)  # 2 weeks default
+            UserSession.objects.create(
+                user=user,
+                session_key=session_key,
+                ip_address=get_client_ip(request),
+                user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
+                expires_at=timezone.now() + timezone.timedelta(seconds=session_age),
+                is_current=True,
+            )
+
         school_code = serializer.validated_data.get("school_code", "").strip().lower()
         memberships = user.get_active_memberships()
         membership = memberships.filter(
@@ -95,6 +186,11 @@ class LoginView(APIView):
         ).first() if school_code else memberships.first()
         if membership is not None:
             request.session["active_institution_id"] = membership.institution_id
+
+        clear_failed_logins(user)
+
+        user.last_login_ip = get_client_ip(request)
+        user.save(update_fields=["last_login_ip"])
 
         record_audit(
             request=request,
@@ -116,10 +212,23 @@ class LoginFailedView(APIView):
     throttle_scope = "login"
 
     def post(self, request):
+        username_or_email = request.data.get("username") or request.data.get("email", "")
+        user = None
+
+        if username_or_email:
+            from django.contrib.auth import get_user_model
+            User = get_user_model()
+            user = User.objects.filter(
+                models.Q(email__iexact=username_or_email) | models.Q(username=username_or_email)
+            ).first()
+
+        if user:
+            record_failed_login(request, user, username_or_email)
+
         record_audit(
             request=request,
             action="login_failed",
-            details={"username": request.data.get("username")},
+            details={"username": username_or_email},
         )
 
         return Response(
@@ -136,6 +245,14 @@ class LogoutView(APIView):
             request=request,
             action="logout",
         )
+
+        # Delete current session record
+        session_key = request.session.session_key
+        if session_key:
+            UserSession.objects.filter(
+                user=request.user,
+                session_key=session_key,
+            ).delete()
 
         django_logout(request)
 
@@ -373,7 +490,7 @@ class PasswordResetConfirmView(APIView):
     """
     Confirm a password reset using the uid and token from the email.
 
-    Sets a new password and invalidates the user's existing sessions.
+    Sets a new password, stores password history, and invalidates the user's existing sessions.
     """
 
     permission_classes = []
@@ -401,14 +518,30 @@ class PasswordResetConfirmView(APIView):
                 {"token": "The reset link is invalid or has expired."}
             )
 
-        user.set_password(new_password)
-        user.save(update_fields=["password"])
+        # Store current password hash in history before changing
+        PasswordHistory.objects.create(
+            user=user,
+            password_hash=user.password,
+        )
 
+        # Keep only last 5 password hashes
+        old_hashes = PasswordHistory.objects.filter(user=user).order_by("-created_at")[5:]
+        for old in old_hashes:
+            old.delete()
+
+        user.set_password(new_password)
+        user.password_changed_at = timezone.now()
+        user.must_change_password = False
+        user.save(update_fields=["password", "password_changed_at", "must_change_password"])
+
+        # Invalidate all Django sessions
         for session in Session.objects.all():
             data = session.get_decoded()
-
             if str(data.get("_auth_user_id")) == str(user.pk):
                 session.delete()
+
+        # Invalidate all UserSession records
+        UserSession.objects.filter(user=user).delete()
 
         record_audit(
             request=request,
@@ -417,6 +550,257 @@ class PasswordResetConfirmView(APIView):
         )
 
         return Response({"detail": "Password has been reset."})
+
+
+class PasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(
+        style={"input_type": "password"},
+        write_only=True,
+    )
+    new_password = serializers.CharField(
+        min_length=8,
+        style={"input_type": "password"},
+        write_only=True,
+    )
+    confirm_password = serializers.CharField(
+        style={"input_type": "password"},
+        write_only=True,
+    )
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                "The two passwords do not match."
+            )
+        return attrs
+
+
+class PasswordChangeView(APIView):
+    """Change password for authenticated user."""
+
+    permission_classes = [IsAuthenticated]
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "password_reset"
+
+    def post(self, request):
+        serializer = PasswordChangeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = request.user
+        current_password = serializer.validated_data["current_password"]
+        new_password = serializer.validated_data["new_password"]
+
+        if not user.check_password(current_password):
+            raise serializers.ValidationError(
+                {"current_password": "Current password is incorrect."}
+            )
+
+        # Check password history
+        for hist in user.password_history.all():
+            if user.check_password(hist.password_hash):
+                raise serializers.ValidationError(
+                    {"new_password": "You cannot reuse a recent password."}
+                )
+
+        # Store current password hash in history
+        PasswordHistory.objects.create(
+            user=user,
+            password_hash=user.password,
+        )
+
+        # Keep only last 5 password hashes
+        old_hashes = PasswordHistory.objects.filter(user=user).order_by("-created_at")[5:]
+        for old in old_hashes:
+            old.delete()
+
+        user.set_password(new_password)
+        user.password_changed_at = timezone.now()
+        user.must_change_password = False
+        user.save(update_fields=["password", "password_changed_at", "must_change_password"])
+
+        # Invalidate all Django sessions except current
+        session_key = request.session.session_key
+        for session in Session.objects.all():
+            data = session.get_decoded()
+            if str(data.get("_auth_user_id")) == str(user.pk):
+                if session.session_key != session_key:
+                    session.delete()
+
+        # Invalidate all other UserSession records
+        UserSession.objects.filter(user=user).exclude(
+            session_key=session_key
+        ).delete()
+
+        # Update current session's last activity
+        if session_key:
+            UserSession.objects.filter(
+                user=user,
+                session_key=session_key,
+            ).update(last_activity_at=timezone.now())
+
+        record_audit(
+            request=request,
+            user=user,
+            action="password_change",
+        )
+
+        return Response({"detail": "Password has been changed."})
+
+
+class UserSessionSerializer(serializers.ModelSerializer):
+    is_expired = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = UserSession
+        fields = [
+            "id",
+            "session_key",
+            "ip_address",
+            "user_agent",
+            "created_at",
+            "last_activity_at",
+            "expires_at",
+            "is_current",
+            "is_expired",
+        ]
+
+
+class SessionListView(APIView):
+    """List active sessions for the current user."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        sessions = UserSession.objects.filter(user=request.user)
+        serializer = UserSessionSerializer(sessions, many=True)
+        return Response(serializer.data)
+
+
+class SessionRevokeView(APIView):
+    """Revoke a specific session."""
+
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, session_id):
+        session = UserSession.objects.filter(
+            user=request.user,
+            id=session_id,
+        ).first()
+
+        if not session:
+            return Response(
+                {"detail": "Session not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Don't allow revoking current session via this endpoint
+        if session.is_current:
+            return Response(
+                {"detail": "Cannot revoke current session. Use logout instead."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Delete Django session
+        Session.objects.filter(session_key=session.session_key).delete()
+
+        # Delete UserSession record
+        session.delete()
+
+        record_audit(
+            request=request,
+            action="session_revoke",
+            details={"revoked_session_ip": session.ip_address},
+        )
+
+        return Response({"detail": "Session revoked."})
+
+
+class SessionRevokeAllView(APIView):
+    """Revoke all sessions except current."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        session_key = request.session.session_key
+
+        # Delete other Django sessions
+        for session in Session.objects.all():
+            data = session.get_decoded()
+            if str(data.get("_auth_user_id")) == str(request.user.pk):
+                if session.session_key != session_key:
+                    session.delete()
+
+        # Delete other UserSession records
+        UserSession.objects.filter(user=request.user).exclude(
+            session_key=session_key
+        ).delete()
+
+        record_audit(
+            request=request,
+            action="session_revoke_all",
+        )
+
+        return Response({"detail": "All other sessions revoked."})
+
+
+class AccountLockoutStatusView(APIView):
+    """Check if account is locked and remaining lockout time."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        user = request.user
+        if user.locked_until and user.locked_until > timezone.now():
+            remaining = int((user.locked_until - timezone.now()).total_seconds() / 60) + 1
+            return Response({
+                "locked": True,
+                "locked_until": user.locked_until.isoformat(),
+                "remaining_minutes": remaining,
+                "failed_attempts": user.failed_login_attempts,
+            })
+        return Response({
+            "locked": False,
+            "failed_attempts": user.failed_login_attempts,
+        })
+
+
+class AdminUnlockAccountView(APIView):
+    """Admin endpoint to unlock a user account."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, user_id):
+        # Check if user has admin role
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+
+        user = User.objects.filter(pk=user_id).first()
+        if not user:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        user.failed_login_attempts = 0
+        user.locked_until = None
+        user.save(update_fields=["failed_login_attempts", "locked_until"])
+
+        # Clear failed login attempts
+        user.failed_login_records.all().delete()
+
+        record_audit(
+            request=request,
+            action="account_unlock",
+            details={"unlocked_user": user.username},
+        )
+
+        return Response({"detail": "Account unlocked."})
 
 
 class StaffListCreateView(generics.ListCreateAPIView):
@@ -680,3 +1064,407 @@ class StaffLeaveActionView(generics.GenericAPIView):
         return Response(
             StaffLeaveSerializer(leave).data
         )
+
+
+# =============================================================================
+# PERMISSION MANAGEMENT VIEWS
+# =============================================================================
+
+class PermissionListView(APIView):
+    """List all available permissions."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        # Only admins can view permissions
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        permissions = Permission.objects.all().order_by("category", "action", "codename")
+        
+        # Group by category
+        grouped = {}
+        for perm in permissions:
+            if perm.category not in grouped:
+                grouped[perm.category] = []
+            grouped[perm.category].append(PermissionSerializer(perm).data)
+        
+        return Response(grouped)
+
+
+class PermissionDetailView(APIView):
+    """Get a single permission."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, pk):
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        perm = Permission.objects.filter(pk=pk).first()
+        if not perm:
+            return Response(
+                {"detail": "Permission not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        return Response(PermissionSerializer(perm).data)
+
+
+class RolePermissionListView(APIView):
+    """List role permissions for the current institution."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        institution = getattr(request, "institution", None)
+        if not institution:
+            return Response(
+                {"detail": "No active institution selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Only admins can view role permissions
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        role_perms = RolePermission.objects.filter(
+            institution=institution
+        ).select_related("permission").order_by("role", "permission__category", "permission__action")
+        
+        # Group by role
+        grouped = {}
+        for rp in role_perms:
+            if rp.role not in grouped:
+                grouped[rp.role] = []
+            grouped[rp.role].append(RolePermissionSerializer(rp).data)
+        
+        return Response(grouped)
+
+
+class RolePermissionCreateView(APIView):
+    """Assign a permission to a role for the current institution."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        institution = getattr(request, "institution", None)
+        if not institution:
+            return Response(
+                {"detail": "No active institution selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Only super_admin, admin, principal can assign role permissions
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        serializer = RolePermissionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Set institution from request
+        role_perm = serializer.save(institution=institution, granted_by=request.user)
+        
+        record_audit(
+            request=request,
+            action="role_permission_assign",
+            model_name="RolePermission",
+            object_id=str(role_perm.pk),
+            object_repr=str(role_perm),
+            details={
+                "role": role_perm.role,
+                "permission": role_perm.permission.codename,
+            },
+        )
+        
+        return Response(
+            RolePermissionSerializer(role_perm).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class RolePermissionDeleteView(APIView):
+    """Remove a permission from a role."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, pk):
+        institution = getattr(request, "institution", None)
+        if not institution:
+            return Response(
+                {"detail": "No active institution selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        role_perm = RolePermission.objects.filter(
+            pk=pk,
+            institution=institution,
+        ).first()
+        
+        if not role_perm:
+            return Response(
+                {"detail": "Role permission not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        # Prevent deleting system permissions
+        if role_perm.permission.is_system:
+            return Response(
+                {"detail": "Cannot remove system permission from role."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        role_perm.delete()
+        
+        record_audit(
+            request=request,
+            action="role_permission_remove",
+            model_name="RolePermission",
+            object_id=str(pk),
+            details={
+                "role": role_perm.role,
+                "permission": role_perm.permission.codename,
+            },
+        )
+        
+        return Response({"detail": "Permission removed from role."})
+
+
+class UserPermissionListView(APIView):
+    """List user-specific permissions for the current institution."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request):
+        institution = getattr(request, "institution", None)
+        if not institution:
+            return Response(
+                {"detail": "No active institution selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        user_perms = UserPermission.objects.filter(
+            institution=institution
+        ).select_related("permission", "user", "granted_by").order_by("-granted_at")
+        
+        return Response(UserPermissionSerializer(user_perms, many=True).data)
+
+
+class UserPermissionCreateView(APIView):
+    """Grant or deny a permission to a specific user."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request):
+        institution = getattr(request, "institution", None)
+        if not institution:
+            return Response(
+                {"detail": "No active institution selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        serializer = UserPermissionCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user_perm = serializer.save(
+            institution=institution,
+            granted_by=request.user,
+        )
+        
+        record_audit(
+            request=request,
+            action="user_permission_grant" if user_perm.effect == "allow" else "user_permission_deny",
+            model_name="UserPermission",
+            object_id=str(user_perm.pk),
+            object_repr=str(user_perm),
+            details={
+                "user": user_perm.user.username,
+                "permission": user_perm.permission.codename,
+                "effect": user_perm.effect,
+            },
+        )
+        
+        return Response(
+            UserPermissionSerializer(user_perm).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class UserPermissionDeleteView(APIView):
+    """Remove a user-specific permission."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def delete(self, request, pk):
+        institution = getattr(request, "institution", None)
+        if not institution:
+            return Response(
+                {"detail": "No active institution selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        if not request.user.has_any_role(["super_admin", "admin", "principal"]):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        user_perm = UserPermission.objects.filter(
+            pk=pk,
+            institution=institution,
+        ).first()
+        
+        if not user_perm:
+            return Response(
+                {"detail": "User permission not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        user_perm.delete()
+        
+        record_audit(
+            request=request,
+            action="user_permission_remove",
+            model_name="UserPermission",
+            object_id=str(pk),
+            details={
+                "user": user_perm.user.username,
+                "permission": user_perm.permission.codename,
+            },
+        )
+        
+        return Response({"detail": "User permission removed."})
+
+
+class UserPermissionsSummaryView(APIView):
+    """Get a summary of a user's effective permissions in the current institution."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, user_id):
+        institution = getattr(request, "institution", None)
+        if not institution:
+            return Response(
+                {"detail": "No active institution selected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        # Users can view their own permissions; admins can view anyone's
+        if request.user.pk != user_id and not request.user.has_any_role(
+            ["super_admin", "admin", "principal"]
+        ):
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        
+        user = User.objects.filter(pk=user_id).first()
+        if not user:
+            return Response(
+                {"detail": "User not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        # Check user has membership in this institution
+        if not user.memberships.filter(institution=institution, status="active").exists():
+            return Response(
+                {"detail": "User is not a member of this institution."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        # Get role-based permissions
+        memberships = user.get_active_memberships().filter(institution=institution)
+        role_names = RoleAssignment.objects.filter(
+            membership__in=memberships
+        ).values_list("role", flat=True).distinct()
+        
+        role_perms = RolePermission.objects.filter(
+            role__in=role_names,
+            institution=institution,
+        ).select_related("permission") if role_names else []
+        
+        # Get user-specific allow permissions
+        allow_perms = user.custom_user_permissions.filter(
+            institution=institution,
+            effect="allow",
+        ).filter(
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now())
+        ).select_related("permission")
+        
+        # Get user-specific deny permissions
+        deny_perms = user.custom_user_permissions.filter(
+            institution=institution,
+            effect="deny",
+        ).filter(
+            models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=timezone.now())
+        ).select_related("permission")
+        
+        # Effective permissions
+        effective = user.get_permissions(institution)
+        
+        return Response(UserPermissionsSummarySerializer({
+            "user_id": user.pk,
+            "username": user.username,
+            "institution_id": institution.pk,
+            "institution_name": institution.name,
+            "role_permissions": [
+                {
+                    "role": rp.role,
+                    "permission": rp.permission.codename,
+                    "permission_name": rp.permission.name,
+                    "granted_at": rp.granted_at,
+                } for rp in role_perms
+            ],
+            "user_allow_permissions": [
+                {
+                    "permission": up.permission.codename,
+                    "permission_name": up.permission.name,
+                    "reason": up.reason,
+                    "granted_at": up.granted_at,
+                    "expires_at": up.expires_at,
+                } for up in allow_perms
+            ],
+            "user_deny_permissions": [
+                {
+                    "permission": up.permission.codename,
+                    "permission_name": up.permission.name,
+                    "reason": up.reason,
+                    "granted_at": up.granted_at,
+                    "expires_at": up.expires_at,
+                } for up in deny_perms
+            ],
+            "effective_permissions": sorted(list(effective)),
+        }).data)

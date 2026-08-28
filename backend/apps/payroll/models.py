@@ -37,6 +37,12 @@ class SalaryStructure(models.Model):
 
     class Meta:
         ordering = ["-effective_date"]
+        indexes = [
+            models.Index(
+                fields=["teacher", "status", "effective_date"],
+                name="salstruct_teacher_sts_date_idx",
+            ),
+        ]
 
     @property
     def total_allowances(self):
@@ -74,6 +80,14 @@ class PayrollRecord(models.Model):
         "teachers.Teacher",
         on_delete=models.CASCADE,
         related_name="payroll_records",
+    )
+    campus = models.ForeignKey(
+        "schools.Campus",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="payroll_records",
+        help_text="Campus where teacher was assigned during this period",
     )
     structure = models.ForeignKey(
         SalaryStructure,
@@ -141,12 +155,29 @@ class PayrollRecord(models.Model):
                 name="unique_teacher_payroll_period",
             )
         ]
+        indexes = [
+            models.Index(
+                fields=["campus", "year", "month", "status"],
+                name="payroll_campus_ym_status_idx",
+            ),
+            models.Index(
+                fields=["teacher", "year", "month"],
+                name="payroll_teacher_ym_idx",
+            ),
+            models.Index(
+                fields=["status", "year", "month"],
+                name="payroll_status_ym_idx",
+            ),
+        ]
 
     def clean(self):
+        errors = {}
         if not 1 <= self.month <= 12:
-            raise ValidationError(
-                {"month": "Month must be between 1 and 12."}
-            )
+            errors["month"] = "Month must be between 1 and 12."
+        if self.campus_id and self.campus.school_id != self.teacher.institution_id:
+            errors["campus"] = "Campus must belong to the teacher's institution."
+        if errors:
+            raise ValidationError(errors)
 
     def compute(self):
         self.basic_salary = self.structure.basic_salary

@@ -91,6 +91,14 @@ class AuditLog(models.Model):
                 fields=["action", "timestamp"],
                 name="audit_action_time_idx",
             ),
+            models.Index(
+                fields=["institution", "timestamp"],
+                name="audit_inst_time_idx",
+            ),
+            models.Index(
+                fields=["model_name", "object_id"],
+                name="audit_model_obj_idx",
+            ),
         ]
 
     def __str__(self):

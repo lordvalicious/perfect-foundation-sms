@@ -3,18 +3,20 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.schools.models import AcademicYear, Campus, Class, Section
-from apps.students.models import Enrollment, Student
+# Use string references to avoid circular imports
+# from apps.students.models import Enrollment, Student
 
 
 class Attendance(models.Model):
+    
     student = models.ForeignKey(
-        Student,
+        "students.Student",
         on_delete=models.CASCADE,
         related_name="attendance_records",
     )
 
     enrollment = models.ForeignKey(
-        Enrollment,
+        "students.Enrollment",
         on_delete=models.CASCADE,
         related_name="attendance_records",
     )
@@ -72,6 +74,20 @@ class Attendance(models.Model):
                 name="unique_student_attendance_per_day",
             )
         ]
+        indexes = [
+            models.Index(
+                fields=["campus", "date", "status"],
+                name="att_campus_date_status_idx",
+            ),
+            models.Index(
+                fields=["class_obj", "section", "date"],
+                name="att_class_section_date_idx",
+            ),
+            models.Index(
+                fields=["academic_year", "date"],
+                name="att_year_date_idx",
+            ),
+        ]
 
     def clean(self):
         errors = {}
@@ -128,6 +144,9 @@ class Attendance(models.Model):
 
         if errors:
             raise ValidationError(errors)
+        
+        # Run campus assignment validation
+        # super().clean()  # Removed CampusAssignmentValidationMixin
 
     def save(self, *args, **kwargs):
         self.full_clean()

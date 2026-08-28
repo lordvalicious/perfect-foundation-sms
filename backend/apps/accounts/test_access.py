@@ -11,9 +11,12 @@ from rest_framework.test import (
 
 from apps.accounts.models import (
     InstitutionMembership,
+    Permission,
     Role,
     RoleAssignment,
+    RolePermission,
     StaffProfile,
+    UserPermission,
 )
 from apps.accounts.access import (
     assert_campus_allowed,
@@ -397,3 +400,688 @@ class CampusIsolatedEventListTests(TestCase):
         self.assertEqual(response.status_code, 200)
         titles = [item["title"] for item in response.json()]
         self.assertEqual(titles, ["Event B"])
+
+
+# =============================================================================
+# GRANULAR PERMISSIONS TESTS
+# =============================================================================
+
+class PermissionModelTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+
+    def test_default_permissions_created(self):
+        """Test that default permissions are defined."""
+        perms = Permission.get_default_permissions()
+        self.assertGreater(len(perms), 100)
+        
+        # Check structure
+        for codename, name, category, action in perms:
+            self.assertIn(".", codename)
+            self.assertTrue(name)
+            self.assertIn(category, dict(Permission.CATEGORY_CHOICES))
+            self.assertIn(action, dict(Permission.ACTION_CHOICES))
+
+    def test_permission_codename_format(self):
+        """Test permission codenames follow resource.action format."""
+        for codename, name, category, action in Permission.get_default_permissions():
+            parts = codename.split(".")
+            self.assertEqual(len(parts), 2)
+            self.assertEqual(parts[1], action)
+
+
+class RolePermissionTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+
+    def test_assign_permission_to_role(self):
+        user = make_user("admin", Role.ADMIN, self.school)
+        
+        # Create a permission
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        # Assign to role
+        role_perm = RolePermission.objects.create(
+            role=Role.ADMIN,
+            permission=perm,
+            institution=self.school,
+            granted_by=user,
+        )
+        
+        self.assertEqual(role_perm.role, Role.ADMIN)
+        self.assertEqual(role_perm.permission, perm)
+        self.assertEqual(role_perm.institution, self.school)
+        self.assertEqual(role_perm.granted_by, user)
+
+    def test_role_permission_unique_per_institution(self):
+        """Test unique constraint on role+permission+institution."""
+        user = make_user("admin", Role.ADMIN, self.school)
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        RolePermission.objects.create(
+            role=Role.ADMIN,
+            permission=perm,
+            institution=self.school,
+            granted_by=user,
+        )
+        
+        # Duplicate should fail
+        with self.assertRaises(Exception):
+            RolePermission.objects.create(
+                role=Role.ADMIN,
+                permission=perm,
+                institution=self.school,
+                granted_by=user,
+            )
+
+    def test_role_permission_isolation_per_institution(self):
+        """Test role permissions are scoped to institution."""
+        other_school = School.objects.create(name="Other School")
+        
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        # Create role permission for first school
+        RolePermission.objects.create(
+            role=Role.ADMIN,
+            permission=perm,
+            institution=self.school,
+        )
+        
+        # Same role/permission for other school should be allowed
+        rp2 = RolePermission.objects.create(
+            role=Role.ADMIN,
+            permission=perm,
+            institution=other_school,
+        )
+        
+        self.assertEqual(rp2.institution, other_school)
+
+
+class UserPermissionTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+        
+        self.admin_user = make_user("admin", Role.ADMIN, self.school)
+        self.target_user = make_user("teacher", Role.TEACHER, self.school)
+
+    def test_grant_allow_permission(self):
+        perm = Permission.objects.create(
+            codename="student.create",
+            name="Create Students",
+            action="create",
+            category="student",
+        )
+        
+        user_perm = UserPermission.objects.create(
+            user=self.target_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+            granted_by=self.admin_user,
+        )
+        
+        self.assertEqual(user_perm.effect, "allow")
+        self.assertTrue(user_perm.is_active())
+
+    def test_grant_deny_permission(self):
+        perm = Permission.objects.create(
+            codename="student.delete",
+            name="Delete Students",
+            action="delete",
+            category="student",
+        )
+        
+        user_perm = UserPermission.objects.create(
+            user=self.target_user,
+            permission=perm,
+            institution=self.school,
+            effect="deny",
+            granted_by=self.admin_user,
+        )
+        
+        self.assertEqual(user_perm.effect, "deny")
+
+    def test_user_permission_expiration(self):
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        # Expired permission
+        expired = UserPermission.objects.create(
+            user=self.target_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+            expires_at=timezone.now() - timezone.timedelta(days=1),
+        )
+        
+        self.assertFalse(expired.is_active())
+        
+        # Valid permission
+        valid = UserPermission.objects.create(
+            user=self.target_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+            expires_at=timezone.now() + timezone.timedelta(days=1),
+        )
+        
+        self.assertTrue(valid.is_active())
+
+    def test_user_permission_unique_per_institution(self):
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        UserPermission.objects.create(
+            user=self.target_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+        )
+        
+        # Duplicate should fail
+        with self.assertRaises(Exception):
+            UserPermission.objects.create(
+                user=self.target_user,
+                permission=perm,
+                institution=self.school,
+                effect="deny",
+            )
+
+
+class UserPermissionEffectiveTests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+        
+        self.admin_user = make_user("admin", Role.ADMIN, self.school)
+        self.teacher_user = make_user("teacher", Role.TEACHER, self.school)
+
+    def test_role_based_permissions(self):
+        """Test permissions granted via role."""
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        # Assign permission to TEACHER role
+        RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm,
+            institution=self.school,
+        )
+        
+        # Teacher should have the permission
+        self.assertTrue(self.teacher_user.has_permission("student.view", self.school))
+        
+        # Non-teacher should not have it
+        other_user = make_user("staff", Role.STAFF, self.school)
+        self.assertFalse(other_user.has_permission("student.view", self.school))
+
+    def test_user_allow_override(self):
+        """Test user-specific allow overrides role."""
+        perm = Permission.objects.create(
+            codename="student.create",
+            name="Create Students",
+            action="create",
+            category="student",
+        )
+        
+        # Teacher role doesn't have create permission by default
+        self.assertFalse(self.teacher_user.has_permission("student.create", self.school))
+        
+        # Grant user-specific allow
+        UserPermission.objects.create(
+            user=self.teacher_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+        )
+        
+        # Now teacher should have it
+        self.assertTrue(self.teacher_user.has_permission("student.create", self.school))
+
+    def test_user_deny_override(self):
+        """Test user-specific deny overrides role."""
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        # Assign to TEACHER role
+        RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm,
+            institution=self.school,
+        )
+        
+        # Teacher has permission via role
+        self.assertTrue(self.teacher_user.has_permission("student.view", self.school))
+        
+        # Deny for this specific user
+        UserPermission.objects.create(
+            user=self.teacher_user,
+            permission=perm,
+            institution=self.school,
+            effect="deny",
+        )
+        
+        # Now teacher should NOT have it
+        self.assertFalse(self.teacher_user.has_permission("student.view", self.school))
+
+    def test_deny_overrides_allow(self):
+        """Test deny takes precedence over allow."""
+        perm = Permission.objects.create(
+            codename="student.edit",
+            name="Edit Students",
+            action="edit",
+            category="student",
+        )
+        
+        # Grant allow
+        UserPermission.objects.create(
+            user=self.teacher_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+        )
+        
+        self.assertTrue(self.teacher_user.has_permission("student.edit", self.school))
+        
+        # Then deny (should override)
+        UserPermission.objects.filter(
+            user=self.teacher_user,
+            permission=perm,
+            institution=self.school,
+        ).update(effect="deny")
+        
+        self.assertFalse(self.teacher_user.has_permission("student.edit", self.school))
+
+    def test_expired_permissions_not_counted(self):
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        # Expired allow permission
+        UserPermission.objects.create(
+            user=self.teacher_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+            expires_at=timezone.now() - timezone.timedelta(days=1),
+        )
+        
+        # Should not have permission
+        self.assertFalse(self.teacher_user.has_permission("student.view", self.school))
+
+    def test_superuser_has_all_permissions(self):
+        superuser = get_user_model().objects.create_superuser(
+            username="root",
+            email="root@test.edu",
+            password="TestPass123!",
+        )
+        
+        perm = Permission.objects.create(
+            codename="any.permission",
+            name="Any Permission",
+            action="view",
+            category="system",
+        )
+        
+        self.assertTrue(superuser.has_permission("student.view", self.school))
+        self.assertTrue(superuser.has_permission("any.permission", self.school))
+        self.assertTrue(superuser.has_permission("nonexistent.permission", self.school))
+
+    def test_has_any_permission(self):
+        perm1 = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        perm2 = Permission.objects.create(
+            codename="student.create",
+            name="Create Students",
+            action="create",
+            category="student",
+        )
+        
+        RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm1,
+            institution=self.school,
+        )
+        
+        self.assertTrue(self.teacher_user.has_any_permission(
+            ["student.view", "student.create"], self.school
+        ))
+        self.assertTrue(self.teacher_user.has_any_permission(
+            ["student.view"], self.school
+        ))
+        self.assertFalse(self.teacher_user.has_any_permission(
+            ["student.create"], self.school
+        ))
+
+    def test_has_all_permissions(self):
+        perm1 = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        perm2 = Permission.objects.create(
+            codename="student.create",
+            name="Create Students",
+            action="create",
+            category="student",
+        )
+        
+        RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm1,
+            institution=self.school,
+        )
+        
+        self.assertTrue(self.teacher_user.has_all_permissions(
+            ["student.view"], self.school
+        ))
+        self.assertFalse(self.teacher_user.has_all_permissions(
+            ["student.view", "student.create"], self.school
+        ))
+
+    def test_get_permissions_returns_set(self):
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm,
+            institution=self.school,
+        )
+        
+        perms = self.teacher_user.get_permissions(self.school)
+        self.assertIsInstance(perms, set)
+        self.assertIn("student.view", perms)
+
+
+class PermissionAPITests(TestCase):
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+        
+        self.admin_user = make_user("admin", Role.ADMIN, self.school)
+        self.teacher_user = make_user("teacher", Role.TEACHER, self.school)
+        
+        self.client = APIClient()
+        
+        # Login admin
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "admin",
+            "password": "TestPass123!",
+        }, format="json")
+
+    def test_permission_list_requires_admin(self):
+        """Test that permission list requires admin role."""
+        # Logout and login as teacher
+        self.client.post("/api/auth/logout/")
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "teacher",
+            "password": "TestPass123!",
+        }, format="json")
+        
+        response = self.client.get("/api/auth/permissions/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_permission_list_as_admin(self):
+        response = self.client.get("/api/auth/permissions/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        
+        # Check grouped by category
+        self.assertIn("student", data)
+        self.assertIn("teacher", data)
+        self.assertIn("finance", data)
+        
+        # Check structure
+        for category, perms in data.items():
+            for perm in perms:
+                self.assertIn("codename", perm)
+                self.assertIn("name", perm)
+                self.assertIn("action", perm)
+                self.assertIn("category", perm)
+
+    def test_role_permission_list(self):
+        response = self.client.get("/api/auth/role-permissions/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        
+        # Initially empty
+        self.assertEqual(data, {})
+
+    def test_role_permission_create(self):
+        perm = Permission.objects.create(
+            codename="student.create",
+            name="Create Students",
+            action="create",
+            category="student",
+        )
+        
+        response = self.client.post("/api/auth/role-permissions/create/", {
+            "role": Role.TEACHER,
+            "permission": perm.pk,
+        }, format="json")
+        
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["role"], Role.TEACHER)
+        self.assertEqual(data["permission"], perm.pk)
+
+    def test_role_permission_delete(self):
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        rp = RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm,
+            institution=self.school,
+        )
+        
+        response = self.client.delete(f"/api/auth/role-permissions/{rp.pk}/")
+        self.assertEqual(response.status_code, 200)
+        
+        # Verify deleted
+        self.assertFalse(RolePermission.objects.filter(pk=rp.pk).exists())
+
+    def test_role_permission_cannot_delete_system(self):
+        perm = Permission.objects.create(
+            codename="system.audit.view",
+            name="View Audit Logs",
+            action="view",
+            category="system",
+            is_system=True,
+        )
+        
+        rp = RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm,
+            institution=self.school,
+        )
+        
+        response = self.client.delete(f"/api/auth/role-permissions/{rp.pk}/")
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("system permission", response.json()["detail"].lower())
+
+    def test_user_permission_list(self):
+        response = self.client.get("/api/auth/user-permissions/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), [])
+
+    def test_user_permission_create_allow(self):
+        perm = Permission.objects.create(
+            codename="student.create",
+            name="Create Students",
+            action="create",
+            category="student",
+        )
+        
+        target_user = make_user("staff1", Role.STAFF, self.school)
+        
+        response = self.client.post("/api/auth/user-permissions/create/", {
+            "user": target_user.pk,
+            "permission": perm.pk,
+            "effect": "allow",
+            "reason": "Needs to create students for testing",
+        }, format="json")
+        
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["effect"], "allow")
+        self.assertEqual(data["user"], target_user.pk)
+
+    def test_user_permission_create_deny(self):
+        perm = Permission.objects.create(
+            codename="student.delete",
+            name="Delete Students",
+            action="delete",
+            category="student",
+        )
+        
+        target_user = make_user("staff2", Role.STAFF, self.school)
+        
+        response = self.client.post("/api/auth/user-permissions/create/", {
+            "user": target_user.pk,
+            "permission": perm.pk,
+            "effect": "deny",
+        }, format="json")
+        
+        self.assertEqual(response.status_code, 201)
+        data = response.json()
+        self.assertEqual(data["effect"], "deny")
+
+    def test_user_permission_delete(self):
+        perm = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        
+        target_user = make_user("staff3", Role.STAFF, self.school)
+        up = UserPermission.objects.create(
+            user=target_user,
+            permission=perm,
+            institution=self.school,
+            effect="allow",
+        )
+        
+        response = self.client.delete(f"/api/auth/user-permissions/{up.pk}/")
+        self.assertEqual(response.status_code, 200)
+        
+        self.assertFalse(UserPermission.objects.filter(pk=up.pk).exists())
+
+    def test_user_permissions_summary(self):
+        perm1 = Permission.objects.create(
+            codename="student.view",
+            name="View Students",
+            action="view",
+            category="student",
+        )
+        perm2 = Permission.objects.create(
+            codename="student.create",
+            name="Create Students",
+            action="create",
+            category="student",
+        )
+        
+        # Grant role permission
+        RolePermission.objects.create(
+            role=Role.TEACHER,
+            permission=perm1,
+            institution=self.school,
+        )
+        
+        # Grant user-specific allow
+        UserPermission.objects.create(
+            user=self.teacher_user,
+            permission=perm2,
+            institution=self.school,
+            effect="allow",
+        )
+        
+        # Get summary as admin
+        response = self.client.get(f"/api/auth/user-permissions/summary/{self.teacher_user.pk}/")
+        self.assertEqual(response.status_code, 200)
+        
+        data = response.json()
+        self.assertEqual(data["user_id"], self.teacher_user.pk)
+        self.assertEqual(len(data["effective_permissions"]), 2)
+        self.assertIn("student.view", data["effective_permissions"])
+        self.assertIn("student.create", data["effective_permissions"])
+        self.assertEqual(len(data["role_permissions"]), 1)
+        self.assertEqual(len(data["user_allow_permissions"]), 1)
+
+    def test_user_can_view_own_permissions(self):
+        # Login as teacher
+        self.client.post("/api/auth/logout/")
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "teacher",
+            "password": "TestPass123!",
+        }, format="json")
+        
+        response = self.client.get(f"/api/auth/user-permissions/summary/{self.teacher_user.pk}/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_user_cannot_view_others_permissions(self):
+        # Login as teacher
+        self.client.post("/api/auth/logout/")
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "teacher",
+            "password": "TestPass123!",
+        }, format="json")
+        
+        # Try to view admin's permissions
+        response = self.client.get(f"/api/auth/user-permissions/summary/{self.admin_user.pk}/")
+        self.assertEqual(response.status_code, 403)

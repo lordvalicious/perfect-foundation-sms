@@ -1,4 +1,5 @@
 from django.contrib.auth.backends import ModelBackend
+from django.utils import timezone
 
 from .models import User
 
@@ -24,6 +25,10 @@ class EmailOrUsernameBackend(ModelBackend):
             ).first()
 
         if user is None or not user.check_password(password):
+            return None
+
+        # Check if account is locked
+        if user.locked_until and user.locked_until > timezone.now():
             return None
 
         if not self.user_can_authenticate(user):

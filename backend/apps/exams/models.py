@@ -3,10 +3,15 @@ from decimal import Decimal
 from django.core.exceptions import ValidationError
 from django.db import models
 
+from apps.core.campus_validation import CampusValidationMixin
 from apps.schools.models import AcademicYear, Campus, Class
 from apps.students.models import Student
 
+
 class Exam(models.Model):
+    campus_field = "campus"
+    institution_field = "academic_year__school"
+    
     EXAM_TYPE_CHOICES = [
         ("monthly", "Monthly Test"),
         ("midterm", "Mid-Term"),
@@ -56,24 +61,42 @@ class Exam(models.Model):
 
     class Meta:
         ordering = ["-start_date"]
+        indexes = [
+            models.Index(
+                fields=["campus", "academic_year", "status"],
+                name="exam_campus_year_status_idx",
+            ),
+            models.Index(
+                fields=["class_obj", "exam_type", "status"],
+                name="exam_class_type_status_idx",
+            ),
+            models.Index(
+                fields=["start_date", "end_date"],
+                name="exam_date_range_idx",
+            ),
+        ]
 
     def clean(self):
+        # Validate campus belongs to the same institution as academic_year
+        if self.campus_id and self.academic_year_id:
+            if self.campus.school_id != self.academic_year.school_id:
+                raise ValidationError(
+                    "The academic year does not belong to the campus school."
+                )
+
         if self.class_obj_id and self.campus_id:
             if self.class_obj.unit.campus_id != self.campus_id:
                 raise ValidationError(
                     "The selected class does not belong to the selected campus."
                 )
 
-        if self.academic_year_id and self.campus_id:
-            if self.campus.school_id != self.academic_year.school_id:
-                raise ValidationError(
-                    "The academic year does not belong to the campus school."
-                )
-
         if self.end_date < self.start_date:
             raise ValidationError(
                 "Exam end date cannot be before the start date."
             )
+        
+        # Run campus validation
+        # super().clean()  # Removed CampusValidationMixin
 
     def __str__(self):
         return (
@@ -85,7 +108,7 @@ class Exam(models.Model):
 
 class ExamSubject(models.Model):
     exam = models.ForeignKey(
-        Exam,
+        "exams.Exam",
         on_delete=models.CASCADE,
         related_name="exam_subjects",
     )
@@ -148,19 +171,19 @@ class StudentResult(models.Model):
     ]
 
     exam = models.ForeignKey(
-        Exam,
+        "exams.Exam",
         on_delete=models.CASCADE,
         related_name="results",
     )
 
     student = models.ForeignKey(
-        Student,
+        "students.Student",
         on_delete=models.CASCADE,
         related_name="exam_results",
     )
 
     exam_subject = models.ForeignKey(
-        ExamSubject,
+        "exams.ExamSubject",
         on_delete=models.CASCADE,
         related_name="results",
     )
@@ -203,6 +226,20 @@ class StudentResult(models.Model):
                 ],
                 name="unique_student_exam_subject_result",
             )
+        ]
+        indexes = [
+            models.Index(
+                fields=["exam", "student"],
+                name="result_exam_student_idx",
+            ),
+            models.Index(
+                fields=["exam_subject", "is_pass"],
+                name="result_subject_pass_idx",
+            ),
+            models.Index(
+                fields=["grade", "is_pass"],
+                name="result_grade_pass_idx",
+            ),
         ]
 
     def clean(self):
@@ -321,19 +358,19 @@ class PracticalResult(models.Model):
     GRADE_CHOICES = StudentResult.GRADE_CHOICES
 
     exam = models.ForeignKey(
-        Exam,
+        "exams.Exam",
         on_delete=models.CASCADE,
         related_name="practical_results",
     )
 
     student = models.ForeignKey(
-        Student,
+        "students.Student",
         on_delete=models.CASCADE,
         related_name="practical_exam_results",
     )
 
     exam_subject = models.ForeignKey(
-        ExamSubject,
+        "exams.ExamSubject",
         on_delete=models.CASCADE,
         related_name="practical_results",
     )

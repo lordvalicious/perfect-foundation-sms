@@ -88,3 +88,70 @@ def get_current_request():
 def clear_current_request():
     """Clear the current request (called at end of request)."""
     _thread_locals._current_request = None
+
+
+# =============================================================================
+# Campus-scoped Manager
+# =============================================================================
+
+class CampusScopedManager(models.Manager):
+    """
+    Manager that filters querysets by campus from the current request.
+    
+    Uses the campus isolation logic from apps.accounts.access to automatically
+    scope queries to the user's allowed campuses.
+    
+    Usage:
+        class MyModel(models.Model):
+            campus = models.ForeignKey('schools.Campus', ...)
+            objects = CampusScopedManager()
+            
+    For models with nested campus relations, specify the campus_field:
+        class MyModel(models.Model):
+            class_obj = models.ForeignKey('schools.Class', ...)
+            objects = CampusScopedManager(campus_field="class_obj__unit__campus_id")
+    """
+    
+    def __init__(self, campus_field="campus_id", institution_field="institution_id"):
+        super().__init__()
+        self.campus_field = campus_field
+        self.institution_field = institution_field
+    
+    def get_queryset(self):
+        from apps.accounts.access import apply_campus_scope
+        from apps.accounts.managers import get_current_request
+        
+        qs = super().get_queryset()
+        request = get_current_request()
+        
+        if request is not None:
+            qs = apply_campus_scope(
+                qs, 
+                request, 
+                campus_field=self.campus_field,
+                institution_field=self.institution_field,
+            )
+        
+        return qs
+    
+    def all_campuses(self):
+        """Return unfiltered queryset (bypasses campus scoping)."""
+        return super().get_queryset()
+    
+    def for_campus(self, campus_id):
+        """Return queryset explicitly filtered to a specific campus."""
+        return super().get_queryset().filter(**{self.campus_field: campus_id})
+
+
+class CampusScopedManagerMixin:
+    """Mixin to add a campus-scoped manager to a model."""
+    
+    def __init__(self, campus_field="campus_id", institution_field="institution_id"):
+        self.campus_field = campus_field
+        self.institution_field = institution_field
+    
+    def get_manager(self):
+        return CampusScopedManager(
+            campus_field=self.campus_field,
+            institution_field=self.institution_field,
+        )

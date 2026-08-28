@@ -7,13 +7,34 @@ from .public_views import (
 )
 from .transcripts import StudentTranscriptPdfView
 from .views import (
+    AcademicHistoryDetailView,
+    AcademicHistoryListView,
     AdmissionApplicationAcceptView,
     AdmissionApplicationDetailView,
     AdmissionApplicationListCreateView,
     AdmissionApplicationReviewView,
+    CampusTransferApproveView,
+    CampusTransferCancelView,
+    CampusTransferCompleteView,
+    CampusTransferDetailView,
+    CampusTransferListCreateView,
+    CampusTransferRejectView,
+    CampusTransferReverseView,
     GuardianListCreateView,
     GuardianDetailView,
     GuardianMyView,
+    InquiryConvertView,
+    InquiryDetailView,
+    InquiryListCreateView,
+    SectionTransferApproveView,
+    SectionTransferCancelView,
+    SectionTransferCompleteView,
+    SectionTransferDetailView,
+    SectionTransferListCreateView,
+    SectionTransferRejectView,
+    Student360View,
+    StudentAlumniDetailView,
+    StudentGraduateView,
     StudentListCreateView,
     StudentDetailView,
     StudentGuardianListCreateView,
@@ -27,6 +48,14 @@ from .views import (
     EnrollmentListCreateView,
     EnrollmentDetailView,
     PromotionView,
+    StudentActivateView,
+    StudentWithdrawView,
+    StudentGraduateView,
+    TransferCertificateCancelView,
+    TransferCertificateDetailView,
+    TransferCertificateIssueView,
+    TransferCertificateListCreateView,
+    TransferCertificateVerifyView,
 )
 
 
@@ -35,6 +64,110 @@ urlpatterns = [
         "admissions/",
         AdmissionApplicationListCreateView.as_view(),
         name="admission-list",
+    ),
+    path(
+        "<int:pk>/360/",
+        Student360View.as_view(),
+        name="student-360",
+    ),
+    # Campus Transfers
+    path(
+        "campus-transfers/",
+        CampusTransferListCreateView.as_view(),
+        name="campus-transfer-list",
+    ),
+    path(
+        "campus-transfers/<int:pk>/",
+        CampusTransferDetailView.as_view(),
+        name="campus-transfer-detail",
+    ),
+    path(
+        "campus-transfers/<int:pk>/approve/",
+        CampusTransferApproveView.as_view(),
+        name="campus-transfer-approve",
+    ),
+    path(
+        "campus-transfers/<int:pk>/reject/",
+        CampusTransferRejectView.as_view(),
+        name="campus-transfer-reject",
+    ),
+    path(
+        "campus-transfers/<int:pk>/complete/",
+        CampusTransferCompleteView.as_view(),
+        name="campus-transfer-complete",
+    ),
+    path(
+        "campus-transfers/<int:pk>/cancel/",
+        CampusTransferCancelView.as_view(),
+        name="campus-transfer-cancel",
+    ),
+    path(
+        "campus-transfers/<int:pk>/reverse/",
+        CampusTransferReverseView.as_view(),
+        name="campus-transfer-reverse",
+    ),
+    # Section Transfers
+    path(
+        "section-transfers/",
+        SectionTransferListCreateView.as_view(),
+        name="section-transfer-list",
+    ),
+    path(
+        "section-transfers/<int:pk>/",
+        SectionTransferDetailView.as_view(),
+        name="section-transfer-detail",
+    ),
+    path(
+        "section-transfers/<int:pk>/approve/",
+        SectionTransferApproveView.as_view(),
+        name="section-transfer-approve",
+    ),
+    path(
+        "section-transfers/<int:pk>/reject/",
+        SectionTransferRejectView.as_view(),
+        name="section-transfer-reject",
+    ),
+    path(
+        "section-transfers/<int:pk>/complete/",
+        SectionTransferCompleteView.as_view(),
+        name="section-transfer-complete",
+    ),
+    path(
+        "section-transfers/<int:pk>/cancel/",
+        SectionTransferCancelView.as_view(),
+        name="section-transfer-cancel",
+    ),
+    # Alumni
+    path(
+        "alumni/",
+        StudentAlumniDetailView.as_view(),
+        name="student-alumni-detail",
+    ),
+    path(
+        "alumni/<int:pk>/",
+        StudentAlumniDetailView.as_view(),
+        name="student-alumni-detail-pk",
+    ),
+    # Graduation/Withdrawal/Activation
+    path(
+        "<int:pk>/graduate/",
+        StudentGraduateView.as_view(),
+        name="student-graduate",
+    ),
+    path(
+        "<int:pk>/withdraw/",
+        StudentWithdrawView.as_view(),
+        name="student-withdraw",
+    ),
+    path(
+        "<int:pk>/activate/",
+        StudentActivateView.as_view(),
+        name="student-activate",
+    ),
+    path(
+        "<int:pk>/360/",
+        Student360View.as_view(),
+        name="student-360",
     ),
     path(
         "admissions/<int:pk>/",
@@ -60,6 +193,56 @@ urlpatterns = [
         "admissions/public/apply/",
         PublicAdmissionApplyView.as_view(),
         name="public-admission-apply",
+    ),
+    path(
+        "inquiries/",
+        InquiryListCreateView.as_view(),
+        name="inquiry-list",
+    ),
+    path(
+        "inquiries/<int:pk>/",
+        InquiryDetailView.as_view(),
+        name="inquiry-detail",
+    ),
+    path(
+        "inquiries/<int:pk>/convert/",
+        InquiryConvertView.as_view(),
+        name="inquiry-convert",
+    ),
+    path(
+        "academic-history/",
+        AcademicHistoryListView.as_view(),
+        name="academic-history-list",
+    ),
+    path(
+        "academic-history/<int:pk>/",
+        AcademicHistoryDetailView.as_view(),
+        name="academic-history-detail",
+    ),
+    path(
+        "transfer-certificates/",
+        TransferCertificateListCreateView.as_view(),
+        name="transfer-certificate-list",
+    ),
+    path(
+        "transfer-certificates/<int:pk>/",
+        TransferCertificateDetailView.as_view(),
+        name="transfer-certificate-detail",
+    ),
+    path(
+        "transfer-certificates/<int:pk>/issue/",
+        TransferCertificateIssueView.as_view(),
+        name="transfer-certificate-issue",
+    ),
+    path(
+        "transfer-certificates/<int:pk>/cancel/",
+        TransferCertificateCancelView.as_view(),
+        name="transfer-certificate-cancel",
+    ),
+    path(
+        "transfer-certificates/verify/<str:code>/",
+        TransferCertificateVerifyView.as_view(),
+        name="transfer-certificate-verify",
     ),
     path(
         "guardian-links/",

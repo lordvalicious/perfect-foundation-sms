@@ -3,11 +3,14 @@ from rest_framework import serializers
 from .models import (
     AcademicUnit,
     AcademicYear,
+    AcademicCalendar,
     Campus,
     Class,
+    ClassTeacher,
     School,
     Section,
     Subject,
+    SubjectGroup,
     SubjectOffering,
     Term,
 )
@@ -244,3 +247,111 @@ class SubjectOfferingSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class SubjectGroupSerializer(serializers.ModelSerializer):
+    subject_count = serializers.IntegerField(
+        source="subjects.count",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SubjectGroup
+        fields = [
+            "id",
+            "institution",
+            "name",
+            "code",
+            "description",
+            "status",
+            "subjects",
+            "subject_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class ClassTeacherSerializer(serializers.ModelSerializer):
+    teacher_name = serializers.CharField(source="teacher.full_name", read_only=True)
+    section_name = serializers.CharField(source="section.name", read_only=True)
+    academic_year_name = serializers.CharField(source="academic_year.name", read_only=True)
+
+    class Meta:
+        model = ClassTeacher
+        fields = [
+            "id",
+            "teacher",
+            "teacher_name",
+            "section",
+            "section_name",
+            "academic_year",
+            "academic_year_name",
+            "status",
+            "assigned_date",
+            "removed_date",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class AcademicCalendarSerializer(serializers.ModelSerializer):
+    campus_name = serializers.CharField(source="campus.name", read_only=True)
+    academic_year_name = serializers.CharField(source="academic_year.name", read_only=True)
+    event_type_display = serializers.CharField(source="get_event_type_display", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = AcademicCalendar
+        fields = [
+            "id",
+            "institution",
+            "campus",
+            "campus_name",
+            "academic_year",
+            "academic_year_name",
+            "event_type",
+            "event_type_display",
+            "title",
+            "description",
+            "start_date",
+            "end_date",
+            "start_time",
+            "end_time",
+            "is_all_day",
+            "is_for_all_campuses",
+            "target_classes",
+            "target_sections",
+            "status",
+            "status_display",
+            "is_recurring",
+            "recurrence_rule",
+            "created_by",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class SubjectGroupSerializer(serializers.ModelSerializer):
+    subject_count = serializers.IntegerField(
+        source="subjects.count",
+        read_only=True,
+    )
+
+    class Meta:
+        model = SubjectGroup
+        fields = [
+            "id",
+            "institution",
+            "name",
+            "code",
+            "description",
+            "status",
+            "subjects",
+            "subject_count",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]

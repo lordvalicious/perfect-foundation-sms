@@ -4,9 +4,10 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
-from apps.exams.models import Exam
 from apps.schools.models import School
-from apps.students.models import Student
+# Use string references to avoid circular imports
+# from apps.exams.models import Exam
+# from apps.students.models import Student
 
 
 class ReportCard(models.Model):
@@ -29,13 +30,13 @@ class ReportCard(models.Model):
     ]
 
     student = models.ForeignKey(
-        Student,
+        "students.Student",
         on_delete=models.CASCADE,
         related_name="report_cards",
     )
 
     exam = models.ForeignKey(
-        Exam,
+        "exams.Exam",
         on_delete=models.CASCADE,
         related_name="report_cards",
     )

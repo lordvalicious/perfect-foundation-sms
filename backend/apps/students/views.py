@@ -1,18 +1,20 @@
 from datetime import date
-
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
-from rest_framework import generics
+from rest_framework.permissions import IsAuthenticated
+from rest_framework import generics, status
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from decimal import Decimal
 
 from apps.accounts.access import assert_campus_allowed, campus_access
 from apps.accounts.permissions import (
     IsAdminOrReadOnly,
     IsAdminRole,
     IsAcademicMemberRole,
+    IsStaffRole,
 )
 from apps.accounts.scopes import (
     get_guardian_profile,
@@ -35,6 +37,12 @@ from .models import (
     StudentLeaveRequest,
     Enrollment,
     StudentDocument,
+    Inquiry,
+    AcademicHistory,
+    TransferCertificate,
+    CampusTransfer,
+    SectionTransfer,
+    StudentAlumni,
 )
 from .serializers import (
     EnrollmentCreateSerializer,
@@ -47,6 +55,17 @@ from .serializers import (
     StudentLifecycleEventSerializer,
     PromotionSerializer,
     StudentLeaveRequestSerializer,
+    InquirySerializer,
+    InquiryCreateSerializer,
+    AcademicHistorySerializer,
+    TransferCertificateSerializer,
+    TransferCertificateIssueSerializer,
+    Student360Serializer,
+    CampusTransferSerializer,
+    CampusTransferCreateSerializer,
+    SectionTransferSerializer,
+    SectionTransferCreateSerializer,
+    StudentAlumniSerializer,
 )
 
 
@@ -713,3 +732,724 @@ class EnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
                 "section",
             )
         ).filter(academic_year__school=self.request.institution), self.request)
+
+
+# =============================================================================
+# INQUIRY VIEWS
+# =============================================================================
+
+class InquiryListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return InquiryCreateSerializer
+        return InquirySerializer
+
+    def get_queryset(self):
+        queryset = Inquiry.objects.select_related(
+            "guardian", "campus", "academic_year", "class_obj", "assigned_to", "converted_by"
+        ).filter(
+            institution=self.request.institution
+        )
+
+        status = self.request.query_params.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        campus = self.request.query_params.get("campus")
+        if campus:
+            assert_campus_allowed(self.request.user, campus)
+            queryset = queryset.filter(campus_id=campus)
+
+        search = self.request.query_params.get("search")
+        if search:
+            queryset = queryset.filter(
+                Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(phone__icontains=search)
+                | Q(email__icontains=search)
+                | Q(inquiry_number__icontains=search)
+            )
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution)
+
+
+class InquiryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAdminOrReadOnly]
+    serializer_class = InquirySerializer
+
+    def get_queryset(self):
+        return Inquiry.objects.filter(institution=self.request.institution)
+
+
+class InquiryConvertView(APIView):
+    """Convert an inquiry to an admission application."""
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        inquiry = get_object_or_404(
+            Inquiry.objects.filter(institution=request.institution),
+            pk=pk,
+        )
+
+        if inquiry.status == "converted":
+            return Response({"detail": "Inquiry already converted."}, status=400)
+
+        application_data = request.data.get("application_data", {})
+
+        try:
+            application = inquiry.convert_to_application(
+                request.user,
+                **application_data,
+            )
+        except ValidationError as e:
+            return Response({"detail": str(e)}, status=400)
+
+        return Response(
+            {"application": AdmissionApplicationSerializer(application, context={"request": request}).data},
+            status=201,
+        )
+
+
+# =============================================================================
+# ACADEMIC HISTORY VIEWS
+# =============================================================================
+
+class AcademicHistoryListView(generics.ListAPIView):
+    serializer_class = AcademicHistorySerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        queryset = AcademicHistory.objects.select_related(
+            "student", "academic_year", "campus", "class_obj", "section"
+        ).filter(student__institution=self.request.institution)
+
+        student = self.request.query_params.get("student")
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        academic_year = self.request.query_params.get("academic_year")
+        if academic_year:
+            queryset = queryset.filter(academic_year_id=academic_year)
+
+        campus = self.request.query_params.get("campus")
+        if campus:
+            assert_campus_allowed(self.request.user, campus)
+            queryset = queryset.filter(campus_id=campus)
+
+        final_status = self.request.query_params.get("final_status")
+        if final_status:
+            queryset = queryset.filter(final_status=final_status)
+
+        return queryset
+
+
+class AcademicHistoryDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AcademicHistorySerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return AcademicHistory.objects.filter(student__institution=self.request.institution)
+
+
+# =============================================================================
+# TRANSFER CERTIFICATE VIEWS
+# =============================================================================
+
+class TransferCertificateListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return TransferCertificateSerializer
+        return TransferCertificateSerializer
+
+    def get_queryset(self):
+        queryset = TransferCertificate.objects.select_related(
+            "student", "campus", "academic_year", "class_obj", "section", "issued_by"
+        ).filter(institution=self.request.institution)
+
+        campus = self.request.query_params.get("campus")
+        if campus:
+            assert_campus_allowed(self.request.user, campus)
+            queryset = queryset.filter(campus_id=campus)
+
+        student = self.request.query_params.get("student")
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        status = self.request.query_params.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution)
+
+
+class TransferCertificateDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = TransferCertificateSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return TransferCertificate.objects.filter(institution=self.request.institution)
+
+
+class TransferCertificateIssueView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        certificate = get_object_or_404(
+            TransferCertificate.objects.filter(institution=request.institution),
+            pk=pk,
+        )
+
+        if certificate.status == "issued":
+            return Response({"detail": "Certificate already issued."}, status=400)
+
+        if certificate.status == "cancelled":
+            return Response({"detail": "Cannot issue a cancelled certificate."}, status=400)
+
+        certificate.issue(request.user)
+        return Response(TransferCertificateSerializer(certificate, context={"request": request}).data)
+
+
+class TransferCertificateCancelView(APIView):
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        certificate = get_object_or_404(
+            TransferCertificate.objects.filter(institution=request.institution),
+            pk=pk,
+        )
+
+        if certificate.status == "draft":
+            return Response({"detail": "Cannot cancel a draft certificate. Delete it instead."}, status=400)
+
+        certificate.cancel(request.user)
+        return Response(TransferCertificateSerializer(certificate, context={"request": request}).data)
+
+
+class TransferCertificateVerifyView(APIView):
+    """Public endpoint to verify a transfer certificate by verification code."""
+
+    permission_classes = []
+
+    def get(self, request, code):
+        certificate = get_object_or_404(
+            TransferCertificate.objects.filter(
+                institution__isnull=False,
+                verification_code=code.upper(),
+                status="issued",
+            ),
+            pk=pk,
+        )
+        # For public verification, return limited info
+        data = {
+            "certificate_number": certificate.certificate_number,
+            "verification_code": certificate.verification_code,
+            "student_name": certificate.full_name,
+            "admission_number": certificate.admission_number,
+            "date_of_birth": certificate.date_of_birth,
+            "campus": certificate.campus.name,
+            "academic_year": certificate.academic_year.name,
+            "class_name": certificate.class_obj.name,
+            "section_name": certificate.section.name,
+            "admission_date": certificate.admission_date,
+            "leaving_date": certificate.leaving_date,
+            "reason": certificate.get_reason_display(),
+            "final_grade": certificate.final_grade,
+            "conduct": certificate.conduct,
+            "status": certificate.status,
+            "issued_at": certificate.issued_at,
+            "issued_by": certificate.issued_by.get_full_name() if certificate.issued_by else None,
+        }
+        return Response(data)
+
+
+# =============================================================================
+# STUDENT 360 VIEW
+# =============================================================================
+
+class Student360View(APIView):
+    """
+    Comprehensive Student 360 view that aggregates data from multiple modules.
+    
+    Provides a complete view of a student by aggregating data from:
+    - Personal details (Student model)
+    - Parents/Guardians (Guardian, StudentGuardian)
+    - Academic history (AcademicHistory)
+    - Current enrollment (Enrollment)
+    - Attendance (Attendance)
+    - Exams & Results (StudentResult, PracticalResult)
+    - Fees & Finance (Invoice, Payment)
+    - Library (BookIssue)
+    - Transport (TransportAssignment)
+    - Discipline (Incident)
+    - Documents (StudentDocument)
+    - Certificates (TransferCertificate)
+    
+    Access Control:
+    - Admin/Manager roles: Can view any student in their institution
+    - Teachers: Can view students in their classes
+    - Parents: Can view their own children
+    - Students: Can view their own profile
+    """
+    
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, student_id):
+        from apps.students.models import Student
+        from apps.accounts.access import assert_campus_allowed
+        from apps.accounts.scopes import (
+            get_student_profile, get_guardian_profile,
+            is_manager, is_parent, is_student,
+            parent_student_ids, parent_scope_filter,
+            teacher_scope_filter,
+        )
+        from apps.students.serializers import Student360Serializer
+        
+        # Get the student
+        student = get_object_or_404(
+            Student.objects.select_related(
+                "guardian", "primary_campus", "user", "membership", "institution"
+            ).prefetch_related(
+                "enrollments__campus",
+                "enrollments__class_obj",
+                "enrollments__section",
+                "enrollments__academic_year",
+                "guardian_links__guardian",
+                "documents",
+            ),
+            pk=student_id,
+            institution=request.institution,
+        )
+        
+        # Check authorization
+        user = request.user
+        
+        # Allow if user is the student themselves
+        if student.user_id == user.id:
+            pass  # Allow
+        # Allow if user is a parent of the student
+        elif is_parent(user) and student.id in parent_student_ids(user):
+            pass  # Allow
+        # Allow if user is the student themselves
+        elif is_student(user) and get_student_profile(user) == student:
+            pass  # Allow
+        # Allow if user is a teacher of the student
+        elif not is_manager(user) and hasattr(user, 'teacher_profile'):
+            teacher = user.teacher_profile
+            active_enrollment = student.enrollments.filter(status="active").first()
+            if active_enrollment and teacher_can_access_student(teacher, active_enrollment):
+                pass  # Allow
+        # Otherwise require admin/manager role
+        elif not is_manager(user):
+            raise PermissionDenied("You do not have permission to view this student's profile.")
+        
+        # Campus access check
+        active_enrollment = student.enrollments.filter(status="active").first()
+        if active_enrollment:
+            try:
+                assert_campus_allowed(user, active_enrollment.campus_id)
+            except PermissionDenied:
+                raise PermissionDenied("You do not have access to this campus.")
+        
+        # Serialize and return
+        serializer = Student360Serializer(student, context={"request": request})
+        return Response(serializer.data)
+
+
+def teacher_can_access_student(teacher, enrollment):
+    """Check if a teacher can access a student's data."""
+    from apps.teachers.models import TeacherAssignment
+    
+    if not enrollment:
+        return False
+    
+    # Check if teacher is class teacher for this student's section
+    return TeacherAssignment.objects.filter(
+        teacher=teacher,
+        class_obj=enrollment.class_obj,
+        section=enrollment.section,
+        role="class_teacher",
+        status="active",
+    ).exists()
+
+
+# =============================================================================
+# CAMPUS TRANSFER VIEWS
+# =============================================================================
+
+class CampusTransferListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAdminRole]
+    
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return CampusTransferCreateSerializer
+        return CampusTransferSerializer
+    
+    def get_queryset(self):
+        queryset = CampusTransfer.objects.select_related(
+            "student", "from_campus", "to_campus", "academic_year",
+            "requested_by", "reviewed_by", "completed_by", "reversed_by"
+        ).filter(student__institution=self.request.institution)
+        
+        status = self.request.query_params.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        campus = self.request.query_params.get("campus")
+        if campus:
+            assert_campus_allowed(self.request.user, campus)
+            queryset = queryset.filter(Q(from_campus_id=campus) | Q(to_campus_id=campus))
+        
+        student = self.request.query_params.get("student")
+        if student:
+            queryset = queryset.filter(student_id=student)
+        
+        return queryset
+
+
+class CampusTransferDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = CampusTransferSerializer
+    permission_classes = [IsAdminRole]
+    
+    def get_queryset(self):
+        return CampusTransfer.objects.filter(
+            student__institution=self.request.institution
+        )
+    
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        
+        if instance.status == "completed":
+            return Response(
+                {"detail": "Cannot modify a completed transfer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        return super().update(request, *args, **partial)
+
+
+class CampusTransferApproveView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            CampusTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status != "requested":
+            return Response(
+                {"detail": "Only requested transfers can be approved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        notes = request.data.get("review_notes", "")
+        transfer.approve(request.user, notes)
+        
+        return Response(CampusTransferSerializer(transfer, context={"request": request}).data)
+
+
+class CampusTransferRejectView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            CampusTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status != "requested":
+            return Response(
+                {"detail": "Only requested transfers can be rejected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        notes = request.data.get("review_notes", "")
+        transfer.reject(request.user, notes)
+        
+        return Response(CampusTransferSerializer(transfer, context={"request": request}).data)
+
+
+class CampusTransferCompleteView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            CampusTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status != "approved":
+            return Response(
+                {"detail": "Only approved transfers can be completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        transfer.complete(request.user)
+        
+        return Response(CampusTransferSerializer(transfer, context={"request": request}).data)
+
+
+class CampusTransferCancelView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            CampusTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status in ["completed", "cancelled"]:
+            return Response(
+                {"detail": f"Cannot cancel a {transfer.status} transfer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        transfer.cancel(request.user)
+        
+        return Response(CampusTransferSerializer(transfer, context={"request": request}).data)
+
+
+class CampusTransferReverseView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            CampusTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        reason = request.data.get("reason", "")
+        transfer.reverse(request.user, reason)
+        
+        return Response(CampusTransferSerializer(transfer, context={"request": request}).data)
+
+
+# =============================================================================
+# SECTION TRANSFER VIEWS
+# =============================================================================
+
+class SectionTransferListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAdminRole]
+    
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return SectionTransferCreateSerializer
+        return SectionTransferSerializer
+    
+    def get_queryset(self):
+        queryset = SectionTransfer.objects.select_related(
+            "student", "from_section", "to_section", "academic_year",
+            "requested_by", "reviewed_by", "completed_by"
+        ).filter(student__institution=self.request.institution)
+        
+        status = self.request.query_params.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+        
+        campus = self.request.query_params.get("campus")
+        if campus:
+            assert_campus_allowed(self.request.user, campus)
+            queryset = queryset.filter(from_section__class_obj__unit__campus_id=campus)
+        
+        return queryset
+
+
+class SectionTransferDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = SectionTransferSerializer
+    permission_classes = [IsAdminRole]
+    
+    def get_queryset(self):
+        return SectionTransfer.objects.filter(
+            student__institution=self.request.institution
+        )
+
+
+class SectionTransferApproveView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            SectionTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status != "requested":
+            return Response(
+                {"detail": "Only requested transfers can be approved."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        notes = request.data.get("review_notes", "")
+        transfer.approve(request.user, notes)
+        
+        return Response(SectionTransferSerializer(transfer, context={"request": request}).data)
+
+
+class SectionTransferRejectView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            SectionTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status != "requested":
+            return Response(
+                {"detail": "Only requested transfers can be rejected."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        notes = request.data.get("review_notes", "")
+        transfer.reject(request.user, notes)
+        
+        return Response(SectionTransferSerializer(transfer, context={"request": request}).data)
+
+
+class SectionTransferCompleteView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            SectionTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status != "approved":
+            return Response(
+                {"detail": "Only approved transfers can be completed."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        transfer.complete(request.user)
+        
+        return Response(SectionTransferSerializer(transfer, context={"request": request}).data)
+
+
+class SectionTransferCancelView(APIView):
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        transfer = get_object_or_404(
+            SectionTransfer.objects.filter(student__institution=request.institution),
+            pk=pk,
+        )
+        
+        if transfer.status in ["completed", "cancelled"]:
+            return Response(
+                {"detail": f"Cannot cancel a {transfer.status} transfer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        transfer.cancel(request.user)
+        
+        return Response(SectionTransferSerializer(transfer, context={"request": request}).data)
+
+
+# =============================================================================
+# ALUMNI VIEWS
+# =============================================================================
+
+class StudentGraduateView(APIView):
+    """Graduate a student and create alumni record."""
+    permission_classes = [IsAdminRole]
+    
+    @transaction.atomic
+    def post(self, request, pk):
+        student = get_object_or_404(
+            Student.objects.filter(
+                institution=request.institution,
+                enrollments__academic_year__school=request.institution,
+            ),
+            pk=pk,
+        )
+        
+        graduation_date = request.data.get("graduation_date")
+        reason = request.data.get("reason", "Graduated")
+        final_grade = request.data.get("final_grade", "")
+        final_percentage = request.data.get("final_percentage")
+        final_percentage = Decimal(final_percentage) if final_percentage else None
+        
+        alumni = student.graduate(
+            request.user,
+            graduation_date=graduation_date,
+            reason=reason,
+            final_grade=final_grade,
+            final_percentage=final_percentage,
+        )
+        
+        return Response(
+            {"student": StudentSerializer(student, context={"request": request}).data,
+             "alumni": StudentAlumniSerializer(alumni, context={"request": request}).data},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class StudentWithdrawView(APIView):
+    """Withdraw a student."""
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        student = get_object_or_404(
+            Student.objects.filter(
+                institution=request.institution,
+                enrollments__academic_year__school=request.institution,
+            ),
+            pk=pk,
+        )
+        
+        reason = request.data.get("reason", "")
+        effective_date = request.data.get("effective_date")
+        
+        event = student.withdraw(request.user, reason, effective_date)
+        
+        return Response(StudentLifecycleEventSerializer(event).data, status=status.HTTP_201_CREATED)
+
+
+class StudentActivateView(APIView):
+    """Reactivate a withdrawn/inactive student."""
+    permission_classes = [IsAdminRole]
+    
+    def post(self, request, pk):
+        student = get_object_or_404(
+            Student.objects.filter(
+                institution=request.institution,
+                enrollments__academic_year__school=request.institution,
+            ),
+            pk=pk,
+        )
+        
+        if student.status not in ["withdrawn", "inactive"]:
+            return Response(
+                {"detail": "Student is not withdrawn or inactive."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        reason = request.data.get("reason", "Reactivated")
+        effective_date = request.data.get("effective_date")
+        
+        event = student.activate(request.user, reason, effective_date)
+        
+        return Response(StudentLifecycleEventSerializer(event).data, status=status.HTTP_201_CREATED)
+
+
+class StudentAlumniDetailView(generics.RetrieveUpdateAPIView):
+    serializer_class = StudentAlumniSerializer
+    permission_classes = [IsAdminRole]
+    
+    def get_queryset(self):
+        return StudentAlumni.objects.filter(
+            student__institution=self.request.institution
+        ).select_related("student", "final_campus", "final_class", "final_section", "final_academic_year")

@@ -160,6 +160,52 @@ export function AuthProvider({ children }) {
     [user]
   );
 
+  const hasPermission = useCallback(
+    (permission) => {
+      if (!user) return false;
+      if (user.is_superuser) return true;
+      
+      // Check user's effective permissions
+      const permissions = new Set();
+      
+      // Get permissions from memberships
+      for (const membership of user.memberships || []) {
+        for (const assignment of membership.roles || []) {
+          // Role-based permissions would be fetched from backend
+          // For now, we use role-based fallback
+        }
+      }
+      
+      // If user has explicit permissions in the data, use them
+      if (user.permissions) {
+        for (const p of user.permissions) {
+          permissions.add(p);
+        }
+      }
+      
+      // Fallback to role-based check
+      const userRoles = new Set();
+      for (const membership of user.memberships || []) {
+        for (const assignment of membership.roles || []) {
+          userRoles.add(assignment.role);
+        }
+      }
+      
+      // Superuser has all permissions
+      if (user.is_superuser) return true;
+      
+      // Admin roles have most permissions
+      const adminRoles = ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic"];
+      const hasAdminRole = adminRoles.some(r => userRoles.has(r));
+      
+      // For now, fall back to role-based for common admin permissions
+      if (hasAdminRole) return true;
+      
+      return permissions.has(permission);
+    },
+    [user]
+  );
+
   const value = useMemo(
     () => ({
       user,
@@ -168,9 +214,10 @@ export function AuthProvider({ children }) {
       login,
       logout,
       hasRole,
+      hasPermission,
       refresh: fetchMe,
     }),
-    [user, loading, error, login, logout, hasRole, fetchMe]
+    [user, loading, error, login, logout, hasRole, hasPermission, fetchMe]
   );
 
   return (

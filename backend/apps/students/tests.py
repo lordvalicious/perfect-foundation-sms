@@ -8,13 +8,16 @@ from apps.accounts.models import InstitutionMembership, Role, RoleAssignment, Us
 from apps.schools.models import AcademicUnit, AcademicYear, Campus, Class, School, Section
 
 from .models import (
-	AdmissionApplication,
-	Guardian,
-	Enrollment,
-	Student,
-	StudentGuardian,
-	StudentLeaveRequest,
-	StudentLifecycleEvent,
+    AdmissionApplication,
+    AcademicHistory,
+    Guardian,
+    Enrollment,
+    Student,
+    StudentGuardian,
+    StudentLeaveRequest,
+    StudentLifecycleEvent,
+    Inquiry,
+    TransferCertificate,
 )
 
 
@@ -266,3 +269,321 @@ class StudentLifecycleModelTests(TestCase):
 
 		self.assertEqual(response.status_code, 200)
 		self.assertEqual(response.json()["id"], self.guardian.pk)
+
+
+# =============================================================================
+# STUDENT 360 TESTS
+# =============================================================================
+
+class Student360ModelTests(TestCase):
+    """Test Student model methods used by Student 360."""
+    
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+        unit = AcademicUnit.objects.create(campus=self.campus, name="Primary")
+        self.class_obj = Class.objects.create(unit=unit, name="Grade 1")
+        self.section = Section.objects.create(class_obj=self.class_obj, name="A")
+        self.year = AcademicYear.objects.create(
+            school=self.school,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.guardian = Guardian.objects.create(
+            name="Test Parent",
+            relationship="Father",
+            phone="03000000000",
+        )
+        self.student = Student.objects.create(
+            admission_number="ADM-001",
+            first_name="Ali",
+            last_name="Khan",
+            date_of_birth=date(2010, 1, 1),
+            gender="male",
+            guardian=self.guardian,
+        )
+        self.admin = User.objects.create_user(
+            username="admin",
+            email="admin@test.edu",
+            password="test-password",
+        )
+        membership = InstitutionMembership.objects.create(
+            user=self.admin,
+            institution=self.school,
+        )
+        RoleAssignment.objects.create(
+            membership=membership,
+            role=Role.ADMIN,
+        )
+
+    def test_student_age_property(self):
+        """Test student age calculation."""
+        self.student.date_of_birth = date(2010, 1, 1)
+        self.student.save()
+        self.assertEqual(self.student.age, 16)  # Assuming current year is 2026
+
+    def test_student_full_name_property(self):
+        """Test student full name property."""
+        self.student.first_name = "Ali"
+        self.student.middle_name = "Ahmed"
+        self.student.last_name = "Khan"
+        self.assertEqual(self.student.full_name, "Ali Ahmed Khan")
+        
+        self.student.middle_name = ""
+        self.assertEqual(self.student.full_name, "Ali Khan")
+
+    def test_student_can_transition_to(self):
+        """Test status transition validation."""
+        # active -> inactive
+        self.student.status = "active"
+        self.assertTrue(self.student.can_transition_to("inactive"))
+        
+        # inactive -> active
+        self.student.status = "inactive"
+        self.assertTrue(self.student.can_transition_to("active"))
+        
+        # active -> graduated
+        self.student.status = "active"
+        self.assertTrue(self.student.can_transition_to("graduated"))
+        
+        # graduated -> anything (terminal)
+        self.student.status = "graduated"
+        self.assertFalse(self.student.can_transition_to("active"))
+        self.assertFalse(self.student.can_transition_to("inactive"))
+        self.assertFalse(self.student.can_transition_to("withdrawn"))
+
+    def test_student_transition_status_creates_lifecycle_event(self):
+        """Test that transition_status creates a lifecycle event."""
+        event = self.student.transition_status("inactive", self.admin, "Medical leave")
+        self.assertEqual(event.event_type, "inactive")
+        self.assertEqual(event.student, self.student)
+        self.assertEqual(event.reason, "Medical leave")
+        self.assertEqual(event.recorded_by, self.admin)
+        self.assertEqual(self.student.status, "inactive")
+
+
+class Student360SerializerTests(TestCase):
+    """Test Student360Serializer."""
+    
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+        unit = AcademicUnit.objects.create(campus=self.campus, name="Primary")
+        self.class_obj = Class.objects.create(unit=unit, name="Grade 1")
+        self.section = Section.objects.create(class_obj=self.class_obj, name="A")
+        self.year = AcademicYear.objects.create(
+            school=self.school,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.guardian = Guardian.objects.create(
+            name="Test Parent",
+            relationship="Father",
+            phone="03000000000",
+        )
+        self.student = Student.objects.create(
+            admission_number="ADM-001",
+            first_name="Ali",
+            last_name="Khan",
+            date_of_birth=date(2010, 1, 1),
+            gender="male",
+            guardian=self.guardian,
+        )
+        self.admin = User.objects.create_user(
+            username="admin",
+            email="admin@test.edu",
+            password="test-password",
+        )
+        membership = InstitutionMembership.objects.create(
+            user=self.admin,
+            institution=self.school,
+        )
+        RoleAssignment.objects.create(
+            membership=membership,
+            role=Role.ADMIN,
+        )
+
+    def test_student360_serializer_basic_fields(self):
+        """Test Student360Serializer basic field serialization."""
+        from apps.students.serializers import Student360Serializer
+        
+        serializer = Student360Serializer(self.student)
+        data = serializer.data
+        
+        self.assertEqual(data["admission_number"], "ADM-001")
+        self.assertEqual(data["first_name"], "Ali")
+        self.assertEqual(data["last_name"], "Khan")
+        self.assertEqual(data["full_name"], "Ali Khan")
+        self.assertEqual(data["gender"], "male")
+        self.assertIn("photo_url", data)
+        self.assertIn("age", data)
+
+
+class Student360APITests(TestCase):
+    """Test Student 360 API endpoints."""
+    
+    def setUp(self):
+        self.school = School.objects.create(name="Test School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+        unit = AcademicUnit.objects.create(campus=self.campus, name="Primary")
+        self.class_obj = Class.objects.create(unit=unit, name="Grade 1")
+        self.section = Section.objects.create(class_obj=self.class_obj, name="A")
+        self.year = AcademicYear.objects.create(
+            school=self.school,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.guardian = Guardian.objects.create(
+            name="Test Parent",
+            relationship="Father",
+            phone="03000000000",
+        )
+        self.student = Student.objects.create(
+            admission_number="ADM-001",
+            first_name="Ali",
+            last_name="Khan",
+            date_of_birth=date(2010, 1, 1),
+            gender="male",
+            guardian=self.guardian,
+        )
+        self.admin = User.objects.create_user(
+            username="admin",
+            email="admin@test.edu",
+            password="Admin123!",
+        )
+        membership = InstitutionMembership.objects.create(
+            user=self.admin,
+            institution=self.school,
+        )
+        RoleAssignment.objects.create(
+            membership=membership,
+            role=Role.ADMIN,
+        )
+        self.client = APIClient()
+
+    def test_student_360_requires_admin(self):
+        """Test that Student 360 endpoint requires admin role."""
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "admin",
+            "password": "Admin123!",
+        }, format="json")
+        
+        response = self.client.get(f"/api/students/{self.student.pk}/360/")
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data["admission_number"], "ADM-001")
+        self.assertEqual(data["full_name"], "Ali Khan")
+        self.assertIn("current_enrollment", data)
+        self.assertIn("enrollments", data)
+        self.assertIn("academic_history", data)
+        self.assertIn("attendance_summary", data)
+        self.assertIn("exam_results", data)
+        self.assertIn("invoices", data)
+        self.assertIn("payments", data)
+        self.assertIn("fee_balance", data)
+        self.assertIn("book_issues", data)
+        self.assertIn("transport_assignment", data)
+        self.assertIn("discipline_incidents", data)
+        self.assertIn("discipline_summary", data)
+        self.assertIn("documents", data)
+        self.assertIn("transfer_certificates", data)
+
+    def test_student_360_teacher_denied(self):
+        """Test that Student 360 endpoint denies teacher access to unrelated students."""
+        teacher = User.objects.create_user(username="teacher", email="teacher@test.edu", password="Test123!")
+        membership = InstitutionMembership.objects.create(user=teacher, institution=self.school)
+        RoleAssignment.objects.create(membership=membership, role=Role.TEACHER)
+
+        self.client.post("/api/auth/logout/")
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "teacher",
+            "password": "Test123!",
+        }, format="json")
+        
+        response = self.client.get(f"/api/students/{self.student.pk}/360/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_student_360_parent_access_own_child(self):
+        """Test that parent can access their own child's 360."""
+        parent = User.objects.create_user(username="parent", email="parent@test.edu", password="Parent123!")
+        membership = InstitutionMembership.objects.create(user=parent, institution=self.school)
+        RoleAssignment.objects.create(membership=membership, role=Role.PARENT)
+        
+        # Link parent to student
+        StudentGuardian.objects.create(
+            student=self.student,
+            guardian=self.guardian,
+            relationship="Father",
+            is_primary=True,
+        )
+        self.guardian.user = parent
+        self.guardian.save()
+        
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "parent",
+            "password": "Parent123!",
+        }, format="json")
+        
+        response = self.client.get(f"/api/students/{self.student.pk}/360/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["admission_number"], "ADM-001")
+
+    def test_student_360_student_access_own_profile(self):
+        """Test that student can access their own 360."""
+        self.student.user = self.student.user or User.objects.create_user(
+            username="student", email="student@test.edu", password="Student123!"
+        )
+        self.student.save()
+        
+        membership = InstitutionMembership.objects.create(
+            user=self.student.user, institution=self.school
+        )
+        RoleAssignment.objects.create(membership=membership, role=Role.STUDENT)
+        
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "student",
+            "password": "Student123!",
+        }, format="json")
+        
+        response = self.client.get(f"/api/students/{self.student.pk}/360/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_student_360_denied_other_student(self):
+        """Test that student cannot access another student's 360."""
+        other_student = Student.objects.create(
+            admission_number="ADM-002",
+            first_name="Other",
+            last_name="Student",
+            gender="female",
+            guardian=self.guardian,
+        )
+        
+        self.student.user = User.objects.create_user(
+            username="student", email="student@test.edu", password="Student123!"
+        )
+        self.student.save()
+        membership = InstitutionMembership.objects.create(
+            user=self.student.user, institution=self.school
+        )
+        RoleAssignment.objects.create(membership=membership, role=Role.STUDENT)
+        
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post("/api/auth/login/", {
+            "username": "student",
+            "password": "Student123!",
+        }, format="json")
+        
+        response = self.client.get(f"/api/students/{other_student.pk}/360/")
+        self.assertEqual(response.status_code, 403)
+
+    def test_student_360_unauthenticated_denied(self):
+        """Test that unauthenticated access is denied."""
+        response = self.client.get(f"/api/students/{self.student.pk}/360/")
+        self.assertEqual(response.status_code, 403)

@@ -4,12 +4,15 @@ from rest_framework import serializers
 
 from .models import (
     InstitutionMembership,
+    Permission,
     Role,
     RoleAssignment,
+    RolePermission,
     StaffAttendance,
     StaffLeave,
     StaffProfile,
     User,
+    UserPermission,
 )
 
 
@@ -584,6 +587,29 @@ class LoginSerializer(serializers.Serializer):
         return attrs
 
 
+class PasswordChangeSerializer(serializers.Serializer):
+    current_password = serializers.CharField(
+        style={"input_type": "password"},
+        write_only=True,
+    )
+    new_password = serializers.CharField(
+        min_length=8,
+        style={"input_type": "password"},
+        write_only=True,
+    )
+    confirm_password = serializers.CharField(
+        style={"input_type": "password"},
+        write_only=True,
+    )
+
+    def validate(self, attrs):
+        if attrs["new_password"] != attrs["confirm_password"]:
+            raise serializers.ValidationError(
+                "The two passwords do not match."
+            )
+        return attrs
+
+
 class PasswordResetRequestSerializer(serializers.Serializer):
     email = serializers.EmailField()
 
@@ -613,3 +639,131 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             )
 
         return attrs
+
+
+class PermissionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Permission
+        fields = [
+            "id",
+            "codename",
+            "name",
+            "description",
+            "action",
+            "category",
+            "is_system",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class RolePermissionSerializer(serializers.ModelSerializer):
+    permission_detail = PermissionSerializer(source="permission", read_only=True)
+    role_label = serializers.CharField(source="get_role_display", read_only=True)
+    institution_name = serializers.CharField(source="institution.name", read_only=True)
+    granted_by_name = serializers.CharField(source="granted_by.username", read_only=True)
+    
+    class Meta:
+        model = RolePermission
+        fields = [
+            "id",
+            "role",
+            "role_label",
+            "permission",
+            "permission_detail",
+            "institution",
+            "institution_name",
+            "granted_by",
+            "granted_by_name",
+            "granted_at",
+        ]
+        read_only_fields = ["id", "granted_at"]
+
+
+class RolePermissionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = RolePermission
+        fields = [
+            "role",
+            "permission",
+            "institution",
+        ]
+
+
+class UserPermissionSerializer(serializers.ModelSerializer):
+    permission_detail = PermissionSerializer(source="permission", read_only=True)
+    institution_name = serializers.CharField(source="institution.name", read_only=True)
+    granted_by_name = serializers.CharField(source="granted_by.username", read_only=True)
+    user_name = serializers.CharField(source="user.username", read_only=True)
+    is_active = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = UserPermission
+        fields = [
+            "id",
+            "user",
+            "user_name",
+            "permission",
+            "permission_detail",
+            "institution",
+            "institution_name",
+            "effect",
+            "reason",
+            "granted_by",
+            "granted_by_name",
+            "granted_at",
+            "expires_at",
+            "is_active",
+        ]
+        read_only_fields = ["id", "granted_at", "is_active"]
+    
+    def get_is_active(self, obj):
+        return obj.is_active()
+
+
+class UserPermissionCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserPermission
+        fields = [
+            "user",
+            "permission",
+            "institution",
+            "effect",
+            "reason",
+            "expires_at",
+        ]
+    
+    def validate(self, attrs):
+        user = attrs.get("user")
+        institution = attrs.get("institution")
+        if user and institution:
+            if not user.memberships.filter(institution=institution, status="active").exists():
+                raise serializers.ValidationError(
+                    "User must have an active membership in this institution."
+                )
+        return attrs
+
+
+class UserPermissionsSummarySerializer(serializers.Serializer):
+    """Serializer for a user's effective permissions in an institution."""
+    user_id = serializers.IntegerField()
+    username = serializers.CharField()
+    institution_id = serializers.IntegerField()
+    institution_name = serializers.CharField()
+    role_permissions = serializers.ListField(
+        child=serializers.DictField(),
+        help_text="Permissions granted via roles"
+    )
+    user_allow_permissions = serializers.ListField(
+        child=serializers.DictField(),
+        help_text="Permissions explicitly allowed for this user"
+    )
+    user_deny_permissions = serializers.ListField(
+        child=serializers.DictField(),
+        help_text="Permissions explicitly denied for this user"
+    )
+    effective_permissions = serializers.ListField(
+        child=serializers.CharField(),
+        help_text="All effective permission codenames"
+    )

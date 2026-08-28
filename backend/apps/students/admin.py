@@ -4,11 +4,14 @@ from django.contrib import admin
 
 from .models import (
     AdmissionApplication,
+    AcademicHistory,
     Enrollment,
     Guardian,
+    Inquiry,
     Student,
     StudentGuardian,
     StudentLifecycleEvent,
+    TransferCertificate,
 )
 
 
@@ -253,4 +256,79 @@ class EnrollmentAdmin(admin.ModelAdmin):
         "created_at",
         "updated_at",
     )
+
+
+@admin.register(Inquiry)
+class InquiryAdmin(admin.ModelAdmin):
+    list_display = (
+        "inquiry_number",
+        "applicant_name",
+        "campus",
+        "academic_year",
+        "class_obj",
+        "status",
+        "source",
+        "assigned_to",
+        "created_at",
+    )
+    list_filter = ("status", "source", "campus", "academic_year")
+    search_fields = ("inquiry_number", "first_name", "last_name", "phone", "email")
+    readonly_fields = ("inquiry_number", "created_at", "updated_at", "converted_at", "converted_by")
+
+
+@admin.register(AcademicHistory)
+class AcademicHistoryAdmin(admin.ModelAdmin):
+    list_display = (
+        "student",
+        "academic_year",
+        "campus",
+        "class_obj",
+        "section",
+        "final_status",
+        "promotion_status",
+        "final_grade",
+        "final_percentage",
+    )
+    list_filter = ("final_status", "promotion_status", "campus", "academic_year")
+    search_fields = ("student__admission_number", "student__first_name", "student__last_name")
+    readonly_fields = ("created_at", "updated_at")
+
+
+@admin.register(TransferCertificate)
+class TransferCertificateAdmin(admin.ModelAdmin):
+    list_display = (
+        "certificate_number",
+        "student",
+        "full_name",
+        "campus",
+        "academic_year",
+        "class_obj",
+        "status",
+        "reason",
+        "issued_at",
+    )
+    list_filter = ("status", "reason", "campus", "academic_year")
+    search_fields = ("certificate_number", "student__admission_number", "full_name")
+    readonly_fields = (
+        "certificate_number",
+        "verification_code",
+        "issued_by",
+        "issued_at",
+        "created_at",
+        "updated_at",
+    )
+    actions = ["issue_certificates", "cancel_certificates"]
+
+    def issue_certificates(self, request, queryset):
+        for cert in queryset.filter(status="draft"):
+            cert.issue(request.user)
+        self.message_user(request, f"Issued {queryset.filter(status='issued').count()} certificates.")
+
+    def cancel_certificates(self, request, queryset):
+        for cert in queryset.filter(status="issued"):
+            cert.cancel(request.user)
+        self.message_user(request, f"Cancelled {queryset.filter(status='cancelled').count()} certificates.")
+
+    issue_certificates.short_description = "Issue selected certificates"
+    cancel_certificates.short_description = "Cancel selected certificates"
 
