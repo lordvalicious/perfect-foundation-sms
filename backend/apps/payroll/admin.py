@@ -5,14 +5,14 @@ from .models import PayrollRecord, Payslip, SalaryStructure
 
 @admin.register(SalaryStructure)
 class SalaryStructureAdmin(admin.ModelAdmin):
-    list_display = ["teacher", "basic_salary", "effective_date", "status"]
+    list_display = ["employee", "basic_salary", "effective_date", "status"]
     list_filter = ["status"]
 
 
 @admin.register(PayrollRecord)
 class PayrollRecordAdmin(admin.ModelAdmin):
     list_display = [
-        "teacher",
+        "employee",
         "month",
         "year",
         "gross_salary",

@@ -3,9 +3,12 @@ from django.urls import path
 from .bank_file import PayrollBankFileView
 from .payslips_pdf import PayrollPayslipPdfView
 from .views import (
+    PayrollApproveView,
+    PayrollPayView,
     PayrollProcessView,
     PayrollRecordDetailView,
     PayrollRecordListView,
+    PayslipGenerateView,
     PayslipListView,
     SalaryStructureDetailView,
     SalaryStructureListView,
@@ -39,9 +42,24 @@ urlpatterns = [
         name="payroll-process",
     ),
     path(
+        "records/<int:pk>/approve/",
+        PayrollApproveView.as_view(),
+        name="payroll-approve",
+    ),
+    path(
+        "records/<int:pk>/pay/",
+        PayrollPayView.as_view(),
+        name="payroll-pay",
+    ),
+    path(
         "records/<int:pk>/payslip.pdf",
         PayrollPayslipPdfView.as_view(),
         name="payroll-payslip-pdf",
+    ),
+    path(
+        "records/<int:pk>/payslip/",
+        PayslipGenerateView.as_view(),
+        name="payroll-payslip-generate",
     ),
     path(
         "records/bank-file/",

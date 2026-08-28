@@ -20,6 +20,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.accounts.access import assert_campus_allowed
+from apps.hr.models import Employee
 
 
 class PayrollPayslipPdfView(APIView):
@@ -38,17 +39,17 @@ class PayrollPayslipPdfView(APIView):
         record = get_object_or_404(
             payroll_queryset(
                 PayrollRecord.objects.select_related(
-                    "teacher",
-                    "teacher__primary_campus",
-                    "teacher__primary_campus__school",
-                    "structure",
+                    "employee",
+                    "employee__primary_campus",
+                    "employee__primary_campus__school",
+                    "salary_structure",
                 ),
                 request,
             ),
             pk=pk,
         )
 
-        campus_obj = record.teacher.primary_campus
+        campus_obj = record.employee.primary_campus
         campus = campus_obj.name if campus_obj else "-"
         school_name = (
             campus_obj.school.name
@@ -86,8 +87,8 @@ class PayrollPayslipPdfView(APIView):
         )
 
         rows = [
-            ["Employee", record.teacher.full_name],
-            ["Employee No", record.teacher.employee_number],
+            ["Employee", record.employee.full_name],
+            ["Employee No", record.employee.employee_number],
             ["Campus", campus],
             ["Period", f"{record.year}-{record.month:02d}"],
             ["Paid Days", f"{record.paid_days} / {record.working_days}"],
@@ -107,15 +108,15 @@ class PayrollPayslipPdfView(APIView):
         earnings_rows = [["Earnings", "Amount (Rs)"]]
         earnings_rows.append(["Basic Salary", f"{record.basic_salary:,.2f}"])
 
-        for name, value in sorted((record.allowances or {}).items()):
+        for name, value in sorted((record.component_details.get("allowances", {}) or {}).items()):
             earnings_rows.append([name.replace("_", " ").title(), f"{value:,.2f}"])
 
         earnings_rows.append(["Gross", f"{record.gross_salary:,.2f}"])
 
         deduction_rows = [["Deductions", "Amount (Rs)"]]
 
-        if record.deductions:
-            for name, value in sorted(record.deductions.items()):
+        if record.component_details.get("deductions"):
+            for name, value in sorted(record.component_details["deductions"].items()):
                 deduction_rows.append(
                     [name.replace("_", " ").title(), f"{value:,.2f}"]
                 )
@@ -234,7 +235,7 @@ class PayrollPayslipPdfView(APIView):
 
         response = HttpResponse(pdf_bytes, content_type="application/pdf")
         response["Content-Disposition"] = (
-            f'attachment; filename="payslip_{record.teacher.employee_number}'
+            f'attachment; filename="payslip_{record.employee.employee_number}'
             f'_{record.year}_{record.month:02d}.pdf"'
         )
 
