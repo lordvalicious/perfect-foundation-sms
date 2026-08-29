@@ -18,8 +18,71 @@ class WorkflowDefinitionSerializer(serializers.ModelSerializer):
             "approval_steps",
             "transitions",
             "is_active",
+            "created_at",
+            "updated_at",
         ]
-        read_only_fields = fields
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class WorkflowDefinitionWriteSerializer(serializers.ModelSerializer):
+    """Serializer for creating/updating workflow definitions (admin only)."""
+
+    class Meta:
+        model = WorkflowDefinition
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "object_type",
+            "states",
+            "initial_state",
+            "approval_steps",
+            "transitions",
+            "is_active",
+        ]
+        read_only_fields = ["id"]
+
+    def validate(self, data):
+        """Validate state machine configuration."""
+        states = data.get("states", [])
+        initial_state = data.get("initial_state", "")
+        transitions = data.get("transitions", {})
+        approval_steps = data.get("approval_steps", [])
+
+        errors = {}
+
+        if not states:
+            errors["states"] = "Must define at least one state."
+        if initial_state not in states:
+            errors["initial_state"] = f"Initial state must be one of: {states}"
+
+        # Validate transitions
+        for action, trans in transitions.items():
+            from_states = trans.get("from", [])
+            to_state = trans.get("to", "")
+            if to_state not in states:
+                errors.setdefault("transitions", {})[action] = f"Target state '{to_state}' not in states."
+            for fs in from_states:
+                if fs not in states:
+                    errors.setdefault("transitions", {})[action] = f"From state '{fs}' not in states."
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return data
+
+
+class WorkflowDefinitionTestSerializer(serializers.Serializer):
+    """Test a workflow by simulating a transition."""
+
+    from_state = serializers.CharField(max_length=50)
+    action = serializers.CharField(max_length=50)
+
+    def validate_from_state(self, value):
+        definition = self.context.get("definition")
+        if definition and value not in definition.states:
+            raise serializers.ValidationError(f"State '{value}' not in workflow states.")
+        return value
 
 
 class WorkflowApprovalSerializer(serializers.ModelSerializer):

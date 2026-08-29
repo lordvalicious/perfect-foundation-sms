@@ -14,6 +14,8 @@ from apps.workflow.serializers import (
     WorkflowApprovalDecideSerializer,
     WorkflowApprovalSerializer,
     WorkflowDefinitionSerializer,
+    WorkflowDefinitionWriteSerializer,
+    WorkflowDefinitionTestSerializer,
     WorkflowInstanceDetailSerializer,
     WorkflowInstanceSerializer,
     WorkflowTransitionSerializer,
@@ -192,3 +194,111 @@ class WorkflowApprovalDecideView(APIView):
         return Response(
             WorkflowInstanceDetailSerializer(instance, context={"request": request}).data
         )
+
+
+class WorkflowDefinitionCreateUpdateDeleteView(generics.CreateUpdateAPIView):
+    """Create, update, or delete workflow definitions (admin only)."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = WorkflowDefinitionWriteSerializer
+    queryset = WorkflowDefinition.objects.all()
+
+    def check_admin_permission(self, request):
+        """Ensure user is admin."""
+        user = request.user
+        if not user.is_staff and not user.is_superuser:
+            raise PermissionDenied("Only administrators can manage workflow definitions.")
+
+    def create(self, request, *args, **kwargs):
+        self.check_admin_permission(request)
+        return super().create(request, *args, **kwargs)
+
+    def update(self, request, *args, **kwargs):
+        self.check_admin_permission(request)
+        return super().update(request, *args, **kwargs)
+
+    def destroy(self, request, *args, **kwargs):
+        self.check_admin_permission(request)
+        definition = self.get_object()
+        definition.is_active = False
+        definition.save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class WorkflowDefinitionTestView(APIView):
+    """Test workflow transitions without creating an instance."""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, pk):
+        definition = get_object_or_404(WorkflowDefinition, pk=pk)
+        
+        serializer = WorkflowDefinitionTestSerializer(
+            data=request.data,
+            context={"definition": definition}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        from_state = serializer.validated_data["from_state"]
+        action = serializer.validated_data["action"]
+
+        # Simulate the transition
+        transitions = definition.transitions.get(action, {})
+        allowed_from_states = transitions.get("from", [])
+
+        if from_state not in allowed_from_states:
+            raise ValidationError(
+                {"from_state": f"Action '{action}' not allowed from state '{from_state}'."}
+            )
+
+        to_state = transitions.get("to", None)
+        if to_state is None:
+            raise ValidationError({"action": f"Transition for action '{action}' not configured."})
+
+        # If this action has approval steps, create a dummy queue
+        approval_steps = []
+        if action == "submit":
+            approval_steps = [
+                {"sequence": i, "role": role}
+                for i, role in enumerate(definition.approval_steps or [])
+            ]
+
+        return Response({
+            "from_state": from_state,
+            "action": action,
+            "to_state": to_state,
+            "approval_steps": approval_steps,
+            "is_terminal": definition.is_terminal(to_state),
+        })
+
+
+class WorkflowInstanceStatsView(APIView):
+    """Get workflow statistics for the active institution."""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        institution = _active_institution(request)
+        
+        queryset = _scoped_instances(request)
+        if institution:
+            queryset = queryset.filter(
+                Q(institution_id=institution.id) | Q(institution_id__isnull=True)
+            )
+
+        total_instances = queryset.count()
+        pending_approvals = queryset.filter(
+            current_state="pending_approval"
+        ).count()
+        
+        # Count by definition
+        by_definition = {}
+        for definition in WorkflowDefinition.objects.filter(is_active=True):
+            count = queryset.filter(definition_id=definition.id).count()
+            by_definition[definition.slug] = count
+
+        return Response({
+            "total_instances": total_instances,
+            "pending_approvals": pending_approvals,
+            "by_definition": by_definition,
+        })
