@@ -4,7 +4,7 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed
 from apps.accounts.permissions import IsAcademicMemberRole, IsTeacherRole
 from apps.accounts.scopes import (
     get_student_profile,
@@ -21,8 +21,9 @@ from apps.accounts.scopes import (
 )
 from apps.audit.models import record_audit
 
-from .models import Exam, ExamSubject, PracticalResult, StudentResult
+from .models import Exam, ExamSchedule, ExamSubject, PracticalResult, StudentResult
 from .serializers import (
+    ExamScheduleSerializer,
     ExamSerializer,
     ExamSubjectSerializer,
     PracticalResultSerializer,
@@ -447,3 +448,206 @@ class PracticalResultDetailView(generics.RetrieveUpdateDestroyAPIView):
             )
 
         instance.delete()
+
+
+class ExamScheduleListView(generics.ListCreateAPIView):
+    serializer_class = ExamScheduleSerializer
+    permission_classes = [IsAcademicMemberRole]
+    pagination_class = ExamListPagination
+
+    def get_queryset(self):
+        queryset = (
+            ExamSchedule.objects
+            .select_related(
+                "exam",
+                "exam__academic_year",
+                "exam__campus",
+                "section",
+                "section__class_obj",
+                "exam_subject__subject",
+            )
+            .order_by("date", "start_time", "section__name")
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_parent(user):
+                class_ids = parent_student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_teacher(user):
+                class_ids = teacher_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+
+        exam = self.request.query_params.get("exam")
+
+        if exam:
+            queryset = queryset.filter(exam_id=exam)
+
+        section = self.request.query_params.get("section")
+
+        if section:
+            queryset = queryset.filter(section_id=section)
+
+        class_obj = self.request.query_params.get("class")
+
+        if class_obj:
+            queryset = queryset.filter(section__class_obj_id=class_obj)
+
+        date_param = self.request.query_params.get("date")
+
+        if date_param:
+            queryset = queryset.filter(date=date_param)
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
+        )
+
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can create exam schedules."
+            )
+
+        exam = serializer.validated_data["exam"]
+        assert_campus_allowed(user, exam.campus_id)
+
+        schedule = serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="create",
+            model_name="ExamSchedule",
+            object_id=str(schedule.pk),
+            object_repr=str(schedule),
+            details={
+                "exam": schedule.exam.name,
+                "section": schedule.section.name,
+                "date": str(schedule.date),
+            },
+        )
+
+
+class ExamScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ExamScheduleSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def get_queryset(self):
+        queryset = (
+            ExamSchedule.objects
+            .select_related(
+                "exam",
+                "exam__academic_year",
+                "exam__campus",
+                "section",
+                "section__class_obj",
+                "exam_subject__subject",
+            )
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_parent(user):
+                class_ids = parent_student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_teacher(user):
+                class_ids = teacher_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
+        )
+
+        return queryset
+
+    def perform_update(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can update exam schedules."
+            )
+
+        schedule = self.get_object()
+        assert_campus_allowed(user, schedule.exam.campus_id)
+        serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="update",
+            model_name="ExamSchedule",
+            object_id=str(schedule.pk),
+            object_repr=str(schedule),
+        )
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can delete exam schedules."
+            )
+
+        assert_campus_allowed(user, instance.exam.campus_id)
+        instance.delete()
+
+        record_audit(
+            request=self.request,
+            action="delete",
+            model_name="ExamSchedule",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+        )

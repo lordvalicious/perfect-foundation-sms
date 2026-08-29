@@ -7,10 +7,16 @@ from typing import List, Optional, Dict, Any
 from django.db import transaction
 from django.db.models import Avg, Count, Q
 
-from apps.schools.models import AcademicYear, Campus, Class, School
+from apps.schools.models import AcademicYear, Campus, Class, School, Section
 from apps.students.models import Enrollment, Student
 
-from .models import Exam, ExamSubject, StudentResult, PracticalResult
+from .models import (
+    Exam,
+    ExamSchedule,
+    ExamSubject,
+    PracticalResult,
+    StudentResult,
+)
 
 
 class ExamService:
@@ -318,42 +324,96 @@ class ResultService:
 
 
 class GradeService:
-    """Service for grade calculation and management."""
+    """Grade calculation that delegates to the configurable grading engine.
 
-    def __init__(self, institution: School):
+    The authoritative grade bands live in the ``reportcards`` app
+    (``GradeScale`` / ``GradeBand``). This service reuses that engine so
+    institutions' configured boundaries and grade points are honoured
+    instead of a competing hard-coded scale.
+    """
+
+    def __init__(self, institution: School = None):
         self.institution = institution
-        self.settings = getattr(institution, "settings", None)
+        self.settings = getattr(institution, "settings", None) if institution else None
+
+    def _default_scale(self):
+        """Resolve the institution's effective grade scale.
+
+        Prefers the institution's own default scale, falling back to the
+        platform default scale used for automated grade calculation.
+        """
+        from apps.reportcards.models import GradeScale
+
+        if self.institution is not None:
+            scale = (
+                GradeScale.objects
+                .filter(
+                    institution=self.institution,
+                    is_default=True,
+                )
+                .first()
+            )
+
+            if scale is not None:
+                return scale
+
+        return GradeScale.objects.filter(is_default=True).first()
 
     def get_grade_bands(self) -> List[Dict[str, Any]]:
-        """Get grade bands based on institution settings."""
-        if self.settings and self.settings.grading_scale == "custom" and self.settings.custom_grade_bands:
-            return self.settings.custom_grade_bands
+        """Return the effective grade bands as sorted dicts."""
+        from apps.reportcards.models import GradeBand
 
-        # Default standard grading scale
+        scale = self._default_scale()
+
+        if scale is None:
+            return []
+
+        bands = (
+            GradeBand.objects
+            .filter(scale=scale)
+            .order_by("-minimum_percentage")
+        )
+
         return [
-            {"min_percentage": 90, "max_percentage": 100, "grade": "A+", "label": "Excellent", "gpa": 4.0},
-            {"min_percentage": 80, "max_percentage": 89, "grade": "A", "label": "Very Good", "gpa": 3.7},
-            {"min_percentage": 70, "max_percentage": 79, "grade": "B+", "label": "Good", "gpa": 3.3},
-            {"min_percentage": 60, "max_percentage": 69, "grade": "B", "label": "Above Average", "gpa": 3.0},
-            {"min_percentage": 50, "max_percentage": 59, "grade": "C+", "label": "Average", "gpa": 2.5},
-            {"min_percentage": 40, "max_percentage": 49, "grade": "C", "label": "Below Average", "gpa": 2.0},
-            {"min_percentage": 33, "max_percentage": 39, "grade": "D", "label": "Pass", "gpa": 1.0},
-            {"min_percentage": 0, "max_percentage": 32, "grade": "F", "label": "Fail", "gpa": 0.0},
+            {
+                "min_percentage": band.minimum_percentage,
+                "max_percentage": band.maximum_percentage,
+                "grade": band.letter_grade,
+                "gpa": band.grade_point,
+                "grade_point": band.grade_point,
+            }
+            for band in bands
         ]
 
     def calculate_grade(self, percentage: Decimal) -> Dict[str, Any]:
-        """Calculate grade for a given percentage."""
-        bands = self.get_grade_bands()
-        for band in bands:
-            if band["min_percentage"] <= percentage <= band["max_percentage"]:
-                return band
-        # Fallback
-        return bands[-1]
+        """Calculate the grade band for a percentage."""
+        from apps.reportcards.models import GradeBand
+
+        scale = self._default_scale()
+        band = GradeBand.band_for_percentage(percentage, scale=scale)
+
+        if band is None:
+            return {}
+
+        return {
+            "min_percentage": band.minimum_percentage,
+            "max_percentage": band.maximum_percentage,
+            "grade": band.letter_grade,
+            "gpa": band.grade_point,
+            "grade_point": band.grade_point,
+        }
 
     def calculate_gpa(self, results: List[StudentResult]) -> Decimal:
-        """Calculate GPA from a list of results."""
+        """Calculate GPA from a list of results using the configured scale.
+
+        Absent subjects are excluded from the calculation.
+        """
         if not results:
             return Decimal("0.00")
+
+        from apps.reportcards.models import GradeBand
+
+        scale = self._default_scale()
 
         total_points = Decimal("0.00")
         total_credits = 0
@@ -361,15 +421,24 @@ class GradeService:
         for result in results:
             if result.is_absent:
                 continue
-            percentage = result.percentage
-            band = self.calculate_grade(percentage)
-            total_points += Decimal(str(band.get("gpa", 0)))
+
+            band = GradeBand.band_for_percentage(
+                result.percentage,
+                scale=scale,
+            )
+
+            if band is None:
+                continue
+
+            total_points += band.grade_point
             total_credits += 1
 
         if total_credits == 0:
             return Decimal("0.00")
 
-        return (total_points / total_credits).quantize(Decimal("0.01"))
+        return (
+            total_points / Decimal(str(total_credits))
+        ).quantize(Decimal("0.01"))
 
     def is_promoted(self, results: List[StudentResult]) -> bool:
         """Determine if student should be promoted based on results."""
@@ -379,3 +448,293 @@ class GradeService:
         min_subjects = self.settings.exam_minimum_subjects_to_pass
         passed_count = sum(1 for r in results if r.is_pass and not r.is_absent)
         return passed_count >= min_subjects
+
+
+class MarksService:
+    """Reliable, reusable calculation foundation for marks and results.
+
+    All percentages, grades, grade points, GPAs and pass/fail decisions
+    delegate to the canonical ``GradeScale``/``GradeBand`` engine so there
+    is a single source of truth across the platform.
+    """
+
+    def __init__(self, institution: School = None, scale=None):
+        self.scale = scale
+        if scale is None and institution is not None:
+            from apps.reportcards.models import GradeScale
+
+            self.scale = (
+                GradeScale.objects
+                .filter(institution=institution, is_default=True)
+                .first()
+            ) or GradeScale.objects.filter(is_default=True).first()
+
+    @staticmethod
+    def percentage(obtained: Decimal, maximum: Decimal) -> Decimal:
+        """Percentage of obtained marks out of maximum, rounded to 2dp."""
+        from decimal import Decimal as D, ROUND_HALF_UP
+
+        maximum = D(str(maximum))
+        if maximum <= 0:
+            return D("0.00")
+
+        value = (D(str(obtained)) / maximum) * D("100")
+        return value.quantize(D("0.01"), rounding=ROUND_HALF_UP)
+
+    def grade_band(self, percentage: Decimal):
+        """Canonical grade band for a percentage (``None`` if unscaled)."""
+        from apps.reportcards.models import GradeBand
+
+        return GradeBand.band_for_percentage(percentage, scale=self.scale)
+
+    def grade(self, percentage: Decimal) -> str:
+        band = self.grade_band(percentage)
+        return band.letter_grade if band else ""
+
+    def grade_point(self, percentage: Decimal) -> Decimal:
+        band = self.grade_band(percentage)
+        return band.grade_point if band else Decimal("0.00")
+
+    def subject_result(self, result: StudentResult) -> Dict[str, Any]:
+        """Calculated presentation of a single subject result."""
+        from decimal import Decimal as D
+
+        maximum = D(str(result.exam_subject.maximum_marks))
+        obtained = result.obtained_marks
+
+        return {
+            "exam_subject": result.exam_subject_id,
+            "subject": result.exam_subject.subject_id,
+            "subject_name": result.exam_subject.subject.name,
+            "maximum_marks": maximum,
+            "obtained_marks": obtained,
+            "absent": result.is_absent,
+            "percentage": result.percentage,
+            "grade": result.grade,
+            "is_pass": result.is_pass
+            if not result.is_absent
+            else False,
+        }
+
+    def gpa(self, results: List[StudentResult]) -> Decimal:
+        """GPA over results using the configured scale.
+
+        Absent subjects are excluded. Fails on empty subject sets as
+        ``0.00`` only when there are no measurable results.
+        """
+        if not results:
+            return Decimal("0.00")
+
+        from decimal import Decimal as D, ROUND_HALF_UP
+
+        total_points = D("0.00")
+        total_credits = 0
+
+        for result in results:
+            if result.is_absent:
+                continue
+
+            band = self.grade_band(result.percentage)
+
+            if band is None:
+                continue
+
+            total_points += band.grade_point
+            total_credits += 1
+
+        if total_credits == 0:
+            return D("0.00")
+
+        return (
+            total_points / D(str(total_credits))
+        ).quantize(D("0.01"), rounding=ROUND_HALF_UP)
+
+    def overall(
+        self,
+        results: List[StudentResult],
+        total_marks=None,
+        maximum_marks=None,
+    ) -> Dict[str, Any]:
+        """Aggregated overall result for a set of subject results.
+
+        Passes only when every recorded result passes. Uses the provided
+        totals (for example from a report card) or sums the marks.
+        """
+        from decimal import Decimal as D, ROUND_HALF_UP
+
+        results = list(results)
+
+        if total_marks is None:
+            total_marks = sum(
+                (r.obtained_marks for r in results),
+                D("0.00"),
+            )
+
+        if maximum_marks is None:
+            maximum_marks = sum(
+                (
+                    D(str(r.exam_subject.maximum_marks))
+                    for r in results
+                ),
+                D("0.00"),
+            )
+
+        pct = self.percentage(total_marks, maximum_marks)
+        is_pass = bool(results) and all(
+            r.is_pass for r in results if not r.is_absent
+        )
+
+        return {
+            "maximum_marks": maximum_marks,
+            "total_marks": total_marks,
+            "percentage": pct,
+            "grade": self.grade(pct),
+            "grade_point": self.grade_point(pct),
+            "is_pass": is_pass,
+            "overall_result": "Pass" if is_pass else "Fail",
+            "subject_count": len(results),
+        }
+
+
+class ScheduleService:
+    """Service for exam scheduling and conflict detection."""
+
+    def __init__(self, institution: School):
+        self.institution = institution
+
+    def check_conflicts(
+        self,
+        exam: Exam,
+        section: Section,
+        date,
+        start_time,
+        end_time,
+        room: str = "",
+        exclude_schedule=None,
+    ) -> List[str]:
+        """Return a list of conflict messages for a proposed time slot.
+
+        Ignores ``exclude_schedule`` when present (for updates).
+        """
+        conflicts = []
+
+        if end_time <= start_time:
+            conflicts.append("End time must be after start time.")
+
+        if date < exam.start_date or date > exam.end_date:
+            conflicts.append(
+                "Exam date falls outside the exam period "
+                f"({exam.start_date} to {exam.end_date})."
+            )
+
+        if section.class_obj_id != exam.class_obj_id:
+            conflicts.append(
+                "The section does not belong to the exam's class."
+            )
+
+        overlap = ExamSchedule.objects.filter(
+            date=date,
+            start_time__lt=end_time,
+            end_time__gt=start_time,
+        )
+        if exclude_schedule is not None:
+            overlap = overlap.exclude(pk=exclude_schedule.pk)
+
+        if section_id := getattr(section, "id", None):
+            if overlap.filter(section_id=section_id).exists():
+                conflicts.append(
+                    "This section already has an exam "
+                    "overlapping this date and time."
+                )
+
+        if room:
+            if overlap.filter(room=room).exists():
+                conflicts.append(
+                    "This room is already booked for an exam "
+                    "overlapping this date and time."
+                )
+
+        return conflicts
+
+    @transaction.atomic
+    def create_schedule(
+        self,
+        exam: Exam,
+        section: Section,
+        exam_subject=None,
+        date=None,
+        start_time=None,
+        end_time=None,
+        room: str = "",
+        notes: str = "",
+    ) -> ExamSchedule:
+        """Create a single exam schedule slot."""
+        conflicts = self.check_conflicts(
+            exam=exam,
+            section=section,
+            date=date,
+            start_time=start_time,
+            end_time=end_time,
+            room=room,
+        )
+
+        if conflicts:
+            raise ValueError("; ".join(conflicts))
+
+        return ExamSchedule.objects.create(
+            exam=exam,
+            section=section,
+            exam_subject=exam_subject,
+            date=date,
+            start_time=start_time,
+            end_time=end_time,
+            room=room,
+            notes=notes,
+        )
+
+    @transaction.atomic
+    def bulk_create_schedules(
+        self,
+        exam: Exam,
+        slots: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Atomically create many schedule slots for an exam.
+
+        Each item in ``slots`` may carry: section, exam_subject, date,
+        start_time, end_time, room, notes. Returns a report with created
+        ids and any per-slot errors (a failing slot does not roll back
+        the whole batch).
+        """
+        created = []
+        errors = []
+
+        for slot in slots:
+            section = slot.get("section")
+            if section is None:
+                errors.append({"error": "section is required"})
+                continue
+
+            try:
+                schedule = self.create_schedule(
+                    exam=exam,
+                    section=section,
+                    exam_subject=slot.get("exam_subject"),
+                    date=slot.get("date"),
+                    start_time=slot.get("start_time"),
+                    end_time=slot.get("end_time"),
+                    room=slot.get("room", ""),
+                    notes=slot.get("notes", ""),
+                )
+                created.append(schedule.pk)
+            except (ValueError, KeyError) as exc:
+                errors.append(
+                    {
+                        "section": getattr(section, "id", None),
+                        "exam_subject": getattr(
+                            slot.get("exam_subject"), "id", None
+                        ),
+                        "error": str(exc),
+                    }
+                )
+
+        return {"created": created, "errors": errors}

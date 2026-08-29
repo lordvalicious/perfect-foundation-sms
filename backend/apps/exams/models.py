@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import models
 
 from apps.core.campus_validation import CampusValidationMixin
-from apps.schools.models import AcademicYear, Campus, Class
+from apps.schools.models import AcademicYear, Campus, Class, Section, Term
 from apps.students.models import Student
 
 
@@ -29,6 +29,14 @@ class Exam(models.Model):
         AcademicYear,
         on_delete=models.PROTECT,
         related_name="exams",
+    )
+
+    term = models.ForeignKey(
+        Term,
+        on_delete=models.PROTECT,
+        related_name="exams",
+        null=True,
+        blank=True,
     )
 
     campus = models.ForeignKey(
@@ -88,6 +96,13 @@ class Exam(models.Model):
             if self.class_obj.unit.campus_id != self.campus_id:
                 raise ValidationError(
                     "The selected class does not belong to the selected campus."
+                )
+
+        if self.term_id and self.academic_year_id:
+            if self.term.academic_year_id != self.academic_year_id:
+                raise ValidationError(
+                    "The selected term does not belong to the selected "
+                    "academic year."
                 )
 
         if self.end_date < self.start_date:
@@ -499,4 +514,154 @@ class PracticalResult(models.Model):
             f"{self.student.full_name} - "
             f"{self.exam.name} - "
             f"{self.exam_subject.subject.name} (Practical)"
+        )
+
+
+class ExamSchedule(models.Model):
+    """A single examination slot for a section on a given date and time.
+
+    Each schedule binds an exam to a section, subject and room, and is
+    validated to prevent:
+
+    * one section sitting two exams at overlapping date/time, and
+    * two exams competing for the same room at overlapping date/time.
+    """
+
+    exam = models.ForeignKey(
+        "exams.Exam",
+        on_delete=models.CASCADE,
+        related_name="schedules",
+    )
+
+    section = models.ForeignKey(
+        Section,
+        on_delete=models.PROTECT,
+        related_name="exam_schedules",
+    )
+
+    exam_subject = models.ForeignKey(
+        "exams.ExamSubject",
+        on_delete=models.PROTECT,
+        related_name="schedules",
+        null=True,
+        blank=True,
+    )
+
+    date = models.DateField()
+
+    start_time = models.TimeField()
+
+    end_time = models.TimeField()
+
+    room = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Room, hall or location for the exam.",
+    )
+
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["date", "start_time", "section__name"]
+        indexes = [
+            models.Index(
+                fields=["exam", "date", "start_time"],
+                name="examsched_exam_date_idx",
+            ),
+            models.Index(
+                fields=["section", "date", "start_time"],
+                name="examsched_sec_date_idx",
+            ),
+            models.Index(
+                fields=["date", "room"],
+                name="examsched_date_room_idx",
+            ),
+        ]
+
+    def clean(self):
+        errors = {}
+
+        if self.end_time and self.start_time:
+            if self.end_time <= self.start_time:
+                errors["end_time"] = (
+                    "Exam end time must be after start time."
+                )
+
+        if self.exam_id and self.date:
+            if self.date < self.exam.start_date or self.date > self.exam.end_date:
+                errors["date"] = (
+                    "Exam date must fall within the exam period "
+                    f"({self.exam.start_date} to {self.exam.end_date})."
+                )
+
+        if self.exam_id and self.section_id:
+            if self.section.class_obj_id != self.exam.class_obj_id:
+                errors["section"] = (
+                    "The selected section does not belong "
+                    "to the exam's class."
+                )
+
+        if self.exam_id and self.exam_subject_id:
+            if self.exam_subject.exam_id != self.exam_id:
+                errors["exam_subject"] = (
+                    "The selected subject does not belong to this exam."
+                )
+
+        errors.update(self._validate_conflicts())
+
+        if errors:
+            raise ValidationError(errors)
+
+    def _validate_conflicts(self):
+        """Detect overlapping sections and rooms at the same date/time."""
+        errors = {}
+
+        if not (self.date and self.start_time and self.end_time):
+            return errors
+
+        overlap = (
+            lambda qs: qs.exclude(pk=self.pk).filter(
+                date=self.date,
+                start_time__lt=self.end_time,
+                end_time__gt=self.start_time,
+            )
+        )
+
+        if self.section_id:
+            conflicting_section = overlap(
+                ExamSchedule.objects.filter(section_id=self.section_id)
+            ).exists()
+
+            if conflicting_section:
+                errors["section"] = (
+                    "This section already has an exam scheduled "
+                    "overlapping this date and time."
+                )
+
+        if self.room:
+            conflicting_room = overlap(
+                ExamSchedule.objects.filter(room=self.room)
+            ).only("pk").exists()
+
+            if conflicting_room:
+                errors["room"] = (
+                    "This room is already booked for an exam "
+                    "overlapping this date and time."
+                )
+
+        return errors
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return (
+            f"{self.exam.name} | "
+            f"{self.section} | "
+            f"{self.date} "
+            f"{self.start_time}-{self.end_time}"
         )

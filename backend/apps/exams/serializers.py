@@ -1,6 +1,12 @@
 from rest_framework import serializers
 
-from .models import Exam, ExamSubject, PracticalResult, StudentResult
+from .models import (
+    Exam,
+    ExamSchedule,
+    ExamSubject,
+    PracticalResult,
+    StudentResult,
+)
 
 
 class ExamSerializer(serializers.ModelSerializer):
@@ -10,6 +16,10 @@ class ExamSerializer(serializers.ModelSerializer):
     )
     academic_year_name = serializers.CharField(
         source="academic_year.name",
+        read_only=True,
+    )
+    term_name = serializers.CharField(
+        source="term.name",
         read_only=True,
     )
     campus_name = serializers.CharField(
@@ -42,6 +52,8 @@ class ExamSerializer(serializers.ModelSerializer):
             "exam_type_display",
             "academic_year",
             "academic_year_name",
+            "term",
+            "term_name",
             "campus",
             "campus_name",
             "class_obj",
@@ -293,6 +305,75 @@ class PracticalResultSerializer(serializers.ModelSerializer):
 
         try:
             return PracticalResult.objects.create(**validated_data)
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+    def update(self, instance, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+
+        try:
+            instance.save()
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+        return instance
+
+
+class ExamScheduleSerializer(serializers.ModelSerializer):
+    exam_name = serializers.CharField(
+        source="exam.name",
+        read_only=True,
+    )
+    section_name = serializers.CharField(
+        source="section.name",
+        read_only=True,
+    )
+    class_name = serializers.CharField(
+        source="section.class_obj.name",
+        read_only=True,
+    )
+    subject = serializers.SerializerMethodField()
+    subject_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExamSchedule
+        fields = [
+            "id",
+            "exam",
+            "exam_name",
+            "section",
+            "section_name",
+            "class_name",
+            "exam_subject",
+            "subject",
+            "subject_name",
+            "date",
+            "start_time",
+            "end_time",
+            "room",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_subject(self, obj):
+        if obj.exam_subject is None:
+            return None
+        return obj.exam_subject.subject_id
+
+    def get_subject_name(self, obj):
+        if obj.exam_subject is None:
+            return ""
+        return obj.exam_subject.subject.name
+
+    def create(self, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        try:
+            return ExamSchedule.objects.create(**validated_data)
         except ModelValidationError as exc:
             raise serializers.ValidationError(exc.message_dict)
 

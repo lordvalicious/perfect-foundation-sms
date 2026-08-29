@@ -3,6 +3,8 @@ from django.urls import path
 from .gradebook import ClassGradebookView
 from .views import (
     ExamListView,
+    ExamScheduleDetailView,
+    ExamScheduleListView,
     ExamSubjectListView,
     PracticalResultDetailView,
     PracticalResultListCreateView,
@@ -14,6 +16,12 @@ from .views import (
 urlpatterns = [
     path("", ExamListView.as_view(), name="exam-list"),
     path("subjects/", ExamSubjectListView.as_view(), name="exam-subject-list"),
+    path("schedules/", ExamScheduleListView.as_view(), name="exam-schedule-list"),
+    path(
+        "schedules/<int:pk>/",
+        ExamScheduleDetailView.as_view(),
+        name="exam-schedule-detail",
+    ),
     path("results/", StudentResultListView.as_view(), name="student-result-list"),
     path(
         "results/<int:pk>/",
