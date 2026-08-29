@@ -46,6 +46,11 @@ SESSION_COOKIE_SECURE = (
 CSRF_COOKIE_SECURE = (
     os.environ.get("DJANGO_CSRF_COOKIE_SECURE", "1") == "1"
 )
+# Add after CSRF_COOKIE_SECURE
+CSRF_TRUSTED_ORIGINS = [
+    "https://perfect-foundation-api.vercel.app",
+    "https://perfect-foundation-sms.vercel.app",
+]
 # The frontend reads the csrf token from document.cookie and sends
 # it back as the X-CSRFToken header, so it must not be HttpOnly.
 CSRF_COOKIE_HTTPONLY = False
