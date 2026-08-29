@@ -229,14 +229,19 @@ class Announcement(models.Model):
             user_ids = set()
 
             if "student" in roles or not roles:
+                from apps.students.models import Student
+
                 user_ids.update(
                     User.objects.filter(
-                        student_profile_id__in=student_ids
+                        id__in=Student.objects.filter(
+                            id__in=student_ids,
+                            user_id__isnull=False,
+                        ).values_list("user_id", flat=True)
                     ).values_list("id", flat=True)
                 )
 
             if "parent" in roles or not roles:
-                from apps.students.models import Student
+                from apps.students.models import Guardian, Student
 
                 guardian_ids = (
                     Student.objects
@@ -246,11 +251,16 @@ class Announcement(models.Model):
 
                 user_ids.update(
                     User.objects.filter(
-                        guardian_profile_id__in=guardian_ids
+                        id__in=Guardian.objects.filter(
+                            id__in=guardian_ids,
+                            user_id__isnull=False,
+                        ).values_list("user_id", flat=True)
                     ).values_list("id", flat=True)
                 )
 
             if "teacher" in roles or not roles:
+                from apps.teachers.models import Teacher
+
                 teacher_ids = (
                     TeacherAssignment.objects
                     .filter(
@@ -262,7 +272,10 @@ class Announcement(models.Model):
 
                 user_ids.update(
                     User.objects.filter(
-                        teacher_profile_id__in=teacher_ids
+                        id__in=Teacher.objects.filter(
+                            id__in=teacher_ids,
+                            user_id__isnull=False,
+                        ).values_list("user_id", flat=True)
                     ).values_list("id", flat=True)
                 )
 
@@ -275,10 +288,8 @@ class Announcement(models.Model):
         )
 
         if roles:
-            from apps.accounts.models import RoleAssignment
-
             memberships = memberships.filter(
-                role_assignments__role__in=roles
+                memberships__role_assignments__role__in=roles
             )
 
         if self.campus_id:
@@ -693,3 +704,102 @@ class MessageTemplate(models.Model):
             for key, value in context.items():
                 text = text.replace("{" + key + "}", str(value))
         return text
+
+
+class QueuedNotification(models.Model):
+    """Outbox row for scheduled, retryable outbound notifications.
+
+    One row per notification to deliver. The cron processor
+    (``process_due_notifications``) claims rows whose ``next_attempt_at``
+    has passed, delivers them, records the audit log and idempotency
+    dispatch, and — on failure — reschedules with exponential backoff
+    until ``max_attempts`` is exhausted.
+    """
+
+    CHANNEL_CHOICES = [
+        ("sms", "SMS"),
+        ("email", "Email"),
+        ("in_app", "In-app"),
+    ]
+
+    STATUS_CHOICES = [
+        ("queued", "Queued"),
+        ("sent", "Sent"),
+        ("failed", "Failed"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="queued_notifications",
+        null=True,
+        blank=True,
+    )
+
+    channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
+    kind = models.CharField(
+        max_length=24,
+        blank=True,
+        help_text="Dispatch kind, e.g. fee_reminder / result_published.",
+    )
+    reference = models.CharField(
+        max_length=120,
+        blank=True,
+        help_text="Stable per-target key for idempotency, e.g. result:{id}.",
+    )
+
+    recipient = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="queued_notifications",
+    )
+    to_address = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Phone number (sms) or email address (email).",
+    )
+
+    subject = models.CharField(max_length=250, blank=True)
+    body = models.TextField(blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="queued",
+    )
+    attempts = models.PositiveIntegerField(default=0)
+    max_attempts = models.PositiveIntegerField(default=3)
+    next_attempt_at = models.DateTimeField(default=timezone.now)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    last_error = models.TextField(blank=True)
+
+    scheduled_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="When the notification should first be delivered.",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+        indexes = [
+            models.Index(
+                fields=["status", "next_attempt_at"],
+                name="qn_due_idx",
+            ),
+            models.Index(
+                fields=["channel", "kind"],
+                name="qn_channel_kind_idx",
+            ),
+        ]
+
+    def __str__(self):
+        address = self.to_address or (
+            self.recipient.username if self.recipient else ""
+        )
+        return f"{self.get_channel_display()} to {address} ({self.status})"

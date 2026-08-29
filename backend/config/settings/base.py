@@ -58,6 +58,8 @@ INSTALLED_APPS = [
     "apps.alumni",
     "apps.hostel",
     "apps.lms",
+    "apps.portal",
+    "apps.workflow",
 
     "corsheaders",
     "rest_framework",

@@ -7,7 +7,9 @@ TeacherAssignments and SubjectOfferings:
   periods per week.
 - A section can only be in one place at a time; a teacher cannot teach
   two sections at once. The database-level unique constraints mirror
-  these rules.
+  these rules, and the in-memory busy map is overlap-aware: a slot is
+  free only if it does not overlap any already-booked period for that
+  resource on the same day (periods may share wall-clock time).
 - Subjects are interleaved and slot order is rotated per lesson so the
   schedule spreads instead of clustering.
 
@@ -100,18 +102,35 @@ def generate_timetable(
     unplaced = []
     sections_covered = 0
 
+    from .models import periods_overlap
+
+    period_by_id = {p.id: p for p in periods}
+
     busy_teacher = {}
     busy_section = {}
 
     def _mark(teacher_id, section_key, slot):
-        busy_teacher[(teacher_id, slot)] = True
-        busy_section[(section_key, slot)] = True
+        day, period = slot
+        busy_teacher.setdefault((teacher_id, day), set()).add(period.id)
+        busy_section.setdefault((section_key, day), set()).add(period.id)
+
+    def _overlaps_any(period, booked_ids):
+        return any(
+            periods_overlap(period, period_by_id[pid])
+            for pid in booked_ids
+        )
 
     def _free(teacher_id, section_key, slot):
-        return not (
-            busy_teacher.get((teacher_id, slot))
-            or busy_section.get((section_key, slot))
-        )
+        day, period = slot
+        if _overlaps_any(
+            period, busy_teacher.get((teacher_id, day), ())
+        ):
+            return False
+        if _overlaps_any(
+            period, busy_section.get((section_key, day), ())
+        ):
+            return False
+        return True
 
     with transaction.atomic():
         if replace:

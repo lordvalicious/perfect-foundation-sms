@@ -9,6 +9,10 @@ from .views import (
     AssetListView,
     MaintenanceRecordDetailView,
     MaintenanceRecordListView,
+    StockLevelDetailView,
+    StockLevelListView,
+    StockMovementListView,
+    StockSummaryView,
     SupplierDetailView,
     SupplierListView,
 )
@@ -56,5 +60,25 @@ urlpatterns = [
         "maintenance/<int:pk>/",
         MaintenanceRecordDetailView.as_view(),
         name="maintenance-detail",
+    ),
+    path(
+        "stock/levels/",
+        StockLevelListView.as_view(),
+        name="stock-level-list",
+    ),
+    path(
+        "stock/levels/<int:pk>/",
+        StockLevelDetailView.as_view(),
+        name="stock-level-detail",
+    ),
+    path(
+        "stock/movements/",
+        StockMovementListView.as_view(),
+        name="stock-movement-list",
+    ),
+    path(
+        "stock/summary/",
+        StockSummaryView.as_view(),
+        name="stock-summary",
     ),
 ]
