@@ -96,6 +96,12 @@ class Asset(models.Model):
         decimal_places=2,
         default=0,
     )
+    unit = models.CharField(
+        max_length=30,
+        blank=True,
+        default="pcs",
+        help_text="Tracking unit for stock, e.g. pcs, box, litre.",
+    )
     purchase_date = models.DateField(null=True, blank=True)
     location = models.CharField(max_length=200, blank=True)
     status = models.CharField(
@@ -203,3 +209,110 @@ class MaintenanceRecord(models.Model):
 
     def __str__(self):
         return f"{self.asset.name} - {self.date}"
+
+
+class StockLevel(models.Model):
+    """Per-campus on-hand quantity for one stockable item."""
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="stock_levels",
+        null=True,
+        blank=True,
+    )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.CASCADE,
+        related_name="stock_levels",
+    )
+    asset = models.ForeignKey(
+        Asset,
+        on_delete=models.CASCADE,
+        related_name="stock_levels",
+    )
+    quantity = models.PositiveIntegerField(default=0)
+    minimum_stock = models.PositiveIntegerField(
+        default=0,
+        help_text="Reorder point. Reached when quantity drops to this level.",
+    )
+    location = models.CharField(max_length=200, blank=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("asset__name",)
+        constraints = [
+            models.UniqueConstraint(
+                fields=["campus", "asset"],
+                name="unique_stock_level_per_campus_asset",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.asset.name} @ {self.campus.name}: {self.quantity}"
+
+    @property
+    def is_low(self):
+        return self.quantity > 0 and self.minimum_stock > 0 and self.quantity <= self.minimum_stock
+
+    @property
+    def is_out(self):
+        return self.quantity <= 0
+
+
+class StockMovement(models.Model):
+    """Append-only ledger of every stock in/out/transfer/stocktake event."""
+
+    MOVEMENT_TYPES = [
+        ("receive", "Received"),
+        ("issue", "Issued"),
+        ("return", "Returned"),
+        ("transfer_in", "Received (transfer)"),
+        ("transfer_out", "Issued (transfer)"),
+        ("write_off", "Written off"),
+        ("adjust", "Adjusted (stocktake)"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="stock_movements",
+        null=True,
+        blank=True,
+    )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.CASCADE,
+        related_name="stock_movements",
+    )
+    asset = models.ForeignKey(
+        Asset,
+        on_delete=models.PROTECT,
+        related_name="stock_movements",
+    )
+    movement_type = models.CharField(max_length=16, choices=MOVEMENT_TYPES)
+    quantity = models.PositiveIntegerField()
+    unit_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    destination_campus = models.ForeignKey(
+        Campus,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    reference = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="stock_movements",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+
+    def __str__(self):
+        return f"{self.movement_type} {self.quantity} x {self.asset.name}"

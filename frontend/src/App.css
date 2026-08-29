@@ -1852,6 +1852,61 @@ select {
 }
 
 /* ==========================================================================
+   HELPDESK — ticket desk + thread
+   ========================================================================== */
+
+.table-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  color: var(--primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.table-link:hover { text-decoration: underline; }
+
+.table-sub {
+  display: block;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.ticket-meta-line {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-top: 6px;
+}
+
+.ticket-thread h4 {
+  margin: 0 0 10px;
+}
+
+.ticket-message {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--surface-2);
+}
+
+.ticket-message.internal {
+  border-left: 3px solid var(--warning);
+}
+
+.ticket-message-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.ticket-message-head strong { font-size: 13px; }
+.ticket-message-head span { color: var(--text-muted); font-size: 12px; }
+.ticket-message p { margin: 0; font-size: 14px; }
+
+/* ==========================================================================
    CAMPUS CARDS
    ========================================================================== */
 

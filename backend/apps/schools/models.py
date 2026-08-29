@@ -325,7 +325,7 @@ class Subject(models.Model):
         blank=True,
     )
     name = models.CharField(max_length=100)
-    code = models.CharField(max_length=20, unique=True)
+    code = models.CharField(max_length=20)
     subject_type = models.CharField(
         max_length=20,
         choices=[("theory", "Theory"), ("practical", "Practical")],
@@ -358,6 +358,13 @@ class Subject(models.Model):
 
 
 class SubjectOffering(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="subject_offerings",
+        null=True,
+        blank=True,
+    )
     academic_year = models.ForeignKey(
         AcademicYear,
         on_delete=models.PROTECT,

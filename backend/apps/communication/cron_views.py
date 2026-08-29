@@ -64,3 +64,34 @@ class AbsenceAlertCronView(APIView):
         )
 
         return JsonResponse(summary)
+
+
+class ProcessNotificationsCronView(APIView):
+    """GET /api/communication/cron/process-notifications/[?limit=50]
+
+    Scheduler entry point: delivers every due queued notification with
+    retry/backoff. Called by the platform cron (see vercel.json).
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        if not _authorized(request):
+            return JsonResponse({"detail": "Unauthorized."}, status=401)
+
+        from .notification_queue import (
+            process_due_notifications,
+            queue_status,
+        )
+
+        try:
+            limit = int(request.query_params.get("limit", 50))
+        except (TypeError, ValueError):
+            limit = 50
+
+        summary = process_due_notifications(
+            limit=max(1, min(500, limit))
+        )
+        summary["queue"] = queue_status()
+
+        return JsonResponse(summary)

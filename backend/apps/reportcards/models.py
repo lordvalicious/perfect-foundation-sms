@@ -1,4 +1,5 @@
 from decimal import Decimal, ROUND_HALF_UP
+import logging
 
 from django.core.exceptions import ValidationError
 from django.db import models
@@ -8,6 +9,8 @@ from apps.schools.models import School
 # Use string references to avoid circular imports
 # from apps.exams.models import Exam
 # from apps.students.models import Student
+
+logger = logging.getLogger(__name__)
 
 
 class ReportCard(models.Model):
@@ -466,6 +469,18 @@ class ReportCard(models.Model):
         must gate this route with explicit authorization.
         """
         self._transition("draft", user=user)
+
+        # Best-effort guardian notifications (scheduled outbox, retried
+        # by the cron processor). Publishing must never fail on notify.
+        try:
+            from apps.communication.notification_queue import notify_result_published
+
+            notify_result_published(self, user=user)
+        except Exception:
+            logger.exception(
+                "Failed to enqueue result notifications for report card %s",
+                self.pk,
+            )
 
     def save(self, *args, **kwargs):
         self.full_clean()

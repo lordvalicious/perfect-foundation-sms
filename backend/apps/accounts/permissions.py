@@ -175,6 +175,7 @@ class IsStaffRole(BasePermission):
         "accountant",
         "hr",
         "receptionist",
+        "guard",
         "teacher",
         "staff",
     ]

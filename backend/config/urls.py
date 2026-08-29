@@ -154,6 +154,31 @@ urlpatterns = [
         "api/lms/",
         include("apps.lms.urls"),
     ),
+
+    path(
+        "api/portal/",
+        include("apps.portal.urls"),
+    ),
+
+    path(
+        "api/workflow/",
+        include("apps.workflow.urls"),
+    ),
+
+    path(
+        "api/helpdesk/",
+        include("apps.helpdesk.urls"),
+    ),
+
+    path(
+        "api/visitors/",
+        include("apps.visitors.urls"),
+    ),
+
+    path(
+        "api/digital-ids/",
+        include("apps.digital_ids.urls"),
+    ),
 ]
 
 # Protected media serving (replaces public static() serving)

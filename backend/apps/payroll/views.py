@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import IsAccountantRole
-from apps.teachers.models import Teacher
+from apps.hr.models import Employee
 
 from .models import PayrollRecord, Payslip, SalaryStructure
 from .serializers import (
@@ -17,37 +17,33 @@ from .serializers import (
 )
 
 
-def payroll_queryset(queryset, request, teacher_path="teacher"):
-    """Scope a payroll-related queryset (already built by the caller,
-    e.g. ``SalaryStructure.objects.select_related("teacher")``) to the
-    active institution and the user's campus access."""
+def payroll_queryset(queryset, request, employee_path="employee"):
+    """Scope a payroll-related queryset to the active institution and the user's campus access."""
     institution = getattr(request, "institution", None)
 
     if institution is None:
         from apps.accounts.access import get_institution
-
         institution = get_institution(request)
 
     if institution is not None:
         from django.db.models import Q
-
         queryset = queryset.filter(
-            Q(**{f"{teacher_path}__membership__institution": institution})
-            | Q(**{f"{teacher_path}__primary_campus__school": institution})
+            Q(**{f"{employee_path}__institution": institution})
+            | Q(**{f"{employee_path}__primary_campus__school": institution})
         )
 
     return apply_campus_scope(
         queryset,
         request,
-        f"{teacher_path}__primary_campus_id",
+        f"{employee_path}__primary_campus_id",
         institution_field=None,
     )
 
 
-def teacher_queryset(request):
+def employee_queryset(request):
     return apply_campus_scope(
-        Teacher.objects.filter(
-            membership__institution=request.institution,
+        Employee.objects.filter(
+            institution=request.institution,
         ),
         request,
         "primary_campus_id",
@@ -59,21 +55,21 @@ class SalaryStructureListView(generics.ListCreateAPIView):
     permission_classes = [IsAccountantRole]
 
     def perform_create(self, serializer):
-        teacher = serializer.validated_data["teacher"]
-        if not teacher_queryset(self.request).filter(pk=teacher.pk).exists():
-            raise PermissionDenied("The teacher is outside your campus scope.")
+        employee = serializer.validated_data["employee"]
+        if not employee_queryset(self.request).filter(pk=employee.pk).exists():
+            raise PermissionDenied("The employee is outside your campus scope.")
         serializer.save()
 
     def get_queryset(self):
         queryset = payroll_queryset(
-            SalaryStructure.objects.select_related("teacher"),
+            SalaryStructure.objects.select_related("employee"),
             self.request,
         )
 
-        teacher = self.request.query_params.get("teacher")
+        employee = self.request.query_params.get("employee")
 
-        if teacher:
-            queryset = queryset.filter(teacher_id=teacher)
+        if employee:
+            queryset = queryset.filter(employee_id=employee)
 
         return queryset
 
@@ -91,29 +87,31 @@ class PayrollRecordListView(generics.ListCreateAPIView):
     permission_classes = [IsAccountantRole]
 
     def perform_create(self, serializer):
-        teacher = serializer.validated_data["teacher"]
-        structure = serializer.validated_data["structure"]
-        if not teacher_queryset(self.request).filter(pk=teacher.pk).exists():
-            raise PermissionDenied("The teacher is outside your campus scope.")
+        employee = serializer.validated_data["employee"]
+        structure = serializer.validated_data["salary_structure"]
+        if not employee_queryset(self.request).filter(pk=employee.pk).exists():
+            raise PermissionDenied("The employee is outside your campus scope.")
         if not payroll_queryset(
             SalaryStructure.objects.all(),
             self.request,
-        ).filter(pk=structure.pk, teacher_id=teacher.pk).exists():
+        ).filter(pk=structure.pk, employee_id=employee.pk).exists():
             raise PermissionDenied("The salary structure is outside your campus scope.")
         serializer.save()
 
     def get_queryset(self):
         queryset = payroll_queryset(
             PayrollRecord.objects.select_related(
-                "teacher",
-                "structure",
+                "employee",
+                "salary_structure",
+                "payroll_period",
             ),
             self.request,
         )
 
         month = self.request.query_params.get("month")
         year = self.request.query_params.get("year")
-        teacher = self.request.query_params.get("teacher")
+        employee = self.request.query_params.get("employee")
+        period = self.request.query_params.get("period")
 
         if month:
             queryset = queryset.filter(month=month)
@@ -121,8 +119,11 @@ class PayrollRecordListView(generics.ListCreateAPIView):
         if year:
             queryset = queryset.filter(year=year)
 
-        if teacher:
-            queryset = queryset.filter(teacher_id=teacher)
+        if employee:
+            queryset = queryset.filter(employee_id=employee)
+
+        if period:
+            queryset = queryset.filter(payroll_period_id=period)
 
         return queryset
 
@@ -150,12 +151,59 @@ class PayrollProcessView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        record.status = "paid"
+        record.compute()
+        record.status = "processed"
         record.processed_at = timezone.now()
         record.processed_by = request.user
         record.save()
 
         Payslip.objects.get_or_create(record=record)
+
+        return Response(PayrollRecordSerializer(record).data)
+
+
+class PayrollApproveView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    def post(self, request, pk):
+        record = get_object_or_404(
+            payroll_queryset(PayrollRecord.objects.all(), request),
+            pk=pk,
+        )
+
+        if record.status != "processed":
+            return Response(
+                {"detail": "Payroll must be processed before approval."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        record.status = "approved"
+        record.approved_at = timezone.now()
+        record.approved_by = request.user
+        record.save(update_fields=["status", "approved_at", "approved_by"])
+
+        return Response(PayrollRecordSerializer(record).data)
+
+
+class PayrollPayView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    def post(self, request, pk):
+        record = get_object_or_404(
+            payroll_queryset(PayrollRecord.objects.all(), request),
+            pk=pk,
+        )
+
+        if record.status != "approved":
+            return Response(
+                {"detail": "Payroll must be approved before payment."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        record.status = "paid"
+        record.paid_at = timezone.now()
+        record.paid_by = request.user
+        record.save(update_fields=["status", "paid_at", "paid_by"])
 
         return Response(PayrollRecordSerializer(record).data)
 
@@ -167,15 +215,37 @@ class PayslipListView(generics.ListAPIView):
     def get_queryset(self):
         queryset = payroll_queryset(
             Payslip.objects.select_related(
-                "record__teacher",
+                "record__employee",
             ),
             self.request,
-            teacher_path="record__teacher",
+            teacher_path="record__employee",
         )
 
-        teacher = self.request.query_params.get("teacher")
+        employee = self.request.query_params.get("employee")
 
-        if teacher:
-            queryset = queryset.filter(record__teacher_id=teacher)
+        if employee:
+            queryset = queryset.filter(record__employee_id=employee)
 
         return queryset
+
+
+class PayslipGenerateView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    def post(self, request, pk):
+        record = get_object_or_404(
+            payroll_queryset(PayrollRecord.objects.all(), request),
+            pk=pk,
+        )
+
+        if record.status != "paid":
+            return Response(
+                {"detail": "Payslip can only be generated for paid payroll records."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Generate PDF payslip
+        from .pdf_views import PayrollPayslipPdfView
+        pdf_view = PayrollPayslipPdfView()
+        pdf_view.request = request
+        return pdf_view.get(request, pk=record.pk)

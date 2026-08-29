@@ -5,6 +5,11 @@ from apps.schools.models import AcademicYear, Campus, Class, School, Section, Su
 from apps.teachers.models import Teacher
 
 
+def periods_overlap(a, b):
+    """True when two Period time ranges overlap at any point."""
+    return a.start_time < b.end_time and b.start_time < a.end_time
+
+
 class Period(models.Model):
     institution = models.ForeignKey(
         School,
@@ -211,8 +216,68 @@ class TimetableEntry(models.Model):
                     "to a break period."
                 )
 
+        self._validate_conflicts(errors)
+
         if errors:
             raise ValidationError(errors)
+
+    def _conflict_queryset(self, **filters):
+        """Entries that could clash with ``self``: same year/day/period,
+        excluding this row so an update does not fail against itself."""
+        return (
+            TimetableEntry.objects
+            .filter(
+                academic_year_id=self.academic_year_id,
+                day=self.day,
+            )
+            .exclude(pk=self.pk)
+            .select_related("period", "teacher", "section")
+            .filter(**filters)
+        )
+
+    def _validate_conflicts(self, errors):
+        """Detect resource conflicts beyond the DB unique constraints.
+
+        Cover double-booking across *overlapping* periods (two periods may
+        share wall-clock time) and room clashes, which the exact
+        (year, resource, day, period) constraints do not catch.
+        """
+        if not (self.academic_year_id and self.day and self.period_id):
+            return
+
+        own_period = self.period
+
+        if self.teacher_id:
+            for other in self._conflict_queryset(teacher_id=self.teacher_id):
+                if periods_overlap(own_period, other.period):
+                    errors["teacher"] = (
+                        "The teacher is already assigned to an "
+                        "overlapping period on this day."
+                    )
+                    break
+
+        if self.section_id:
+            for other in self._conflict_queryset(section_id=self.section_id):
+                if periods_overlap(own_period, other.period):
+                    errors["section"] = (
+                        "This section already has an entry in an "
+                        "overlapping period on this day."
+                    )
+                    break
+
+        room = (self.room or "").strip()
+
+        if room and self.campus_id:
+            for other in self._conflict_queryset(
+                room=room,
+                campus_id=self.campus_id,
+            ):
+                if periods_overlap(own_period, other.period):
+                    errors["room"] = (
+                        "This room is already booked for an "
+                        "overlapping period on this day."
+                    )
+                    break
 
     def save(self, *args, **kwargs):
         self.full_clean()

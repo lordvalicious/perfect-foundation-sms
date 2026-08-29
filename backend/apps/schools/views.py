@@ -7,7 +7,7 @@ from django.db import transaction
 from django.shortcuts import get_object_or_404
 from datetime import date
 
-from apps.accounts.access import apply_campus_scope, assert_campus_allowed
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed, institution_scope
 from apps.accounts.permissions import HasActiveInstitution, IsAdminOrReadOnly, IsSuperAdmin
 from apps.students.models import Student, Enrollment
 from .models import (
@@ -247,9 +247,11 @@ class TermListView(NoPaginationMixin, generics.ListAPIView):
 
 
 class SubjectListView(NoPaginationMixin, generics.ListAPIView):
-    queryset = Subject.objects.all().order_by("name")
     serializer_class = SubjectSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return institution_scope(Subject.objects.all(), self.request).order_by("name")
 
 
 class SubjectOfferingListView(NoPaginationMixin, generics.ListAPIView):

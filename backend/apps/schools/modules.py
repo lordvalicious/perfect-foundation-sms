@@ -20,6 +20,9 @@ MODULE_PREFIXES = {
     "alumni/": "alumni",
     "hr/": "hr",
     "communication/": "communication",
+    "helpdesk/": "helpdesk",
+    "visitors/": "visitors",
+    "digital-ids/": "digital_ids",
 }
 
 ALL_MODULES = [
@@ -40,6 +43,9 @@ ALL_MODULES = [
     "health",
     "alumni",
     "communication",
+    "helpdesk",
+    "visitors",
+    "digital_ids",
     "reports",
 ]
 

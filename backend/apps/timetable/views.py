@@ -1,5 +1,7 @@
 from django.db.models import Q
 from rest_framework import generics
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from apps.accounts.access import apply_campus_scope
 from apps.accounts.permissions import IsAcademicMemberRole
@@ -115,3 +117,56 @@ class TimetableEntryListView(generics.ListAPIView):
             )
 
         return queryset
+
+
+class TimetableConflictsView(APIView):
+    """GET /api/timetable/conflicts/[?year=&campus=]
+
+    Audits the timetable for double-bookings that the database unique
+    constraints cannot see: overlapping-period teacher/section clashes
+    and room double-bookings. Returns the matching conflict records.
+    """
+
+    permission_classes = [IsAcademicMemberRole]
+
+    def get(self, request):
+        from django.shortcuts import get_object_or_404
+
+        from apps.accounts.access import (
+            apply_campus_scope,
+            assert_campus_allowed,
+        )
+        from apps.schools.models import AcademicYear, Campus
+        from .conflicts import find_conflicts
+
+        filters = {}
+
+        year_id = request.query_params.get("year")
+
+        if year_id:
+            if not str(year_id).isdigit():
+                return Response(
+                    {"detail": "Invalid academic year id."}, status=400
+                )
+            year = get_object_or_404(AcademicYear, pk=year_id)
+            filters["academic_year"] = year
+
+        campus_id = request.query_params.get("campus")
+
+        if campus_id:
+            if not str(campus_id).isdigit():
+                return Response(
+                    {"detail": "Invalid campus id."}, status=400
+                )
+            campus = get_object_or_404(Campus, pk=campus_id)
+            assert_campus_allowed(request.user, campus.pk)
+            filters["campus"] = campus
+
+        conflicts = find_conflicts(**filters)
+
+        return Response(
+            {
+                "count": len(conflicts),
+                "conflicts": conflicts,
+            }
+        )

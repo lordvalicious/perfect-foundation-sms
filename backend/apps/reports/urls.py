@@ -1,18 +1,5 @@
 from django.urls import path
 
-from .extended_views import (
-    ChronicAbsenteeReportView,
-    CollectionTrendReportView,
-    DiscountsReportView,
-    EventParticipationReportView,
-    InventoryValueReportView,
-    LibraryOverviewReportView,
-    MaintenanceDueReportView,
-    PayrollSummaryReportView,
-    RouteUtilizationReportView,
-    SmsUsageReportView,
-    TopPerformersReportView,
-)
 from .views import (
     AttendanceReportView,
     ClassPerformanceReportView,
@@ -31,6 +18,19 @@ from .views import (
     SubjectPerformanceReportView,
     TeacherWorkloadReportView,
 )
+from .extended_views import (
+    ChronicAbsenteeReportView,
+    CollectionTrendReportView,
+    DiscountsReportView,
+    EventParticipationReportView,
+    InventoryValueReportView,
+    LibraryOverviewReportView,
+    MaintenanceDueReportView,
+    PayrollSummaryReportView,
+    RouteUtilizationReportView,
+    SmsUsageReportView,
+    TopPerformersReportView,
+)
 from .export_views import (
     DataBackupView,
     DataExportListView,
@@ -44,187 +44,369 @@ from .import_views import (
     ImportTemplateView,
 )
 from .health_views import SystemHealthView
+from .student_views import (
+    StudentMasterReportView,
+    StudentListReportView,
+    AdmissionReportView,
+    StudentProfileReportView,
+    StudentStatisticsReportView,
+)
+from .attendance_views import (
+    DailyAttendanceReportView,
+    MonthlyAttendanceReportView,
+    StudentAttendanceReportView,
+    ClassAttendanceReportView,
+    AttendanceAnalyticsReportView,
+    ChronicAbsenteeReportView as ChronicAbsenteeReportView2,
+    SubjectAttendanceReportView,
+)
+from .exam_views import (
+    ExamScheduleReportView,
+    ExamMarksReportView,
+    SubjectPerformanceReportView as SubjectPerformanceReportView2,
+    ClassMarksReportView,
+    StudentResultReportView,
+    ResultAnalyticsReportView,
+    StudentRankingReportView,
+    ReportCardGeneratorView,
+)
+from .fee_views import (
+    FeeCollectionReportView,
+    FeeStatusReportView,
+    FeeAnalyticsReportView,
+    FinanceReportView,
+    FeeDefaultersReportView as FeeDefaultersReportView2,
+)
+from .hr_views import (
+    EmployeeMasterReportView,
+    HRAttendanceReportView,
+    HRLeaveReportView,
+    PayrollMonthlyReportView,
+    EmployeeSalaryReportView,
+    PayrollSummaryReportView as PayrollSummaryReportView2,
+    AllowanceReportView,
+    DeductionReportView,
+    NetSalaryReportView,
+    PaidSalaryReportView,
+    PendingSalaryReportView,
+)
+from .staff_views import (
+    StaffMasterReportView,
+    TeacherMasterReportView,
+    StaffAttendanceReportView,
+    TeacherAttendanceReportView,
+    StaffLeaveReportView,
+    TeacherLeaveReportView,
+    TeacherWorkloadReportView as TeacherWorkloadReportView2,
+    DepartmentReportView,
+    DesignationReportView,
+    StaffJoiningReportView,
+    StaffResignationReportView,
+)
+from .academic_views import (
+    ClassStrengthReportView,
+    SectionStrengthReportView,
+    ClassStudentListReportView,
+    GenderDistributionReportView,
+    AcademicPerformanceReportView,
+    PromotionReportView,
+    SubjectListReportView,
+    SubjectAllocationReportView,
+    SubjectPerformanceReportView as SubjectPerformanceReportView3,
+    TeacherSubjectAllocationReportView,
+    StudentTimetableReportView,
+    ClassTimetableReportView,
+    TeacherTimetableReportView,
+    RoomTimetableReportView,
+    FreePeriodReportView,
+)
+from .parent_views import (
+    ParentMasterReportView,
+    ParentStudentRelationshipReportView,
+    ParentContactReportView,
+    ParentWiseStudentsReportView,
+    OutstandingFeesByParentReportView,
+    AttendanceSummaryByParentReportView,
+    AcademicSummaryByParentReportView,
+)
+from .library_views import (
+    LibraryInventoryReportView,
+    AvailableBooksReportView,
+    IssuedBooksReportView,
+    ReturnedBooksReportView,
+    OverdueBooksReportView,
+    LibraryFinesReportView,
+    LibraryActivitySummaryReportView,
+    MostBorrowedBooksReportView,
+    StudentBorrowingHistoryReportView,
+    TeacherBorrowingHistoryReportView,
+)
+from .transport_views import (
+    StudentTransportListReportView,
+    RouteReportView,
+    VehicleReportView,
+    DriverReportView,
+    PickupDropoffReportView,
+    StudentsByRouteReportView,
+    StudentsByVehicleReportView,
+    TransportFeeReportView,
+    VehicleCapacityReportView,
+    RouteOccupancyReportView,
+)
+from .inventory_views import (
+    InventoryMasterReportView,
+    StockReportView,
+    LowStockReportView,
+    OutOfStockReportView,
+    StockMovementReportView,
+    PurchaseReportView,
+    IssueReportView,
+    ReturnReportView,
+    DamagedItemsReportView,
+    LostItemsReportView,
+    CategoryReportView,
+    SupplierReportView,
+    InventoryValuationReportView,
+)
+from .discipline_views import (
+    DisciplineIncidentsReportView,
+    StudentIncidentsReportView,
+    ClassIncidentsReportView,
+    CampusIncidentsReportView,
+    IncidentTypeReportView,
+    DateRangeIncidentsReportView,
+    WarningReportView,
+    SuspensionReportView,
+    RepeatIncidentsReportView,
+    DisciplinaryHistoryReportView,
+)
+from .certificate_views import (
+    BonafideCertificateView,
+    CharacterCertificateView,
+    LeavingCertificateView,
+    TransferCertificateView,
+    EnrollmentCertificateView,
+    FeeClearanceCertificateView,
+    StudentIDCardView,
+    StaffIDCardView,
+    CertificateTemplateListView,
+    CertificateReportView,
+)
+from .campus_views import (
+    CampusStudentCountReportView,
+    CampusAttendanceReportView,
+    CampusAcademicPerformanceReportView,
+    CampusFeeCollectionReportView,
+    CampusOutstandingFeesReportView,
+    CampusStaffCountReportView,
+    CampusAdmissionsReportView,
+    CampusFinancialSummaryReportView,
+    CampusComparisonReportView,
+    CampusDashboardReportView,
+)
 
 
 urlpatterns = [
-    path(
-        "enrollment/",
-        EnrollmentReportView.as_view(),
-        name="report-enrollment",
-    ),
-    path(
-        "attendance/",
-        AttendanceReportView.as_view(),
-        name="report-attendance",
-    ),
-    path(
-        "results/",
-        ResultsReportView.as_view(),
-        name="report-results",
-    ),
-    path(
-        "fees/",
-        FeesReportView.as_view(),
-        name="report-fees",
-    ),
-    path(
-        "staff/",
-        StaffReportView.as_view(),
-        name="report-staff",
-    ),
-    path(
-        "subjects/",
-        SubjectPerformanceReportView.as_view(),
-        name="report-subject-performance",
-    ),
-    path(
-        "payments/",
-        PaymentMethodsReportView.as_view(),
-        name="report-payment-methods",
-    ),
-    path(
-        "student-status/",
-        StudentStatusReportView.as_view(),
-        name="report-student-status",
-    ),
-    path(
-        "fee-categories/",
-        FeeCategoryReportView.as_view(),
-        name="report-fee-categories",
-    ),
-    path(
-        "fee-defaulters/",
-        FeeDefaultersReportView.as_view(),
-        name="report-fee-defaulters",
-    ),
-    path(
-        "teacher-workload/",
-        TeacherWorkloadReportView.as_view(),
-        name="report-teacher-workload",
-    ),
-    path(
-        "class-performance/",
-        ClassPerformanceReportView.as_view(),
-        name="report-class-performance",
-    ),
-    path(
-        "student-progress/",
-        StudentProgressTrendReportView.as_view(),
-        name="report-student-progress",
-    ),
-    path(
-        "collection-trend/",
-        CollectionTrendReportView.as_view(),
-        name="report-collection-trend",
-    ),
-    path(
-        "discounts/",
-        DiscountsReportView.as_view(),
-        name="report-discounts",
-    ),
-    path(
-        "chronic-absentee/",
-        ChronicAbsenteeReportView.as_view(),
-        name="report-chronic-absentee",
-    ),
-    path(
-        "payroll-summary/",
-        PayrollSummaryReportView.as_view(),
-        name="report-payroll-summary",
-    ),
-    path(
-        "library/",
-        LibraryOverviewReportView.as_view(),
-        name="report-library",
-    ),
-    path(
-        "route-utilization/",
-        RouteUtilizationReportView.as_view(),
-        name="report-route-utilization",
-    ),
-    path(
-        "inventory-value/",
-        InventoryValueReportView.as_view(),
-        name="report-inventory-value",
-    ),
-    path(
-        "maintenance-due/",
-        MaintenanceDueReportView.as_view(),
-        name="report-maintenance-due",
-    ),
-    path(
-        "event-participation/",
-        EventParticipationReportView.as_view(),
-        name="report-event-participation",
-    ),
-    path(
-        "sms-usage/",
-        SmsUsageReportView.as_view(),
-        name="report-sms-usage",
-    ),
-    path(
-        "top-performers/",
-        TopPerformersReportView.as_view(),
-        name="report-top-performers",
-    ),
-    path(
-        "at-risk/",
-        AtRiskReportView.as_view(),
-        name="report-at-risk",
-    ),
-    path(
-        "templates/",
-        ReportTemplateListView.as_view(),
-        name="report-template-list",
-    ),
-    path(
-        "templates/<int:pk>/",
-        ReportTemplateDetailView.as_view(),
-        name="report-template-detail",
-    ),
-    path(
-        "generate/",
-        ReportGenerateView.as_view(),
-        name="report-generate",
-    ),
-    path(
-        "export/",
-        DataExportListView.as_view(),
-        name="data-export-list",
-    ),
-    path(
-        "export/<str:export_key>/",
-        DataExportView.as_view(),
-        name="data-export",
-    ),
-    path(
-        "backup/",
-        DataBackupView.as_view(),
-        name="data-backup",
-    ),
-    path(
-        "import/templates/<str:import_key>/",
-        ImportTemplateView.as_view(),
-        name="import-template",
-    ),
-    path(
-        "import/preview/",
-        ImportPreviewView.as_view(),
-        name="import-preview",
-    ),
-    path(
-        "import/commit/",
-        ImportCommitView.as_view(),
-        name="import-commit",
-    ),
-    path(
-        "cron/email-weekly/",
-        WeeklyReportEmailCronView.as_view(),
-        name="email-weekly-cron",
-    ),
-    path(
-        "health/",
-        SystemHealthView.as_view(),
-        name="system-health",
-    ),
+    # Core reports
+    path("enrollment/", EnrollmentReportView.as_view(), name="report-enrollment"),
+    path("attendance/", AttendanceReportView.as_view(), name="report-attendance"),
+    path("results/", ResultsReportView.as_view(), name="report-results"),
+    path("fees/", FeesReportView.as_view(), name="report-fees"),
+    path("staff/", StaffReportView.as_view(), name="report-staff"),
+    path("subjects/", SubjectPerformanceReportView.as_view(), name="report-subject-performance"),
+    path("payments/", PaymentMethodsReportView.as_view(), name="report-payment-methods"),
+    path("student-status/", StudentStatusReportView.as_view(), name="report-student-status"),
+    path("fee-categories/", FeeCategoryReportView.as_view(), name="report-fee-categories"),
+    path("fee-defaulters/", FeeDefaultersReportView.as_view(), name="report-fee-defaulters"),
+    path("teacher-workload/", TeacherWorkloadReportView.as_view(), name="report-teacher-workload"),
+    path("class-performance/", ClassPerformanceReportView.as_view(), name="report-class-performance"),
+    path("student-progress/", StudentProgressTrendReportView.as_view(), name="report-student-progress"),
+    path("collection-trend/", CollectionTrendReportView.as_view(), name="report-collection-trend"),
+    path("discounts/", DiscountsReportView.as_view(), name="report-discounts"),
+    path("chronic-absentee/", ChronicAbsenteeReportView.as_view(), name="report-chronic-absentee"),
+    path("payroll-summary/", PayrollSummaryReportView.as_view(), name="report-payroll-summary"),
+    path("library/", LibraryOverviewReportView.as_view(), name="report-library"),
+    path("route-utilization/", RouteUtilizationReportView.as_view(), name="report-route-utilization"),
+    path("inventory-value/", InventoryValueReportView.as_view(), name="report-inventory-value"),
+    path("maintenance-due/", MaintenanceDueReportView.as_view(), name="report-maintenance-due"),
+    path("event-participation/", EventParticipationReportView.as_view(), name="report-event-participation"),
+    path("sms-usage/", SmsUsageReportView.as_view(), name="report-sms-usage"),
+    path("top-performers/", TopPerformersReportView.as_view(), name="report-top-performers"),
+    path("at-risk/", AtRiskReportView.as_view(), name="report-at-risk"),
+
+    # Student reports
+    path("students/master/", StudentMasterReportView.as_view(), name="report-student-master"),
+    path("students/list/", StudentListReportView.as_view(), name="report-student-list"),
+    path("students/profile/", StudentProfileReportView.as_view(), name="report-student-profile"),
+    path("students/statistics/", StudentStatisticsReportView.as_view(), name="report-student-statistics"),
+    path("admissions/", AdmissionReportView.as_view(), name="report-admissions"),
+
+    # Attendance reports
+    path("attendance/daily/", DailyAttendanceReportView.as_view(), name="report-attendance-daily"),
+    path("attendance/monthly/", MonthlyAttendanceReportView.as_view(), name="report-attendance-monthly"),
+    path("attendance/student/", StudentAttendanceReportView.as_view(), name="report-attendance-student"),
+    path("attendance/class/", ClassAttendanceReportView.as_view(), name="report-attendance-class"),
+    path("attendance/analytics/", AttendanceAnalyticsReportView.as_view(), name="report-attendance-analytics"),
+    path("attendance/subject/", SubjectAttendanceReportView.as_view(), name="report-attendance-subject"),
+
+    # Exam reports
+    path("exams/schedule/", ExamScheduleReportView.as_view(), name="report-exam-schedule"),
+    path("exams/marks/", ExamMarksReportView.as_view(), name="report-exam-marks"),
+    path("exams/subject-performance/", SubjectPerformanceReportView2.as_view(), name="report-exam-subject-performance"),
+    path("exams/class-marks/", ClassMarksReportView.as_view(), name="report-exam-class-marks"),
+    path("exams/student-result/", StudentResultReportView.as_view(), name="report-exam-student-result"),
+    path("exams/analytics/", ResultAnalyticsReportView.as_view(), name="report-exam-analytics"),
+    path("exams/ranking/", StudentRankingReportView.as_view(), name="report-exam-ranking"),
+    path("exams/report-card/", ReportCardGeneratorView.as_view(), name="report-exam-report-card"),
+
+    # Fee reports
+    path("fees/collection/", FeeCollectionReportView.as_view(), name="report-fee-collection"),
+    path("fees/status/", FeeStatusReportView.as_view(), name="report-fee-status"),
+    path("fees/analytics/", FeeAnalyticsReportView.as_view(), name="report-fee-analytics"),
+    path("fees/defaulters/", FeeDefaultersReportView2.as_view(), name="report-fee-defaulters"),
+    path("finance/", FinanceReportView.as_view(), name="report-finance"),
+
+    # HR/Payroll reports
+    path("hr/employees/", EmployeeMasterReportView.as_view(), name="report-hr-employees"),
+    path("hr/attendance/", HRAttendanceReportView.as_view(), name="report-hr-attendance"),
+    path("hr/leave/", HRLeaveReportView.as_view(), name="report-hr-leave"),
+    path("payroll/monthly/", PayrollMonthlyReportView.as_view(), name="report-payroll-monthly"),
+    path("payroll/salary-slip/", EmployeeSalaryReportView.as_view(), name="report-payroll-salary-slip"),
+    path("payroll/summary/", PayrollSummaryReportView2.as_view(), name="report-payroll-summary"),
+    path("payroll/allowances/", AllowanceReportView.as_view(), name="report-payroll-allowances"),
+    path("payroll/deductions/", DeductionReportView.as_view(), name="report-payroll-deductions"),
+    path("payroll/net-salary/", NetSalaryReportView.as_view(), name="report-payroll-net-salary"),
+    path("payroll/paid/", PaidSalaryReportView.as_view(), name="report-payroll-paid"),
+    path("payroll/pending/", PendingSalaryReportView.as_view(), name="report-payroll-pending"),
+
+    # Staff/Teacher reports
+    path("staff/master/", StaffMasterReportView.as_view(), name="report-staff-master"),
+    path("staff/teachers/", TeacherMasterReportView.as_view(), name="report-teacher-master"),
+    path("staff/attendance/", StaffAttendanceReportView.as_view(), name="report-staff-attendance"),
+    path("staff/teacher-attendance/", TeacherAttendanceReportView.as_view(), name="report-teacher-attendance"),
+    path("staff/leave/", StaffLeaveReportView.as_view(), name="report-staff-leave"),
+    path("staff/teacher-leave/", TeacherLeaveReportView.as_view(), name="report-teacher-leave"),
+    path("staff/workload/", TeacherWorkloadReportView2.as_view(), name="report-teacher-workload"),
+    path("staff/department/", DepartmentReportView.as_view(), name="report-staff-department"),
+    path("staff/designation/", DesignationReportView.as_view(), name="report-staff-designation"),
+    path("staff/joining/", StaffJoiningReportView.as_view(), name="report-staff-joining"),
+    path("staff/resignation/", StaffResignationReportView.as_view(), name="report-staff-resignation"),
+
+    # Academic reports
+    path("academic/class-strength/", ClassStrengthReportView.as_view(), name="report-class-strength"),
+    path("academic/section-strength/", SectionStrengthReportView.as_view(), name="report-section-strength"),
+    path("academic/student-list/", ClassStudentListReportView.as_view(), name="report-class-student-list"),
+    path("academic/gender-distribution/", GenderDistributionReportView.as_view(), name="report-gender-distribution"),
+    path("academic/performance/", AcademicPerformanceReportView.as_view(), name="report-academic-performance"),
+    path("academic/promotion/", PromotionReportView.as_view(), name="report-promotion"),
+    path("academic/subjects/", SubjectListReportView.as_view(), name="report-subjects"),
+    path("academic/subject-allocation/", SubjectAllocationReportView.as_view(), name="report-subject-allocation"),
+    path("academic/subject-performance/", SubjectPerformanceReportView3.as_view(), name="report-subject-performance"),
+    path("academic/teacher-subjects/", TeacherSubjectAllocationReportView.as_view(), name="report-teacher-subjects"),
+    path("timetable/student/", StudentTimetableReportView.as_view(), name="report-timetable-student"),
+    path("timetable/class/", ClassTimetableReportView.as_view(), name="report-timetable-class"),
+    path("timetable/teacher/", TeacherTimetableReportView.as_view(), name="report-timetable-teacher"),
+    path("timetable/room/", RoomTimetableReportView.as_view(), name="report-timetable-room"),
+    path("timetable/free-periods/", FreePeriodReportView.as_view(), name="report-timetable-free-periods"),
+
+    # Parent reports
+    path("parents/master/", ParentMasterReportView.as_view(), name="report-parent-master"),
+    path("parents/relationship/", ParentStudentRelationshipReportView.as_view(), name="report-parent-relationship"),
+    path("parents/contact/", ParentContactReportView.as_view(), name="report-parent-contact"),
+    path("parents/students/", ParentWiseStudentsReportView.as_view(), name="report-parent-students"),
+    path("parents/outstanding-fees/", OutstandingFeesByParentReportView.as_view(), name="report-parent-outstanding-fees"),
+    path("parents/attendance/", AttendanceSummaryByParentReportView.as_view(), name="report-parent-attendance"),
+    path("parents/academic/", AcademicSummaryByParentReportView.as_view(), name="report-parent-academic"),
+
+    # Library reports
+    path("library/inventory/", LibraryInventoryReportView.as_view(), name="report-library-inventory"),
+    path("library/available/", AvailableBooksReportView.as_view(), name="report-library-available"),
+    path("library/issued/", IssuedBooksReportView.as_view(), name="report-library-issued"),
+    path("library/returned/", ReturnedBooksReportView.as_view(), name="report-library-returned"),
+    path("library/overdue/", OverdueBooksReportView.as_view(), name="report-library-overdue"),
+    path("library/fines/", LibraryFinesReportView.as_view(), name="report-library-fines"),
+    path("library/activity/", LibraryActivitySummaryReportView.as_view(), name="report-library-activity"),
+    path("library/most-borrowed/", MostBorrowedBooksReportView.as_view(), name="report-library-most-borrowed"),
+    path("library/student-history/", StudentBorrowingHistoryReportView.as_view(), name="report-library-student-history"),
+    path("library/teacher-history/", TeacherBorrowingHistoryReportView.as_view(), name="report-library-teacher-history"),
+
+    # Transport reports
+    path("transport/students/", StudentTransportListReportView.as_view(), name="report-transport-students"),
+    path("transport/routes/", RouteReportView.as_view(), name="report-transport-routes"),
+    path("transport/vehicles/", VehicleReportView.as_view(), name="report-transport-vehicles"),
+    path("transport/drivers/", DriverReportView.as_view(), name="report-transport-drivers"),
+    path("transport/pickup-dropoff/", PickupDropoffReportView.as_view(), name="report-transport-pickup-dropoff"),
+    path("transport/students-by-route/", StudentsByRouteReportView.as_view(), name="report-transport-students-by-route"),
+    path("transport/students-by-vehicle/", StudentsByVehicleReportView.as_view(), name="report-transport-students-by-vehicle"),
+    path("transport/fees/", TransportFeeReportView.as_view(), name="report-transport-fees"),
+    path("transport/vehicle-capacity/", VehicleCapacityReportView.as_view(), name="report-transport-vehicle-capacity"),
+    path("transport/route-occupancy/", RouteOccupancyReportView.as_view(), name="report-transport-route-occupancy"),
+
+    # Inventory reports
+    path("inventory/master/", InventoryMasterReportView.as_view(), name="report-inventory-master"),
+    path("inventory/stock/", StockReportView.as_view(), name="report-inventory-stock"),
+    path("inventory/low-stock/", LowStockReportView.as_view(), name="report-inventory-low-stock"),
+    path("inventory/out-of-stock/", OutOfStockReportView.as_view(), name="report-inventory-out-of-stock"),
+    path("inventory/movement/", StockMovementReportView.as_view(), name="report-inventory-movement"),
+    path("inventory/purchases/", PurchaseReportView.as_view(), name="report-inventory-purchases"),
+    path("inventory/issues/", IssueReportView.as_view(), name="report-inventory-issues"),
+    path("inventory/returns/", ReturnReportView.as_view(), name="report-inventory-returns"),
+    path("inventory/damaged/", DamagedItemsReportView.as_view(), name="report-inventory-damaged"),
+    path("inventory/lost/", LostItemsReportView.as_view(), name="report-inventory-lost"),
+    path("inventory/category/", CategoryReportView.as_view(), name="report-inventory-category"),
+    path("inventory/supplier/", SupplierReportView.as_view(), name="report-inventory-supplier"),
+    path("inventory/valuation/", InventoryValuationReportView.as_view(), name="report-inventory-valuation"),
+
+    # Discipline reports
+    path("discipline/incidents/", DisciplineIncidentsReportView.as_view(), name="report-discipline-incidents"),
+    path("discipline/student/", StudentIncidentsReportView.as_view(), name="report-discipline-student"),
+    path("discipline/class/", ClassIncidentsReportView.as_view(), name="report-discipline-class"),
+    path("discipline/campus/", CampusIncidentsReportView.as_view(), name="report-discipline-campus"),
+    path("discipline/type/", IncidentTypeReportView.as_view(), name="report-discipline-type"),
+    path("discipline/date-range/", DateRangeIncidentsReportView.as_view(), name="report-discipline-date-range"),
+    path("discipline/warnings/", WarningReportView.as_view(), name="report-discipline-warnings"),
+    path("discipline/suspensions/", SuspensionReportView.as_view(), name="report-discipline-suspensions"),
+    path("discipline/repeat/", RepeatIncidentsReportView.as_view(), name="report-discipline-repeat"),
+    path("discipline/history/", DisciplinaryHistoryReportView.as_view(), name="report-discipline-history"),
+
+    # Certificate reports
+    path("certificates/bonafide/", BonafideCertificateView.as_view(), name="report-certificate-bonafide"),
+    path("certificates/character/", CharacterCertificateView.as_view(), name="report-certificate-character"),
+    path("certificates/leaving/", LeavingCertificateView.as_view(), name="report-certificate-leaving"),
+    path("certificates/transfer/", TransferCertificateView.as_view(), name="report-certificate-transfer"),
+    path("certificates/enrollment/", EnrollmentCertificateView.as_view(), name="report-certificate-enrollment"),
+    path("certificates/fee-clearance/", FeeClearanceCertificateView.as_view(), name="report-certificate-fee-clearance"),
+    path("certificates/student-id/", StudentIDCardView.as_view(), name="report-certificate-student-id"),
+    path("certificates/staff-id/", StaffIDCardView.as_view(), name="report-certificate-staff-id"),
+    path("certificates/templates/", CertificateTemplateListView.as_view(), name="report-certificate-templates"),
+    path("certificates/", CertificateReportView.as_view(), name="report-certificates"),
+
+    # Campus reports
+    path("campus/students/", CampusStudentCountReportView.as_view(), name="report-campus-students"),
+    path("campus/attendance/", CampusAttendanceReportView.as_view(), name="report-campus-attendance"),
+    path("campus/performance/", CampusAcademicPerformanceReportView.as_view(), name="report-campus-performance"),
+    path("campus/fees/", CampusFeeCollectionReportView.as_view(), name="report-campus-fees"),
+    path("campus/outstanding/", CampusOutstandingFeesReportView.as_view(), name="report-campus-outstanding"),
+    path("campus/staff/", CampusStaffCountReportView.as_view(), name="report-campus-staff"),
+    path("campus/admissions/", CampusAdmissionsReportView.as_view(), name="report-campus-admissions"),
+    path("campus/finance/", CampusFinancialSummaryReportView.as_view(), name="report-campus-finance"),
+    path("campus/comparison/", CampusComparisonReportView.as_view(), name="report-campus-comparison"),
+    path("campus/dashboard/", CampusDashboardReportView.as_view(), name="report-campus-dashboard"),
+
+    # Templates and configuration
+    path("templates/", ReportTemplateListView.as_view(), name="report-template-list"),
+    path("templates/<int:pk>/", ReportTemplateDetailView.as_view(), name="report-template-detail"),
+    path("generate/", ReportGenerateView.as_view(), name="report-generate"),
+
+    # Export/Import
+    path("export/", DataExportListView.as_view(), name="data-export-list"),
+    path("export/<str:export_key>/", DataExportView.as_view(), name="data-export"),
+    path("backup/", DataBackupView.as_view(), name="data-backup"),
+    path("import/templates/<str:import_key>/", ImportTemplateView.as_view(), name="import-template"),
+    path("import/preview/", ImportPreviewView.as_view(), name="import-preview"),
+    path("import/commit/", ImportCommitView.as_view(), name="import-commit"),
+
+    # Cron and health
+    path("cron/email-weekly/", WeeklyReportEmailCronView.as_view(), name="email-weekly-cron"),
+    path("health/", SystemHealthView.as_view(), name="system-health"),
 ]

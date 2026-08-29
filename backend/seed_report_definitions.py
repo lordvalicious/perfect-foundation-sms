@@ -1,0 +1,174 @@
+#!/usr/bin/env python
+"""Seed script to populate ReportDefinition and related models."""
+
+import os
+import sys
+import django
+
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.development')
+
+# Add backend to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+django.setup()
+
+from apps.reports.models import ReportCategory, ReportDefinition
+
+
+def get_cat(slug):
+    return ReportCategory.objects.get(slug=slug)
+
+
+def create_reports(category_slug, reports_list, required_roles=None):
+    """Create report definitions for a category."""
+    cat = ReportCategory.objects.get(slug=category_slug)
+    if required_roles is None:
+        required_roles = ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'academic']
+
+    for key, title, desc, endpoint, icon in reports_list:
+        ReportDefinition.objects.get_or_create(
+            key=key,
+            defaults={
+                'category': cat,
+                'title': title,
+                'description': desc,
+                'report_type': key.replace('-', '_'),
+                'endpoint_url': '/api/reports/' + endpoint,
+                'supports_csv': True,
+                'supports_pdf': True,
+                'supports_print': True,
+                'required_roles': required_roles,
+            }
+        )
+
+
+def main():
+    # Academic Operations
+    create_reports('academic-ops', [
+        ('class-strength', 'Class Strength', 'Student count by class/section with gender breakdown', 'academic/class-strength/', 'Users'),
+        ('section-strength', 'Section Strength', 'Detailed section-wise student counts', 'academic/section-strength/', 'Users'),
+        ('class-student-list', 'Class Student List', 'Roll-numbered student lists by class/section', 'academic/student-list/', 'ClipboardCheck'),
+        ('gender-distribution', 'Gender Distribution', 'Male/female distribution by campus/class', 'academic/gender-distribution/', 'BarChart3'),
+        ('academic-performance', 'Academic Performance', 'Class-wise pass rates, averages for an exam', 'academic/performance/', 'Trophy'),
+        ('promotion', 'Promotion Report', 'Graduated/transferred students with from/to details', 'academic/promotion/', 'GraduationCap'),
+        ('subject-list', 'Subject List', 'All subjects with codes, types, practical flags', 'academic/subjects/', 'BookOpen'),
+        ('subject-allocation', 'Subject Allocation', 'Subject-teacher-class assignments', 'academic/subject-allocation/', 'Users'),
+        ('subject-performance', 'Subject Performance', 'Cross-class subject averages, pass rates', 'academic/subject-performance/', 'BarChart3'),
+        ('teacher-subjects', 'Teacher Subject Allocation', 'Subjects and classes assigned per teacher', 'academic/teacher-subjects/', 'GraduationCap'),
+        ('timetable-student', 'Student Timetable', 'Weekly timetable for a student', 'timetable/student/', 'CalendarDays'),
+        ('timetable-class', 'Class Timetable', 'Weekly timetable for a class/section', 'timetable/class/', 'CalendarDays'),
+        ('timetable-teacher', 'Teacher Timetable', 'Weekly timetable for a teacher', 'timetable/teacher/', 'CalendarDays'),
+        ('timetable-room', 'Room Timetable', 'Weekly timetable for a room', 'timetable/room/', 'CalendarDays'),
+        ('timetable-free-periods', 'Free Periods', 'Teacher free period analysis', 'timetable/free-periods/', 'Clock'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'academic', 'teacher'])
+
+    # Parents & Guardians
+    create_reports('parents', [
+        ('parent-master', 'Parent Master', 'Guardian directory with contact details', 'parents/master/', 'Users'),
+        ('parent-relationship', 'Parent-Student Relationships', 'Primary/emergency/pickup contacts per student', 'parents/relationship/', 'Users'),
+        ('parent-contact', 'Parent Contact Report', 'Phone/email/address with missing contact flags', 'parents/contact/', 'Mail'),
+        ('parent-students', 'Parent-wise Students', 'Students grouped by parent with class details', 'parents/students/', 'Users'),
+        ('parent-outstanding-fees', 'Outstanding Fees by Parent', 'Total dues per guardian across all children', 'parents/outstanding-fees/', 'Wallet'),
+        ('parent-attendance', 'Attendance Summary by Parent', "Children's attendance rates grouped by parent", 'parents/attendance/', 'ClipboardCheck'),
+        ('parent-academic', 'Academic Summary by Parent', "Children's exam performance grouped by parent", 'parents/academic/', 'Trophy'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'academic'])
+
+    # Library
+    create_reports('library', [
+        ('library-inventory', 'Book Inventory', 'Total books, copies, available/issued by category', 'library/inventory/', 'BookOpen'),
+        ('library-available', 'Available Books', 'Currently available copies with locations', 'library/available/', 'CheckCircle'),
+        ('library-issued', 'Issued Books', 'Currently issued/overdue books with borrower details', 'library/issued/', 'BookOpen'),
+        ('library-returned', 'Returned Books', 'Returned books with late return analysis', 'library/returned/', 'BookOpen'),
+        ('library-overdue', 'Overdue Books', 'Overdue books with days overdue and fines', 'library/overdue/', 'Siren'),
+        ('library-fines', 'Library Fines', 'Fines outstanding/paid with borrower details', 'library/fines/', 'Wallet'),
+        ('library-activity', 'Library Activity Summary', 'Total issues, returns, overdue, fines, most borrowed', 'library/activity/', 'BarChart3'),
+        ('library-most-borrowed', 'Most Borrowed Books', 'Top borrowed titles with issue counts', 'library/most-borrowed/', 'Trophy'),
+        ('library-student-history', 'Student Borrowing History', 'Complete issue/return history for a student', 'library/student-history/', 'FileText'),
+        ('library-teacher-history', 'Teacher Borrowing History', 'Complete issue/return history for a teacher', 'library/teacher-history/', 'FileText'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'academic', 'librarian'])
+
+    # Transport
+    create_reports('transport', [
+        ('transport-students', 'Student Transport List', 'Students with route, vehicle, driver, pickup/drop points', 'transport/students/', 'Users'),
+        ('transport-routes', 'Route Report', 'Route details with vehicle, driver, stops, utilization', 'transport/routes/', 'Bus'),
+        ('transport-vehicles', 'Vehicle Report', 'Vehicles with capacity, status, routes, insurance/fitness', 'transport/vehicles/', 'Truck'),
+        ('transport-drivers', 'Driver Report', 'Drivers with license, vehicle, routes, assigned students', 'transport/drivers/', 'Users'),
+        ('transport-pickup-dropoff', 'Pickup/Drop-off Points', 'All pickup and drop points with times', 'transport/pickup-dropoff/', 'MapPin'),
+        ('transport-students-by-route', 'Students by Route', 'Student lists grouped by route', 'transport/students-by-route/', 'Users'),
+        ('transport-students-by-vehicle', 'Students by Vehicle', 'Student lists grouped by vehicle', 'transport/students-by-vehicle/', 'Truck'),
+        ('transport-fees', 'Transport Fees', 'Monthly transport fees by student/route', 'transport/fees/', 'Wallet'),
+        ('transport-vehicle-capacity', 'Vehicle Capacity', 'Capacity utilization per vehicle', 'transport/vehicle-capacity/', 'BarChart3'),
+        ('transport-route-occupancy', 'Route Occupancy', 'Route capacity vs assigned students, overloaded routes', 'transport/route-occupancy/', 'BarChart3'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'accountant'])
+
+    # Inventory
+    create_reports('inventory', [
+        ('inventory-master', 'Inventory Master', 'All assets with category, campus, quantity, value', 'inventory/master/', 'Package'),
+        ('inventory-stock', 'Current Stock', 'Available stock by item/category/campus', 'inventory/stock/', 'Package'),
+        ('inventory-low-stock', 'Low Stock', 'Items below reorder threshold', 'inventory/low-stock/', 'Siren'),
+        ('inventory-out-of-stock', 'Out of Stock', 'Items with zero quantity', 'inventory/out-of-stock/', 'X'),
+        ('inventory-movement', 'Stock Movement', 'Inward/outward/transfer movements by date range', 'inventory/movement/', 'ArrowRightLeft'),
+        ('inventory-purchases', 'Purchases', 'Purchase orders with supplier, amount, status', 'inventory/purchases/', 'ShoppingCart'),
+        ('inventory-issues', 'Issues', 'Assets issued to staff/students with return tracking', 'inventory/issues/', 'ArrowRight'),
+        ('inventory-returns', 'Returns', 'Asset returns with condition assessment', 'inventory/returns/', 'ArrowLeft'),
+        ('inventory-damaged', 'Damaged Items', 'Assets marked damaged with value', 'inventory/damaged/', 'AlertTriangle'),
+        ('inventory-lost', 'Lost Items', 'Assets marked lost with value', 'inventory/lost/', 'AlertTriangle'),
+        ('inventory-category', 'Category Report', 'Item counts and values by category', 'inventory/category/', 'BarChart3'),
+        ('inventory-supplier', 'Supplier Report', 'Assets and purchase values by supplier', 'inventory/supplier/', 'Truck'),
+        ('inventory-valuation', 'Inventory Valuation', 'Total asset value by category and campus', 'inventory/valuation/', 'Wallet'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'accountant'])
+
+    # Discipline
+    create_reports('discipline', [
+        ('discipline-incidents', 'Discipline Incidents', 'All incidents with type, severity, action taken', 'discipline/incidents/', 'Siren'),
+        ('discipline-student', 'Student Incidents', 'Incidents grouped by student with counts', 'discipline/student/', 'Users'),
+        ('discipline-class', 'Class Incidents', 'Incident counts by class with type breakdown', 'discipline/class/', 'Users'),
+        ('discipline-campus', 'Campus Incidents', 'Incident counts and severity by campus', 'discipline/campus/', 'MapPin'),
+        ('discipline-type', 'Incident Type Breakdown', 'Counts by incident type and severity', 'discipline/type/', 'BarChart3'),
+        ('discipline-date-range', 'Date Range Incidents', 'Incidents within a specific date range', 'discipline/date-range/', 'CalendarDays'),
+        ('discipline-warnings', 'Warnings', 'All warning-level incidents', 'discipline/warnings/', 'AlertTriangle'),
+        ('discipline-suspensions', 'Suspensions', 'All suspension incidents with action taken', 'discipline/suspensions/', 'UserX'),
+        ('discipline-repeat', 'Repeat Offenders', 'Students with multiple incidents', 'discipline/repeat/', 'Siren'),
+        ('discipline-history', 'Disciplinary History', 'Complete incident timeline for a student', 'discipline/history/', 'FileText'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'academic'])
+
+    # Certificates
+    create_reports('certificates', [
+        ('certificate-bonafide', 'Bonafide Certificate', 'Proof of enrollment certificate', 'certificates/bonafide/', 'FileText'),
+        ('certificate-character', 'Character Certificate', 'Good conduct certificate', 'certificates/character/', 'FileText'),
+        ('certificate-leaving', 'Leaving Certificate', 'School leaving certificate', 'certificates/leaving/', 'FileText'),
+        ('certificate-transfer', 'Transfer Certificate', 'Inter-school transfer certificate', 'certificates/transfer/', 'FileText'),
+        ('certificate-enrollment', 'Enrollment Certificate', 'Current enrollment verification', 'certificates/enrollment/', 'FileText'),
+        ('certificate-fee-clearance', 'Fee Clearance Certificate', 'No dues certificate', 'certificates/fee-clearance/', 'FileText'),
+        ('certificate-student-id', 'Student ID Card', 'Photo ID card with barcode', 'certificates/student-id/', 'Badge'),
+        ('certificate-staff-id', 'Staff ID Card', 'Staff photo ID card with barcode', 'certificates/staff-id/', 'Badge'),
+        ('certificate-templates', 'Certificate Templates', 'Manage certificate templates', 'certificates/templates/', 'Settings'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'academic'])
+
+    # Campus Reports
+    create_reports('campus', [
+        ('campus-students', 'Campus Student Count', 'Student totals with gender breakdown by campus', 'campus/students/', 'Users'),
+        ('campus-attendance', 'Campus Attendance', 'Attendance rate comparison across campuses', 'campus/attendance/', 'ClipboardCheck'),
+        ('campus-performance', 'Campus Academic Performance', 'Pass rates, averages, grade distribution by campus', 'campus/performance/', 'Trophy'),
+        ('campus-fees', 'Campus Fee Collection', 'Invoiced, collected, outstanding by campus', 'campus/fees/', 'Wallet'),
+        ('campus-outstanding', 'Campus Outstanding Fees', 'Outstanding fee totals by campus', 'campus/outstanding/', 'Siren'),
+        ('campus-staff', 'Campus Staff Count', 'Staff totals with teaching/admin breakdown', 'campus/staff/', 'Users'),
+        ('campus-admissions', 'Campus Admissions', 'Applications, accepted, pending by campus', 'campus/admissions/', 'GraduationCap'),
+        ('campus-finance', 'Campus Financial Summary', 'Revenue, expenses, net by campus', 'campus/finance/', 'Wallet'),
+        ('campus-comparison', 'Campus Comparison', 'Side-by-side KPI comparison', 'campus/comparison/', 'BarChart3'),
+        ('campus-dashboard', 'Campus Dashboard', 'Single campus overview with all KPIs', 'campus/dashboard/', 'LayoutDashboard'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'accountant'])
+
+    # Report Builder
+    create_reports('builder', [
+        ('builder-data-sources', 'Available Data Sources', 'Browse approved data sources with fields and filters', 'builder/data-sources/', 'Database'),
+        ('builder-create', 'Create Custom Report', 'Select fields, add filters, grouping, sorting', 'builder/create/', 'Plus'),
+        ('builder-saved', 'My Saved Reports', 'Manage and run saved custom reports', 'builder/saved/', 'Star'),
+        ('builder-templates', 'Report Templates', 'Manage PDF/print templates', 'builder/templates/', 'FileText'),
+    ], ['super_admin', 'admin', 'principal', 'vice_principal', 'campus_admin', 'academic'])
+
+    print("All report definitions created successfully!")
+
+
+if __name__ == '__main__':
+    main()
