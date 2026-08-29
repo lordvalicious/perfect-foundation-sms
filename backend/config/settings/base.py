@@ -64,7 +64,7 @@ INSTALLED_APPS = [
     "apps.helpdesk",
     "apps.visitors",
     "apps.digital_ids",
-    "django_ratelimit",
+    # "django_ratelimit",  # Temporarily disabled - requires Redis for production
 
     "corsheaders",
     "rest_framework",
@@ -80,7 +80,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "ratelimit.middleware.RatelimitMiddleware",
+    # "ratelimit.middleware.RatelimitMiddleware",  # Temporarily disabled for migrations
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -234,6 +234,18 @@ CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
     "http://127.0.0.1:8000",
 ]
+
+# Cache (for django-ratelimit)
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": os.path.join(BASE_DIR, "cache"),
+    },
+    "ratelimit": {
+        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
+        "LOCATION": os.path.join(BASE_DIR, "ratelimit_cache"),
+    },
+}
 
 # Email
 DEFAULT_FROM_EMAIL = os.environ.get(
