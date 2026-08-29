@@ -51,6 +51,12 @@ CSRF_COOKIE_SECURE = (
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = CSRF_COOKIE_SAMESITE
 
+# CSRF trusted origins for Vercel
+CSRF_TRUSTED_ORIGINS = [
+    "https://perfect-foundation-api.vercel.app",
+    "https://perfect-foundation-sms.vercel.app",
+]
+
 SECURE_PROXY_SSL_HEADER = (
     "HTTP_X_FORWARDED_PROTO",
     "https",
