@@ -23,3 +23,9 @@ export function formatDate(value) {
     year: "numeric",
   });
 }
+
+export function getMonthLabel(monthKey) {
+  const [year, month] = String(monthKey).split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+  return date.toLocaleDateString("en-GB", { month: "short" });
+}

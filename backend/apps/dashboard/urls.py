@@ -6,6 +6,7 @@ from .views import (
     dashboard_finance,
     dashboard_finance_breakdown,
     dashboard_exams,
+    dashboard_executive,
 )
 
 urlpatterns = [
@@ -18,4 +19,5 @@ urlpatterns = [
         name="dashboard-finance-breakdown",
     ),
     path("exams/", dashboard_exams, name="dashboard-exams"),
+    path("executive/", dashboard_executive, name="dashboard-executive"),
 ]

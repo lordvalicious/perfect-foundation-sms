@@ -3,7 +3,7 @@ from rest_framework import generics, status, viewsets
 from rest_framework.response import Response
 from rest_framework.decorators import action
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import apply_campus_scope, institution_scope
 from apps.accounts.permissions import HasActiveInstitution, IsAdminOrReadOnly, IsSuperAdmin
 from apps.students.models import Enrollment
 from .models import (
@@ -241,9 +241,11 @@ class TermListView(NoPaginationMixin, generics.ListAPIView):
 
 
 class SubjectListView(NoPaginationMixin, generics.ListAPIView):
-    queryset = Subject.objects.all().order_by("name")
     serializer_class = SubjectSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return institution_scope(Subject.objects.all(), self.request).order_by("name")
 
 
 class SubjectOfferingListView(NoPaginationMixin, generics.ListAPIView):

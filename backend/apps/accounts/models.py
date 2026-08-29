@@ -14,6 +14,7 @@ class Role(models.TextChoices):
     ACCOUNTANT = "accountant", "Accountant"
     HR = "hr", "HR / Staff Officer"
     RECEPTIONIST = "receptionist", "Receptionist"
+    GUARD = "guard", "Security Guard"
     TEACHER = "teacher", "Teacher"
     PARENT = "parent", "Parent / Guardian"
     STUDENT = "student", "Student"
@@ -88,6 +89,7 @@ class User(AbstractUser):
             Role.ACCOUNTANT,
             Role.HR,
             Role.RECEPTIONIST,
+            Role.GUARD,
             Role.TEACHER,
             Role.PARENT,
             Role.STAFF,

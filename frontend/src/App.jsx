@@ -55,6 +55,9 @@ import {
   AlertOctagon,
   BedDouble,
   MonitorPlay,
+  LifeBuoy,
+  ShieldCheck,
+  IdCard,
 } from "lucide-react";
 import "./App.css";
 import { AuthProvider, useAuth } from "./auth";
@@ -93,6 +96,7 @@ import ReportBuilderPage from "./pages/ReportBuilderPage";
 import TemplatesPage from "./pages/TemplatesPage";
 import BrandingPage from "./pages/BrandingPage";
 import CampusDashboardPage from "./pages/CampusDashboardPage";
+import ExecutiveDashboardPage from "./pages/ExecutiveDashboardPage";
 import ExportPage from "./pages/ExportPage";
 import HealthPage from "./pages/HealthPage";
 import DataImportPage from "./pages/DataImportPage";
@@ -105,6 +109,9 @@ import AlumniPage from "./pages/AlumniPage";
 import HostelPage from "./pages/HostelPage";
 import LMSPage from "./pages/LMSPage";
 import TenantsPage from "./pages/TenantsPage";
+import HelpdeskPage from "./pages/HelpdeskPage";
+import VisitorsPage from "./pages/VisitorsPage";
+import DigitalIdsPage from "./pages/DigitalIdsPage";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -311,6 +318,7 @@ const navigation = [
   { label: "Timetable", path: "/timetable", icon: CalendarDays, roles: ["super_admin", "admin", "principal", "academic", "teacher", "staff", "student", "parent"] },
   { label: "Campuses", path: "/campuses", icon: Building2, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Campus Dashboard", path: "/campus-dashboard", icon: Building2, roles: ["super_admin", "admin", "principal"] },
+  { label: "Executive Dashboard", path: "/executive-dashboard", icon: BarChart3, roles: ["super_admin", "admin", "academic", "principal", "vice_principal", "campus_admin"] },
   { label: "Announcements", path: "/announcements", icon: Megaphone, roles: [] },
   { label: "Messages", module: "communication", path: "/messages", icon: Mail, roles: [] },
   { label: "SMS", module: "communication", path: "/sms", icon: MessageSquare, roles: ["super_admin", "admin"] },
@@ -328,6 +336,9 @@ const navigation = [
   { label: "Alumni", module: "alumni", path: "/alumni", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Hostel", module: "hostel", path: "/hostel", icon: BedDouble, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Online Courses", path: "/lms", icon: MonitorPlay, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student"] },
+  { label: "Helpdesk", module: "helpdesk", path: "/helpdesk", icon: LifeBuoy, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "teacher", "staff"] },
+  { label: "Visitors", module: "visitors", path: "/visitors", icon: ShieldCheck, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "staff"] },
+  { label: "Digital IDs", module: "digital_ids", path: "/digital-ids", icon: IdCard, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "staff"] },
 ];
 
 const systemNavigation = [
@@ -363,13 +374,19 @@ const navGroups = [
   },
   {
     label: "Resources",
-    items: ["/library", "/transport", "/inventory", "/documents", "/campuses", "/campus-dashboard", "/alumni", "/hostel"]
+    items: ["/library", "/transport", "/inventory", "/documents", "/campuses", "/campus-dashboard", "/executive-dashboard", "/alumni", "/hostel"]
       .map(findNav)
       .filter(Boolean),
   },
   {
     label: "Communication",
     items: ["/messages", "/sms", "/templates", "/announcements", "/events"]
+      .map(findNav)
+      .filter(Boolean),
+  },
+  {
+    label: "Support & Security",
+    items: ["/helpdesk", "/visitors", "/digital-ids"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -738,6 +755,12 @@ function Shell() {
           </RequireRoles>
         } />
 
+        <Route path="/executive-dashboard" element={
+          <RequireRoles roles={["super_admin", "admin", "academic", "principal", "vice_principal", "campus_admin"]}>
+            <ExecutiveDashboardPage />
+          </RequireRoles>
+        } />
+
         <Route path="/events" element={<EventsPage />} />
 
         <Route path="/announcements" element={
@@ -861,6 +884,24 @@ function Shell() {
         <Route path="/lms" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "student"]}>
             <LMSPage isStudent={hasRole(["student"])} />
+          </RequireRoles>
+        } />
+
+        <Route path="/helpdesk" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "teacher", "staff"]}>
+            <HelpdeskPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/visitors" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "staff"]}>
+            <VisitorsPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/digital-ids" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "staff"]}>
+            <DigitalIdsPage />
           </RequireRoles>
         } />
 

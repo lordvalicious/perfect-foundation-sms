@@ -437,3 +437,28 @@ def dashboard_exams(request):
     }
 
     return JsonResponse(data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def dashboard_executive(request):
+    """Owner / principal / academic snapshot of the whole school.
+
+    Institution- and campus-scoped to the caller: aggregates people,
+    finance, attendance, academics, per-campus comparison, and alerts.
+    Manager roles only — students/parents/teachers get 403.
+    """
+    if not is_manager(request.user):
+        return JsonResponse(
+            {
+                "detail": (
+                    "The executive dashboard requires a "
+                    "manager role."
+                )
+            },
+            status=403,
+        )
+
+    from .executive import executive_dashboard
+
+    return JsonResponse(executive_dashboard(request))
