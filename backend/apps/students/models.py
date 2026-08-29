@@ -1809,3 +1809,143 @@ class StudentAlumni(SoftDeleteMixin):
 
         return alumni
 
+
+class ProgressionRecord(SoftDeleteMixin):
+    """
+    Immutable audit/history record for any academic progression: promotion,
+    demotion, class transfer, section transfer, or campus transfer.
+
+    Preserves the full 'previous -> new' transition so that historical data
+    is never lost when an enrollment changes.
+    """
+
+    ACTION_CHOICES = [
+        ("promotion", "Promotion"),
+        ("demotion", "Demotion"),
+        ("class_transfer", "Class Transfer"),
+        ("section_transfer", "Section Transfer"),
+        ("campus_transfer", "Campus Transfer"),
+    ]
+
+    objects = SoftDeleteManager()
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="progression_records",
+    )
+
+    action = models.CharField(max_length=20, choices=ACTION_CHOICES)
+
+    # Previous state
+    from_academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.PROTECT,
+        related_name="progression_from",
+        null=True,
+        blank=True,
+    )
+    from_class = models.ForeignKey(
+        Class,
+        on_delete=models.PROTECT,
+        related_name="progression_from",
+        null=True,
+        blank=True,
+    )
+    from_section = models.ForeignKey(
+        Section,
+        on_delete=models.PROTECT,
+        related_name="progression_from",
+        null=True,
+        blank=True,
+    )
+    from_campus = models.ForeignKey(
+        Campus,
+        on_delete=models.PROTECT,
+        related_name="progression_from",
+        null=True,
+        blank=True,
+    )
+
+    # New state
+    to_academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.PROTECT,
+        related_name="progression_to",
+        null=True,
+        blank=True,
+    )
+    to_class = models.ForeignKey(
+        Class,
+        on_delete=models.PROTECT,
+        related_name="progression_to",
+        null=True,
+        blank=True,
+    )
+    to_section = models.ForeignKey(
+        Section,
+        on_delete=models.PROTECT,
+        related_name="progression_to",
+        null=True,
+        blank=True,
+    )
+    to_campus = models.ForeignKey(
+        Campus,
+        on_delete=models.PROTECT,
+        related_name="progression_to",
+        null=True,
+        blank=True,
+    )
+
+    effective_date = models.DateField(default=timezone.now)
+
+    performed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="performed_progressions",
+    )
+
+    reason = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-effective_date", "-created_at"]
+        indexes = [
+            models.Index(
+                fields=["student", "action"],
+                name="prog_student_action_idx",
+            ),
+            models.Index(
+                fields=["from_academic_year", "to_academic_year"],
+                name="prog_years_idx",
+            ),
+            models.Index(
+                fields=["from_campus", "to_campus"],
+                name="prog_campuses_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.student.full_name} - {self.get_action_display()} "
+            f"({self.effective_date})"
+        )
+
+    def clean(self):
+        errors = {}
+        if self.effective_date and self.from_academic_year_id:
+            if (
+                self.from_academic_year.start_date
+                and self.effective_date < self.from_academic_year.start_date
+            ):
+                errors["effective_date"] = (
+                    "Effective date cannot be earlier than the previous "
+                    "academic year's start date."
+                )
+        if errors:
+            raise ValidationError(errors)
+

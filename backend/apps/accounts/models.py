@@ -453,6 +453,103 @@ class StaffAttendance(SoftDeleteMixin):
     def __str__(self):
         return f"{self.staff} - {self.date} - {self.get_status_display()}"
 
+    @property
+    def working_hours(self):
+        """Compute elapsed working time from check_in / check_out.
+
+        Returns a ``timedelta``, or ``None`` when either timestamp is missing.
+        """
+        if self.check_in is None or self.check_out is None:
+            return None
+
+        from datetime import datetime
+
+        start = datetime.combine(self.date, self.check_in)
+        end = datetime.combine(self.date, self.check_out)
+        if end < start:
+            # Overnight shift: assume wrap-around to the next day.
+            from datetime import timedelta
+
+            end += timedelta(days=1)
+        return end - start
+
+
+class StaffAttendanceCorrection(SoftDeleteMixin):
+    """
+    Immutable audit trail for every change made to a staff attendance record.
+
+    Each correction preserves the old value and the new value (status and
+    check-in/check-out), who performed it, when, and why. Corrections are
+    never edited or deleted, so the full history is retained.
+    """
+
+    objects = SoftDeleteManager()
+
+    attendance = models.ForeignKey(
+        StaffAttendance,
+        on_delete=models.CASCADE,
+        related_name="corrections",
+    )
+
+    staff = models.ForeignKey(
+        StaffProfile,
+        on_delete=models.CASCADE,
+        related_name="attendance_corrections",
+    )
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="staff_attendance_corrections",
+        null=True,
+        blank=True,
+    )
+
+    from_status = models.CharField(
+        max_length=20,
+        choices=StaffAttendance.STATUS_CHOICES,
+    )
+    to_status = models.CharField(
+        max_length=20,
+        choices=StaffAttendance.STATUS_CHOICES,
+    )
+
+    from_check_in = models.TimeField(null=True, blank=True)
+    to_check_in = models.TimeField(null=True, blank=True)
+    from_check_out = models.TimeField(null=True, blank=True)
+    to_check_out = models.TimeField(null=True, blank=True)
+
+    reason = models.TextField(blank=True)
+
+    corrected_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="staff_attendance_corrections_made",
+    )
+
+    corrected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-corrected_at"]
+        indexes = [
+            models.Index(
+                fields=["attendance", "-corrected_at"],
+                name="staff_att_corr_att_idx",
+            ),
+            models.Index(
+                fields=["staff", "corrected_by"],
+                name="staff_att_corr_staff_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.staff} {self.attendance.date}: "
+            f"{self.from_status} -> {self.to_status}"
+        )
+
 
 class StaffLeave(SoftDeleteMixin):
     objects = SoftDeleteManager()

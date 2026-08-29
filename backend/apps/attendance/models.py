@@ -52,6 +52,8 @@ class Attendance(models.Model):
         ("absent", "Absent"),
         ("late", "Late"),
         ("leave", "Leave"),
+        ("excused", "Excused"),
+        ("half_day", "Half Day"),
     ]
 
     status = models.CharField(
@@ -61,6 +63,22 @@ class Attendance(models.Model):
     )
 
     notes = models.TextField(blank=True)
+
+    marked_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="marked_attendance",
+    )
+
+    updated_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_attendance",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -157,5 +175,61 @@ class Attendance(models.Model):
             f"{self.student.full_name} - "
             f"{self.date} - "
             f"{self.get_status_display()}"
+        )
+
+
+class AttendanceCorrection(models.Model):
+    """
+    Immutable audit trail for every change made to an attendance record.
+
+    Each correction captures the original status and the corrected status,
+    who performed it, when, and why. Corrections are never edited or deleted
+    after creation so the full history of who changed what is preserved.
+    """
+
+    attendance = models.ForeignKey(
+        Attendance,
+        on_delete=models.CASCADE,
+        related_name="corrections",
+    )
+
+    student = models.ForeignKey(
+        "students.Student",
+        on_delete=models.CASCADE,
+        related_name="attendance_corrections",
+    )
+
+    from_status = models.CharField(max_length=20, choices=Attendance.STATUS_CHOICES)
+    to_status = models.CharField(max_length=20, choices=Attendance.STATUS_CHOICES)
+
+    reason = models.TextField(blank=True)
+
+    corrected_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="attendance_corrections_made",
+    )
+
+    corrected_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-corrected_at"]
+        indexes = [
+            models.Index(
+                fields=["attendance", "-corrected_at"],
+                name="att_corr_att_corr_at_idx",
+            ),
+            models.Index(
+                fields=["student", "corrected_by"],
+                name="att_corr_stu_by_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.attendance.student.full_name} "
+            f"{self.attendance.date}: {self.from_status} -> {self.to_status}"
         )
 

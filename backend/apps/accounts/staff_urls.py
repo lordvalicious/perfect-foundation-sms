@@ -1,6 +1,8 @@
 from django.urls import path
 
 from .views import (
+    StaffAttendanceCorrectionListView,
+    StaffAttendanceCorrectionView,
     StaffAttendanceDetailView,
     StaffAttendanceListCreateView,
     StaffDetailView,
@@ -32,6 +34,16 @@ urlpatterns = [
         "attendance/<int:pk>/",
         StaffAttendanceDetailView.as_view(),
         name="staff-attendance-detail",
+    ),
+    path(
+        "attendance/<int:pk>/correct/",
+        StaffAttendanceCorrectionView.as_view(),
+        name="staff-attendance-correct",
+    ),
+    path(
+        "attendance/corrections/",
+        StaffAttendanceCorrectionListView.as_view(),
+        name="staff-attendance-corrections",
     ),
     path(
         "leave/",

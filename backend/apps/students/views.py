@@ -1,4 +1,5 @@
 from datetime import date
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
@@ -43,7 +44,9 @@ from .models import (
     CampusTransfer,
     SectionTransfer,
     StudentAlumni,
+    ProgressionRecord,
 )
+from .progression import bulk_promote, promote_student
 from .serializers import (
     EnrollmentCreateSerializer,
     GuardianCreateSerializer,
@@ -53,7 +56,10 @@ from .serializers import (
     StudentGuardianSerializer,
     AdmissionApplicationSerializer,
     StudentLifecycleEventSerializer,
-    PromotionSerializer,
+    ProgressionRecordSerializer,
+    BatchPromotionSerializer,
+    BatchResultSerializer,
+    SinglePromotionSerializer,
     StudentLeaveRequestSerializer,
     InquirySerializer,
     InquiryCreateSerializer,
@@ -83,6 +89,10 @@ def campus_scoped(queryset, request, field="campus_id"):
             return queryset.filter(**{field: access["requested"]})
         return queryset
     return queryset.filter(**{f"{field}__in": access["allowed_ids"] or [-1]})
+
+
+class NoPaginationMixin:
+    pagination_class = None
 
 
 class AdmissionApplicationListCreateView(generics.ListCreateAPIView):
@@ -375,56 +385,145 @@ class StudentLeaveRequestActionView(APIView):
 
 
 class PromotionView(APIView):
+    """
+    Batch promotion / demotion / transfer for a set of students.
+
+    Uses a single database transaction: if any student fails validation the
+    entire operation rolls back so that no records are partially created.
+    """
     permission_classes = [IsAdminRole]
 
-    @transaction.atomic
     def post(self, request):
-        serializer = PromotionSerializer(data=request.data)
+        serializer = BatchPromotionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        years = list(
-            AcademicYear.objects.filter(
-                pk__in=[data["from_academic_year"], data["to_academic_year"]],
-                school=request.institution,
-            )
-        )
-        if len(years) != 2 or data["from_academic_year"] == data["to_academic_year"]:
-            return Response({"detail": "Both academic years must belong to the active school and be different."}, status=400)
-        target_campus = data.get("campus")
+
+        from_year = _get_valid_academic_year(request, data["from_academic_year"])
+
+        # Campus-level authorization for the source year's campus.
+        target_campus = data.get("to_campus")
         if target_campus:
             assert_campus_allowed(request.user, target_campus)
-        created = []
-        skipped = []
-        for item in data["students"]:
-            student_id = item.get("student")
-            source = Enrollment.objects.filter(
-                student_id=student_id, academic_year_id=data["from_academic_year"], status="active"
-            ).select_related("campus").first()
-            if source is None:
-                skipped.append({"student": student_id, "reason": "No active source enrollment."})
-                continue
-            campus_id = target_campus or source.campus_id
-            assert_campus_allowed(request.user, campus_id)
-            if Enrollment.objects.filter(student_id=student_id, academic_year_id=data["to_academic_year"]).exists():
-                skipped.append({"student": student_id, "reason": "Already enrolled in target year."})
-                continue
-            target = Enrollment(
-                student_id=student_id,
-                academic_year_id=data["to_academic_year"],
-                campus_id=campus_id,
-                class_obj_id=item.get("class") or item.get("class_obj"),
-                section_id=item.get("section"),
-                status="active",
+        else:
+            _assert_source_campus(request, data["student_ids"], from_year.pk)
+
+        result = bulk_promote(
+            data["student_ids"],
+            from_year.pk,
+            user=request.user,
+            to_academic_year_id=data.get("to_academic_year"),
+            to_class_id=data.get("to_class"),
+            to_section_id=data.get("to_section"),
+            to_campus_id=target_campus,
+            reason=data.get("reason", ""),
+            effective_date=data.get("effective_date"),
+        )
+        return Response(BatchResultSerializer(result).data, status=status.HTTP_201_CREATED)
+
+
+class SinglePromotionView(APIView):
+    """Promote / demote / transfer a single student and keep full history."""
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        serializer = SinglePromotionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+
+        from_year = _get_valid_academic_year(request, data["from_academic_year"])
+        target_campus = data.get("to_campus")
+        if target_campus:
+            assert_campus_allowed(request.user, target_campus)
+        else:
+            _assert_source_campus(request, [pk], from_year.pk)
+
+        try:
+            record = promote_student(
+                pk,
+                from_year.pk,
+                user=request.user,
+                to_academic_year_id=data.get("to_academic_year"),
+                to_class_id=data.get("to_class"),
+                to_section_id=data.get("to_section"),
+                to_campus_id=target_campus,
+                reason=data.get("reason", ""),
+                effective_date=data.get("effective_date"),
             )
-            try:
-                target.save()
-            except Exception as exc:
-                skipped.append({"student": student_id, "reason": str(exc)})
-                continue
-            source.status = "completed"
-            source.save(update_fields=["status", "updated_at"])
-            created.append(target.id)
-        return Response({"created": created, "skipped": skipped}, status=201)
+        except ValidationError as exc:
+            return Response(
+                {"detail": _flatten_validation_errors(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(
+            ProgressionRecordSerializer(record, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class ProgressionHistoryView(NoPaginationMixin, generics.ListAPIView):
+    """List a student's academic progression / transfer history."""
+    serializer_class = ProgressionRecordSerializer
+    permission_classes = [IsAdminRole]
+
+    def get_queryset(self):
+        queryset = (
+            ProgressionRecord.objects
+            .filter(student__institution=self.request.institution)
+            .select_related(
+                "student",
+                "from_academic_year", "to_academic_year",
+                "from_class", "to_class",
+                "from_section", "to_section",
+                "from_campus", "to_campus",
+                "performed_by",
+            )
+            .order_by("-effective_date", "-created_at")
+        )
+
+        student = self.request.query_params.get("student")
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        action = self.request.query_params.get("action")
+        if action:
+            queryset = queryset.filter(action=action)
+
+        return queryset
+
+
+def _get_valid_academic_year(request, year_id):
+    try:
+        return AcademicYear.objects.get(pk=year_id, school=request.institution)
+    except AcademicYear.DoesNotExist:
+        raise NotFound("Academic year not found for the active institution.")
+
+
+def _assert_source_campus(request, student_ids, from_year_id):
+    """
+    Ensure the requesting user is allowed to operate on the source campuses
+    for all students being progressed.
+    """
+    campus_ids = list(
+        Enrollment.objects.filter(
+            student_id__in=student_ids,
+            academic_year_id=from_year_id,
+            status="active",
+        ).values_list("campus_id", flat=True)
+    )
+    for campus_id in set(campus_ids):
+        assert_campus_allowed(request.user, campus_id)
+
+
+def _flatten_validation_errors(exc):
+    if hasattr(exc, "message_dict"):
+        parts = []
+        for field, value in exc.message_dict.items():
+            if isinstance(value, (list, tuple)):
+                parts.extend(str(v) for v in value)
+            else:
+                parts.append(str(value))
+        return "; ".join(parts)
+    return str(exc)
 
 STUDENT_QUERYSET = (
     Student.objects

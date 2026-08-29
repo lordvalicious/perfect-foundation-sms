@@ -48,6 +48,8 @@ from .views import (
     EnrollmentListCreateView,
     EnrollmentDetailView,
     PromotionView,
+    SinglePromotionView,
+    ProgressionHistoryView,
     StudentActivateView,
     StudentWithdrawView,
     StudentGraduateView,
@@ -268,6 +270,16 @@ urlpatterns = [
         "promotions/",
         PromotionView.as_view(),
         name="student-promotion",
+    ),
+    path(
+        "progression/",
+        ProgressionHistoryView.as_view(),
+        name="student-progression-history",
+    ),
+    path(
+        "promotions/<int:pk>/",
+        SinglePromotionView.as_view(),
+        name="student-promotion-single",
     ),
     path(
         "",

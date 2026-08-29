@@ -9,6 +9,7 @@ from .models import (
     RoleAssignment,
     RolePermission,
     StaffAttendance,
+    StaffAttendanceCorrection,
     StaffLeave,
     StaffProfile,
     User,
@@ -440,6 +441,11 @@ class StaffAttendanceSerializer(serializers.ModelSerializer):
     marked_by_name = serializers.SerializerMethodField()
     check_in = OptionalTimeField(required=False, allow_null=True)
     check_out = OptionalTimeField(required=False, allow_null=True)
+    working_hours = serializers.SerializerMethodField()
+    correction_count = serializers.IntegerField(
+        source="corrections.count",
+        read_only=True,
+    )
 
     class Meta:
         model = StaffAttendance
@@ -453,9 +459,11 @@ class StaffAttendanceSerializer(serializers.ModelSerializer):
             "status_label",
             "check_in",
             "check_out",
+            "working_hours",
             "notes",
             "marked_by",
             "marked_by_name",
+            "correction_count",
             "created_at",
             "updated_at",
         ]
@@ -468,6 +476,76 @@ class StaffAttendanceSerializer(serializers.ModelSerializer):
         return (
             obj.marked_by.get_full_name()
             or obj.marked_by.username
+        )
+
+    def get_working_hours(self, obj):
+        hours = obj.working_hours
+        if hours is None:
+            return None
+        return round(hours.total_seconds() / 3600, 2)
+
+
+class StaffAttendanceCorrectionSerializer(serializers.ModelSerializer):
+    staff_name = serializers.CharField(
+        source="staff.full_name",
+        read_only=True,
+    )
+    corrected_by_name = serializers.SerializerMethodField()
+    from_status_label = serializers.CharField(
+        source="get_from_status_display",
+        read_only=True,
+    )
+    to_status_label = serializers.CharField(
+        source="get_to_status_display",
+        read_only=True,
+    )
+    date = serializers.DateField(source="attendance.date", read_only=True)
+
+    class Meta:
+        model = StaffAttendanceCorrection
+        fields = [
+            "id",
+            "attendance",
+            "staff",
+            "staff_name",
+            "date",
+            "from_status",
+            "from_status_label",
+            "to_status",
+            "to_status_label",
+            "from_check_in",
+            "to_check_in",
+            "from_check_out",
+            "to_check_out",
+            "reason",
+            "corrected_by",
+            "corrected_by_name",
+            "corrected_at",
+        ]
+        read_only_fields = [
+            "id",
+            "attendance",
+            "staff",
+            "staff_name",
+            "date",
+            "from_status",
+            "to_status",
+            "from_check_in",
+            "to_check_in",
+            "from_check_out",
+            "to_check_out",
+            "reason",
+            "corrected_by",
+            "corrected_by_name",
+            "corrected_at",
+        ]
+
+    def get_corrected_by_name(self, obj):
+        if obj.corrected_by is None:
+            return None
+        return (
+            obj.corrected_by.get_full_name()
+            or obj.corrected_by.username
         )
 
 

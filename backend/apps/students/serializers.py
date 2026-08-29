@@ -17,6 +17,7 @@ from .models import (
     CampusTransfer,
     SectionTransfer,
     StudentAlumni,
+    ProgressionRecord,
 )
 
 
@@ -145,12 +146,105 @@ class StudentLifecycleEventSerializer(serializers.ModelSerializer):
 
 class PromotionSerializer(serializers.Serializer):
     from_academic_year = serializers.IntegerField()
-    to_academic_year = serializers.IntegerField()
-    campus = serializers.IntegerField(required=False)
+    to_academic_year = serializers.IntegerField(required=False, allow_null=True)
+    campus = serializers.IntegerField(required=False, allow_null=True)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    effective_date = serializers.DateField(required=False, allow_null=True)
     students = serializers.ListField(
         child=serializers.DictField(),
         allow_empty=False,
     )
+
+
+class ProgressionRecordSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    action_display = serializers.CharField(source="get_action_display", read_only=True)
+    from_academic_year_name = serializers.CharField(
+        source="from_academic_year.name", read_only=True
+    )
+    from_class_name = serializers.CharField(source="from_class.name", read_only=True)
+    from_section_name = serializers.CharField(
+        source="from_section.name", read_only=True
+    )
+    from_campus_name = serializers.CharField(
+        source="from_campus.name", read_only=True
+    )
+    to_academic_year_name = serializers.CharField(
+        source="to_academic_year.name", read_only=True
+    )
+    to_class_name = serializers.CharField(source="to_class.name", read_only=True)
+    to_section_name = serializers.CharField(source="to_section.name", read_only=True)
+    to_campus_name = serializers.CharField(source="to_campus.name", read_only=True)
+    performed_by_name = serializers.CharField(
+        source="performed_by.get_full_name", read_only=True
+    )
+
+    class Meta:
+        model = ProgressionRecord
+        fields = [
+            "id",
+            "student",
+            "student_name",
+            "action",
+            "action_display",
+            "from_academic_year",
+            "from_academic_year_name",
+            "from_class",
+            "from_class_name",
+            "from_section",
+            "from_section_name",
+            "from_campus",
+            "from_campus_name",
+            "to_academic_year",
+            "to_academic_year_name",
+            "to_class",
+            "to_class_name",
+            "to_section",
+            "to_section_name",
+            "to_campus",
+            "to_campus_name",
+            "effective_date",
+            "performed_by",
+            "performed_by_name",
+            "reason",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+
+class BatchPromotionSerializer(serializers.Serializer):
+    """Input serializer for atomic batch promotion / demotion / transfer."""
+
+    student_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        allow_empty=False,
+    )
+    from_academic_year = serializers.IntegerField()
+    to_academic_year = serializers.IntegerField(required=False, allow_null=True)
+    to_class = serializers.IntegerField(required=False, allow_null=True)
+    to_section = serializers.IntegerField(required=False, allow_null=True)
+    to_campus = serializers.IntegerField(required=False, allow_null=True)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    effective_date = serializers.DateField(required=False, allow_null=True)
+
+
+class BatchResultSerializer(serializers.Serializer):
+    """Output serializer describing the outcome of a batch operation."""
+
+    created = serializers.ListField(child=serializers.IntegerField())
+    skipped = serializers.ListField(child=serializers.DictField())
+
+
+class SinglePromotionSerializer(serializers.Serializer):
+    """Input serializer for promoting/demoting/transferring a single student."""
+
+    from_academic_year = serializers.IntegerField()
+    to_academic_year = serializers.IntegerField(required=False, allow_null=True)
+    to_class = serializers.IntegerField(required=False, allow_null=True)
+    to_section = serializers.IntegerField(required=False, allow_null=True)
+    to_campus = serializers.IntegerField(required=False, allow_null=True)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    effective_date = serializers.DateField(required=False, allow_null=True)
 
 
 class StudentLeaveRequestSerializer(serializers.ModelSerializer):

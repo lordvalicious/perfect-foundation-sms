@@ -3,6 +3,7 @@ from datetime import date as date_cls
 
 from django.core.exceptions import ValidationError
 from django.db.models import Count, Q
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.response import Response
@@ -26,8 +27,16 @@ from apps.accounts.scopes import (
 from apps.audit.models import record_audit
 from apps.students.models import Enrollment
 
-from .models import Attendance
-from .serializers import AttendanceSerializer
+from .models import Attendance, AttendanceCorrection
+from .serializers import (
+    AttendanceCorrectionSerializer,
+    AttendanceMarkSerializer,
+    AttendanceSerializer,
+)
+
+
+class NoPaginationMixin:
+    pagination_class = None
 
 
 class AttendanceListView(generics.ListAPIView):
@@ -238,6 +247,7 @@ class AttendanceBulkMarkView(APIView):
                             "section_id": section,
                             "status": att_status,
                             "notes": notes,
+                            "marked_by": user,
                         },
                     )
                 )
@@ -245,7 +255,8 @@ class AttendanceBulkMarkView(APIView):
                 if not was_created:
                     attendance.status = att_status
                     attendance.notes = notes
-                    attendance.save(update_fields=["status", "notes"])
+                    attendance.updated_by = user
+                    attendance.save(update_fields=["status", "notes", "updated_by"])
                     updated += 1
                 else:
                     created += 1
@@ -366,6 +377,8 @@ class AttendanceSummaryView(APIView):
             "absent": 0,
             "late": 0,
             "leave": 0,
+            "excused": 0,
+            "half_day": 0,
         }
 
         for row in grouped:
@@ -464,6 +477,8 @@ class AttendanceMonthlyView(APIView):
                     "absent": 0,
                     "late": 0,
                     "leave": 0,
+                    "excused": 0,
+                    "half_day": 0,
                     "total": 0,
                 },
             )
@@ -482,3 +497,260 @@ class AttendanceMonthlyView(APIView):
             )
 
         return Response(list(daily.values()))
+
+
+class AttendanceMarkView(APIView):
+    """
+    Mark or update attendance for a single student.
+
+    Body::
+
+        {
+          "academic_year": 1,
+          "student": 5,
+          "date": "2026-08-12",
+          "status": "present"|"absent"|"late"|"leave"|"excused"|"half_day",
+          "notes": ""
+        }
+
+    If an attendance record already exists for (student, date), the status is
+    updated and a correction is recorded (preserving the previous status).
+    """
+
+    permission_classes = [IsTeacherRole]
+
+    def post(self, request):
+        user = request.user
+        data = request.data
+
+        serializer = AttendanceMarkSerializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        student_id = serializer.validated_data["student"]
+        day = serializer.validated_data["date"]
+        att_status = serializer.validated_data["status"]
+        notes = serializer.validated_data.get("notes", "")
+
+        academic_year = data.get("academic_year")
+
+        if day > str(date_cls.today()):
+            return Response(
+                {"detail": "Attendance cannot be marked for a future date."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        enrollment = Enrollment.objects.filter(
+            student_id=student_id,
+            academic_year_id=academic_year,
+            status="active",
+        ).select_related("student", "campus", "class_obj", "section").first()
+
+        if enrollment is None:
+            return Response(
+                {"detail": "No active enrollment found for the student in "
+                           "the given academic year."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        assert_campus_allowed(user, enrollment.campus_id)
+
+        if not is_manager(user) and not teacher_can_access_section(
+            user,
+            enrollment.class_obj_id,
+            enrollment.section_id,
+        ):
+            return Response(
+                {"detail": "You can only mark attendance for classes you "
+                           "are assigned to."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        existing = Attendance.objects.filter(
+            student_id=student_id,
+            date=day,
+        ).first()
+
+        if existing:
+            existing.status = att_status
+            existing.notes = notes
+            existing.updated_by = user
+            existing.save(
+                update_fields=["status", "notes", "updated_by", "updated_at"]
+            )
+            record = existing
+            corrected = True
+        else:
+            record = Attendance.objects.create(
+                student_id=student_id,
+                enrollment=enrollment,
+                academic_year_id=academic_year,
+                campus=enrollment.campus,
+                class_obj=enrollment.class_obj,
+                section=enrollment.section,
+                date=day,
+                status=att_status,
+                notes=notes,
+                marked_by=user,
+            )
+            corrected = False
+
+        record_audit(
+            request=request,
+            action="update" if corrected else "create",
+            model_name="Attendance",
+            object_id=str(record.pk),
+            object_repr=f"Attendance for student {student_id} on {day}",
+            details={"status": att_status},
+        )
+
+        return Response(
+            AttendanceSerializer(record, context={"request": request}).data,
+            status=status.HTTP_200_OK if corrected else status.HTTP_201_CREATED,
+        )
+
+
+class AttendanceCorrectionView(APIView):
+    """
+    Correct an attendance record with a reason.
+
+    Body::
+
+        {
+          "to_status": "present"|"absent"|"late"|"leave"|"excused"|"half_day",
+          "reason": "Doctor's note submitted late"
+        }
+
+    The previous status is preserved in an AttendanceCorrection record for a
+    complete audit trail.
+    """
+
+    permission_classes = [IsTeacherRole]
+
+    def post(self, request, pk):
+        user = request.user
+        attendance = get_object_or_404(
+            Attendance.objects.select_related("student", "campus"),
+            pk=pk,
+        )
+
+        assert_campus_allowed(user, attendance.campus_id)
+
+        if not is_manager(user) and not teacher_can_access_section(
+            user,
+            attendance.class_obj_id,
+            attendance.section_id,
+        ):
+            return Response(
+                {"detail": "You can only correct attendance for classes you "
+                           "are assigned to."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        to_status = request.data.get("to_status")
+        reason = request.data.get("reason", "")
+
+        valid_statuses = dict(Attendance.STATUS_CHOICES)
+        if to_status not in valid_statuses:
+            return Response(
+                {"detail": "Invalid status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from_status = attendance.status
+
+        AttendanceCorrection.objects.create(
+            attendance=attendance,
+            student=attendance.student,
+            from_status=from_status,
+            to_status=to_status,
+            reason=reason,
+            corrected_by=user,
+        )
+
+        attendance.status = to_status
+        attendance.updated_by = user
+        attendance.save(update_fields=["status", "updated_by", "updated_at"])
+
+        record_audit(
+            request=request,
+            action="update",
+            model_name="Attendance",
+            object_id=str(attendance.pk),
+            object_repr=(
+                f"Corrected attendance for {attendance.student.full_name} "
+                f"on {attendance.date}"
+            ),
+            details={"from_status": from_status, "to_status": to_status},
+        )
+
+        return Response(
+            AttendanceSerializer(attendance, context={"request": request}).data
+        )
+
+
+class AttendanceCorrectionListView(NoPaginationMixin, generics.ListAPIView):
+    """List corrections for an attendance record or a student."""
+    serializer_class = AttendanceCorrectionSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def get_queryset(self):
+        queryset = (
+            AttendanceCorrection.objects
+            .select_related("student", "corrected_by", "attendance")
+            .order_by("-corrected_at")
+        )
+
+        attendance = self.request.query_params.get("attendance")
+        if attendance:
+            queryset = queryset.filter(attendance_id=attendance)
+
+        student = self.request.query_params.get("student")
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        return queryset
+
+
+class AttendanceHistoryView(NoPaginationMixin, generics.ListAPIView):
+    """
+    Full attendance history for a single student.
+
+        GET /api/attendance/history/?student=5&from=2026-01-01&to=2026-12-31
+    """
+    serializer_class = AttendanceSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def get_queryset(self):
+        user = self.request.user
+        queryset = (
+            Attendance.objects
+            .select_related("student", "campus", "class_obj", "section")
+            .order_by("-date")
+        )
+
+        student = self.request.query_params.get("student")
+        if student:
+            queryset = queryset.filter(student_id=student)
+
+        if not is_manager(user) and not is_teacher(user):
+            if is_student(user):
+                profile = get_student_profile(user)
+                if profile is None:
+                    return queryset.none()
+                queryset = queryset.filter(student=profile)
+            elif is_parent(user):
+                student_ids = parent_student_ids(user)
+                if not student_ids:
+                    return queryset.none()
+                queryset = queryset.filter(student_id__in=student_ids)
+
+        from_date = self.request.query_params.get("from")
+        if from_date:
+            queryset = queryset.filter(date__gte=from_date)
+
+        to_date = self.request.query_params.get("to")
+        if to_date:
+            queryset = queryset.filter(date__lte=to_date)
+
+        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+
+        return queryset

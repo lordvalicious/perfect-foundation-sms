@@ -18,7 +18,11 @@ from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from apps.audit.models import record_audit
-from .access import restrict_to_allowed_campuses
+from .access import (
+    apply_campus_scope,
+    assert_campus_allowed,
+    restrict_to_allowed_campuses,
+)
 from apps.accounts.permissions import (
     IsAcademicMemberRole,
     IsAdminOrReadOnly,
@@ -35,6 +39,7 @@ from .models import (
     RoleAssignment,
     RolePermission,
     StaffAttendance,
+    StaffAttendanceCorrection,
     StaffLeave,
     StaffProfile,
     User,
@@ -49,6 +54,7 @@ from .serializers import (
     PermissionSerializer,
     RolePermissionCreateSerializer,
     RolePermissionSerializer,
+    StaffAttendanceCorrectionSerializer,
     StaffAttendanceSerializer,
     StaffLeaveActionSerializer,
     StaffLeaveSerializer,
@@ -886,6 +892,7 @@ class StaffAttendanceListCreateView(generics.ListCreateAPIView):
     def get_queryset(self):
         queryset = StaffAttendance.objects.select_related(
             "staff",
+            "staff__primary_campus",
             "marked_by",
         )
 
@@ -904,10 +911,26 @@ class StaffAttendanceListCreateView(generics.ListCreateAPIView):
         if date:
             queryset = queryset.filter(date=date)
 
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="staff__primary_campus_id",
+            institution_field="institution_id",
+        )
+
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(marked_by=self.request.user)
+        institution = getattr(self.request, "institution", None)
+        staff = serializer.validated_data.get("staff")
+
+        if staff is not None and staff.primary_campus_id:
+            assert_campus_allowed(self.request.user, staff.primary_campus_id)
+
+        serializer.save(
+            marked_by=self.request.user,
+            institution=institution,
+        )
 
 
 class StaffAttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -915,13 +938,170 @@ class StaffAttendanceDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
-        return StaffAttendance.objects.select_related(
+        queryset = StaffAttendance.objects.select_related(
             "staff",
+            "staff__primary_campus",
             "marked_by",
         )
 
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="staff__primary_campus_id",
+            institution_field="institution_id",
+        )
+
+        return queryset
+
     def perform_update(self, serializer):
         serializer.save(marked_by=self.request.user)
+
+
+class StaffAttendanceCorrectionView(APIView):
+    """
+    Correct a staff attendance record with a reason.
+
+    Body::
+
+        {
+          "to_status": "present"|"absent"|"late"|"half_day"|"leave",
+          "to_check_in": "08:00:00",
+          "to_check_out": "16:00:00",
+          "reason": "Manual correction by admin"
+        }
+
+    The previous values (status, check-in, check-out) are preserved in a
+    StaffAttendanceCorrection record for an immutable audit trail.
+    """
+
+    permission_classes = [IsAdminRole]
+
+    def post(self, request, pk):
+        user = request.user
+        attendance = StaffAttendance.objects.select_related(
+            "staff",
+            "staff__primary_campus",
+        ).filter(pk=pk)
+
+        attendance = apply_campus_scope(
+            attendance,
+            request,
+            campus_field="staff__primary_campus_id",
+            institution_field="institution_id",
+        ).first()
+
+        if attendance is None:
+            raise NotFound("Attendance record not found for your scope.")
+
+        to_status = request.data.get("to_status")
+        reason = request.data.get("reason", "")
+
+        valid_statuses = dict(StaffAttendance.STATUS_CHOICES)
+        if to_status not in valid_statuses:
+            return Response(
+                {"detail": "Invalid status."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        to_check_in = _parse_time(request.data.get("to_check_in"))
+        to_check_out = _parse_time(request.data.get("to_check_out"))
+
+        StaffAttendanceCorrection.objects.create(
+            attendance=attendance,
+            staff=attendance.staff,
+            institution=attendance.institution
+            if attendance.institution_id else getattr(request, "institution", None),
+            from_status=attendance.status,
+            to_status=to_status,
+            from_check_in=attendance.check_in,
+            to_check_in=to_check_in,
+            from_check_out=attendance.check_out,
+            to_check_out=to_check_out,
+            reason=reason,
+            corrected_by=user,
+        )
+
+        attendance.status = to_status
+        attendance.check_in = to_check_in if to_check_in is not None else attendance.check_in
+        attendance.check_out = to_check_out if to_check_out is not None else attendance.check_out
+        attendance.notes = reason or attendance.notes
+        attendance.save(
+            update_fields=[
+                "status",
+                "check_in",
+                "check_out",
+                "notes",
+                "updated_at",
+            ]
+        )
+
+        record_audit(
+            request=request,
+            action="update",
+            model_name="StaffAttendance",
+            object_id=str(attendance.pk),
+            object_repr=(
+                f"Corrected staff attendance for "
+                f"{attendance.staff} on {attendance.date}"
+            ),
+            details={"from_status": None, "to_status": to_status},
+        )
+
+        return Response(
+            StaffAttendanceSerializer(attendance).data
+        )
+
+
+class StaffAttendanceCorrectionListView(APIView):
+    """
+    List the immutable correction history for a staff attendance record or
+    a staff member.
+
+        GET /api/staff/attendance/corrections/?attendance=1
+        GET /api/staff/attendance/corrections/?staff=5
+    """
+
+    permission_classes = [IsStaffRole]
+
+    def get(self, request):
+        queryset = StaffAttendanceCorrection.objects.select_related(
+            "staff",
+            "corrected_by",
+            "attendance",
+        )
+
+        staff = request.query_params.get("staff")
+        if staff:
+            queryset = queryset.filter(staff_id=staff)
+
+        attendance = request.query_params.get("attendance")
+        if attendance:
+            queryset = queryset.filter(attendance_id=attendance)
+
+        queryset = apply_campus_scope(
+            queryset,
+            request,
+            campus_field="staff__primary_campus_id",
+            institution_field="institution_id",
+        ).order_by("-corrected_at")
+
+        return Response(
+            StaffAttendanceCorrectionSerializer(queryset, many=True).data
+        )
+
+
+def _parse_time(value):
+    """Parse an ISO time string (HH:MM:SS) into a time, or None."""
+    from datetime import datetime, time
+
+    if not value:
+        return None
+    try:
+        if isinstance(value, time):
+            return value
+        return datetime.strptime(value, "%H:%M:%S").time()
+    except (TypeError, ValueError):
+        return None
 
 
 class StaffLeaveListCreateView(generics.ListCreateAPIView):
