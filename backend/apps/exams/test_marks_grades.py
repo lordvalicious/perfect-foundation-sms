@@ -94,7 +94,7 @@ class MarksCalculationBase(TestCase):
         )
 
     def make_subject_result(self, subject_code, maximum, obtained, is_absent=False):
-        subject = Subject.objects.create(name=f"S{subject_code}", code=subject_code)
+        subject = Subject.objects.create(name=f"S{subject_code}", code=subject_code, institution=self.school)
         SubjectOffering.objects.create(
             subject=subject,
             class_obj=self.class_obj,
@@ -287,7 +287,7 @@ class MarksAuthorizationTests(MarksCalculationBase):
             role=Role.TEACHER,
         )
 
-        self.math_subject = Subject.objects.create(name="Maths", code="MATH-AUTH")
+        self.math_subject = Subject.objects.create(name="Maths", code="MATH-AUTH", institution=self.school)
         SubjectOffering.objects.create(
             subject=self.math_subject,
             class_obj=self.class_obj,

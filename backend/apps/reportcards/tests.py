@@ -41,7 +41,7 @@ class ReportCardModelTests(TestCase):
 			class_obj=class_obj,
 			section=section,
 		)
-		subject = Subject.objects.create(name="English", code="ENG-CARD")
+		subject = Subject.objects.create(name="English", code="ENG-CARD", institution=school)
 		SubjectOffering.objects.create(
 			subject=subject,
 			class_obj=class_obj,

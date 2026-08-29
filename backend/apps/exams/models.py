@@ -450,6 +450,20 @@ class PracticalResult(models.Model):
                     "in this exam's class and campus."
                 )
 
+            from apps.reportcards.models import ReportCard
+
+            report_card = ReportCard.objects.filter(
+                student=self.student,
+                exam=self.exam,
+            ).first()
+
+            if report_card is not None and not report_card.can_edit:
+                errors["__all__"] = (
+                    "This result belongs to a report card that is "
+                    "no longer editable. Use a grade amendment to "
+                    "correct it."
+                )
+
         if self.obtained_marks < 0:
             errors["obtained_marks"] = (
                 "Obtained marks cannot be negative."

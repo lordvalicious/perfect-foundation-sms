@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import HttpResponse
 from django.db.models import Q
 from rest_framework import generics, status
@@ -7,6 +8,7 @@ from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed
 from apps.accounts.permissions import (
     IsAcademicMemberRole,
     IsTeacherRole,
@@ -197,23 +199,36 @@ class ReportCardDetailView(generics.RetrieveAPIView):
 
 class ReportCardStatusView(APIView):
     """
-    Advance a report card through its workflow:
+    Advance a report card through its lifecycle:
 
-    draft -> approved -> published
+        draft -> submitted -> approved -> published -> locked
+
+    ``unlock`` returns a locked report card to draft through the
+    explicit, authorized revision workflow.
 
     Approval and publication are restricted to academic
-    administrators; teachers cannot publish grades.
+    administrators; teachers cannot advance grades alone.
+    Campus and organization isolation is enforced so users can only
+    transition report cards within their own scope.
     """
 
     permission_classes = [IsTeacherRole]
 
     def post(self, request, pk):
-        report_card = (
+        queryset = (
             ReportCard.objects
             .filter(pk=pk)
             .select_related("student", "exam")
-            .first()
         )
+
+        queryset = apply_campus_scope(
+            queryset,
+            request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
+        )
+
+        report_card = queryset.first()
 
         if report_card is None:
             return Response(
@@ -221,13 +236,20 @@ class ReportCardStatusView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
 
-        new_status = request.data.get("status")
+        action = request.data.get("status")
 
-        if new_status not in {"approved", "published"}:
+        if action not in {
+            "submitted",
+            "approved",
+            "published",
+            "locked",
+            "unlock",
+        }:
             return Response(
                 {
                     "detail": (
-                        "Status must be one of: approved, published."
+                        "Status must be one of: submitted, approved, "
+                        "published, locked, unlock."
                     )
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -239,16 +261,19 @@ class ReportCardStatusView(APIView):
                 "report card status."
             )
 
-        if new_status == "published":
-            report_card.publish(user=request.user)
-        elif new_status == "approved":
-            if report_card.status == "published":
-                raise ValidationError(
-                    "A published report card cannot be moved "
-                    "back to approved."
-                )
-
-            report_card.approve(user=request.user)
+        try:
+            if action == "submitted":
+                report_card.submit(user=request.user)
+            elif action == "approved":
+                report_card.approve(user=request.user)
+            elif action == "published":
+                report_card.publish(user=request.user)
+            elif action == "locked":
+                report_card.lock(user=request.user)
+            elif action == "unlock":
+                report_card.unlock(user=request.user)
+        except DjangoValidationError as exc:
+            raise ValidationError(exc.messages)
 
         return Response(
             ReportCardSerializer(report_card).data
@@ -278,7 +303,7 @@ class GradeAmendmentListCreateView(generics.ListCreateAPIView):
         return GradeAmendmentSerializer
 
     def get_queryset(self):
-        return (
+        queryset = (
             GradeAmendment.objects
             .select_related(
                 "report_card__student",
@@ -289,12 +314,25 @@ class GradeAmendmentListCreateView(generics.ListCreateAPIView):
             .order_by("-created_at")
         )
 
+        return apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="report_card__exam__campus_id",
+            institution_field="report_card__exam__academic_year__school_id",
+        )
+
     def perform_create(self, serializer):
         from django.utils import timezone
 
         attrs = serializer.validated_data
         result = attrs["_result"]
         report_card = attrs["report_card"]
+
+        # IDOR / campus isolation: only amend report cards within scope.
+        assert_campus_allowed(
+            self.request.user,
+            report_card.exam.campus_id,
+        )
 
         maximum = Decimal(str(result.exam_subject.maximum_marks))
         new_marks = attrs["new_obtained_marks"]

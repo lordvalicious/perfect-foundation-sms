@@ -51,7 +51,7 @@ class ExamScheduleBase(TestCase):
             end_date=date(2026, 10, 5),
         )
 
-        self.subject = Subject.objects.create(name="English", code="ENG-EXAM-SCHED")
+        self.subject = Subject.objects.create(name="English", code="ENG-EXAM-SCHED", institution=self.school)
         SubjectOffering.objects.create(
             subject=self.subject,
             class_obj=self.class_obj,
@@ -96,8 +96,8 @@ class ExamScheduleConflictTests(ExamScheduleBase):
         self.schedule(start=time(11, 0), end=time(13, 0))
 
     def test_different_sections_same_time_allowed(self):
-        self.schedule(section=self.section_a, start=time(9, 0), end=time(11, 0))
-        self.schedule(section=self.section_b, start=time(9, 0), end=time(11, 0))
+        self.schedule(section=self.section_a, room="Hall 1", start=time(9, 0), end=time(11, 0))
+        self.schedule(section=self.section_b, room="Hall 2", start=time(9, 0), end=time(11, 0))
 
     def test_same_room_overlapping_time_rejected(self):
         self.schedule(section=self.section_a, room="Hall 1", start=time(9, 0), end=time(11, 0))
@@ -140,7 +140,7 @@ class ExamScheduleValidationTests(ExamScheduleBase):
             end_date=date(2026, 12, 5),
         )
         other_subject = Subject.objects.create(
-            name="Maths", code="MATH-EXAM-SCHED"
+            name="Maths", code="MATH-EXAM-SCHED", institution=self.school
         )
         SubjectOffering.objects.create(
             subject=other_subject,

@@ -50,7 +50,7 @@ class ExamAndResultModelTests(TestCase):
 			class_obj=class_obj,
 			section=section,
 		)
-		subject = Subject.objects.create(name="English", code="ENG-EXAM")
+		subject = Subject.objects.create(name="English", code="ENG-EXAM", institution=school)
 		SubjectOffering.objects.create(
 			subject=subject,
 			class_obj=class_obj,

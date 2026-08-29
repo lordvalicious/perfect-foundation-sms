@@ -25,8 +25,10 @@ class ReportCard(models.Model):
 
     STATUS_CHOICES = [
         ("draft", "Draft"),
+        ("submitted", "Submitted"),
         ("approved", "Approved"),
         ("published", "Published"),
+        ("locked", "Locked"),
     ]
 
     student = models.ForeignKey(
@@ -249,8 +251,13 @@ class ReportCard(models.Model):
 
     @property
     def can_edit(self):
-        """Published report cards are locked."""
-        return self.status != "published"
+        """
+        Marks/results may only be edited while the report card is in
+        an editable state. Once submitted/approved, direct edits are
+        restricted; once published or locked they are blocked and only
+        an authorized revision (unlock) path can reopen them.
+        """
+        return self.status in {"draft", "submitted"}
 
     @property
     def status_display(self):
@@ -363,62 +370,102 @@ class ReportCard(models.Model):
 
         return "The student needs additional academic support and practice."
 
+    # Allowed lifecycle transitions for the secure result workflow.
+    #
+    # draft -> submitted -> approved -> published -> locked
+    #
+    # ``approve``/``publish`` also accept earlier states for backward
+    # compatibility with data created before the full lifecycle existed.
+    _ALLOWED_TRANSITIONS = {
+        "submitted": {"draft"},
+        "approved": {"submitted", "draft"},
+        "published": {"approved", "submitted", "draft"},
+        "locked": {"published", "approved", "submitted", "draft"},
+        "draft": {"locked"},  # authorized unlock / revision workflow
+    }
+
+    def _transition(self, target, user=None):
+        """Move to ``target`` if the current status permits it.
+
+        Audits every transition and records the previous state.
+        """
+        from apps.audit.models import record_audit
+
+        allowed_from = self._ALLOWED_TRANSITIONS.get(target, set())
+
+        if self.status == target:
+            # Already in the target state: no-op but still authoritative.
+            return
+
+        if self.status not in allowed_from:
+            raise ValidationError(
+                f"Cannot move a report card from "
+                f"'{self.status}' to '{target}'."
+            )
+
+        previous = self.status
+        self.status = target
+
+        update_fields = ["status", "updated_at"]
+
+        if target == "published" and self.published_at is None:
+            self.published_at = timezone.now()
+            update_fields.append("published_at")
+
+        self.save(update_fields=update_fields)
+
+        record_audit(
+            user=user,
+            action="grade_status_change",
+            model_name="ReportCard",
+            object_id=str(self.pk),
+            object_repr=str(self),
+            details={
+                "from_status": previous,
+                "to_status": target,
+            },
+        )
+
+    def submit(self, user=None):
+        """Submit a draft report card for approval."""
+        self._transition("submitted", user=user)
+
     def approve(self, user=None):
         """
-        Move a draft report card to the approved state.
+        Approve a submitted (or draft) report card.
 
         Publishing (which exposes the result to students) is a
         separate, later step performed by an academic administrator.
         """
-        from apps.audit.models import record_audit
-
-        if self.status == "draft":
-            self.status = "approved"
-
-            self.save(
-                update_fields=[
-                    "status",
-                    "updated_at",
-                ]
-            )
-
-            record_audit(
-                user=user,
-                action="grade_publish",
-                model_name="ReportCard",
-                object_id=str(self.pk),
-                object_repr=str(self),
-                details={"status": "approved"},
-            )
+        self._transition("approved", user=user)
 
     def publish(self, user=None):
         """
         Publish the report card so students can view it.
 
-        A published report card is locked; further corrections
-        must go through a grade amendment.
+        A published report card is locked for further direct edits;
+        corrections must go through a grade amendment.
         """
-        from apps.audit.models import record_audit
+        self._transition("published", user=user)
 
-        self.status = "published"
-        self.published_at = timezone.now()
+    def lock(self, user=None):
+        """Move a report card to the terminal locked state.
 
-        self.save(
-            update_fields=[
-                "status",
-                "published_at",
-                "updated_at",
-            ]
-        )
+        Once locked, results cannot be modified through the API,
+        direct requests or normal service calls. Only an authorized
+        ``unlock`` (revision) can reopen them.
+        """
+        self._transition("locked", user=user)
 
-        record_audit(
-            user=user,
-            action="grade_publish",
-            model_name="ReportCard",
-            object_id=str(self.pk),
-            object_repr=str(self),
-            details={"status": "published"},
-        )
+    def unlock(self, user=None):
+        """
+        Open a locked report card for revision.
+
+        This is the explicit, authorized revision workflow. It returns
+        the report card to draft so results may be corrected; managers
+        must gate this route with explicit authorization.
+        """
+        self._transition("draft", user=user)
 
     def save(self, *args, **kwargs):
         self.full_clean()
