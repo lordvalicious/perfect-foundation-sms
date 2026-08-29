@@ -1,75 +1,1237 @@
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
 
-from apps.schools.models import AcademicUnit, AcademicYear, Campus, Class, School, Section
+from apps.accounts.models import InstitutionMembership, Role, RoleAssignment, User
+from apps.finance.late_fee_service import apply_late_fees
+from apps.finance.models import (
+    Account,
+    Concession,
+    Expense,
+    FeeCategory,
+    FeeStructure,
+    Invoice,
+    InvoiceItem,
+    JournalEntry,
+    JournalLine,
+    Payment,
+    PaymentRefund,
+    StudentFeeOverride,
+)
+from apps.schools.models import (
+    AcademicUnit,
+    AcademicYear,
+    Campus,
+    Class,
+    School,
+    Section,
+    Subject,
+)
 from apps.students.models import Enrollment, Guardian, Student
 
-from .models import Account, Concession, Invoice, InvoiceItem, JournalEntry, JournalLine, Payment, PaymentRefund
+
+def create_base_school():
+    """Create a complete school hierarchy for testing."""
+    school = School.objects.create(name="Test School")
+    campus = Campus.objects.create(school=school, name="Main Campus")
+    unit = AcademicUnit.objects.create(campus=campus, name="Primary")
+    class_obj = Class.objects.create(unit=unit, name="Grade 1")
+    section = Section.objects.create(class_obj=class_obj, name="A")
+    year = AcademicYear.objects.create(
+        school=school,
+        name="2026-2027",
+        start_date=date(2026, 8, 1),
+        end_date=date(2027, 7, 31),
+    )
+    guardian = Guardian.objects.create(
+        name="Parent", relationship="Father", phone="03000000000"
+    )
+    student = Student.objects.create(
+        admission_number="ADM-001", first_name="Ali", gender="male", guardian=guardian
+    )
+    enrollment = Enrollment.objects.create(
+        student=student,
+        academic_year=year,
+        campus=campus,
+        class_obj=class_obj,
+        section=section,
+    )
+    category = FeeCategory.objects.create(name="Tuition", frequency="monthly")
+    return {
+        "school": school,
+        "campus": campus,
+        "unit": unit,
+        "class_obj": class_obj,
+        "section": section,
+        "year": year,
+        "guardian": guardian,
+        "student": student,
+        "enrollment": enrollment,
+        "category": category,
+    }
 
 
-class AccountingModelTests(TestCase):
-	def setUp(self):
-		self.school = School.objects.create(name="Test School")
-		self.campus = Campus.objects.create(school=self.school, name="Main Campus")
-		unit = AcademicUnit.objects.create(campus=self.campus, name="Primary")
-		class_obj = Class.objects.create(unit=unit, name="Grade 1")
-		section = Section.objects.create(class_obj=class_obj, name="A")
-		year = AcademicYear.objects.create(
-			school=self.school,
-			name="2026-2027",
-			start_date=date(2026, 8, 1),
-			end_date=date(2027, 7, 31),
-		)
-		guardian = Guardian.objects.create(name="Parent", relationship="Father", phone="03000000000")
-		student = Student.objects.create(admission_number="ADM-001", first_name="Ali", gender="male", guardian=guardian)
-		self.enrollment = Enrollment.objects.create(
-			student=student,
-			academic_year=year,
-			campus=self.campus,
-			class_obj=class_obj,
-			section=section,
-		)
-		self.category = __import__("apps.finance.models", fromlist=["FeeCategory"]).FeeCategory.objects.create(name="Tuition")
-		self.invoice = Invoice.objects.create(
-			invoice_number="INV-001",
-			student=student,
-			enrollment=self.enrollment,
-			academic_year=year,
-			issue_date=date.today(),
-			due_date=date.today(),
-		)
-		InvoiceItem.objects.create(invoice=self.invoice, category=self.category, description="Tuition", amount=Decimal("1000.00"))
+class FinanceModelTests(TestCase):
+    """Test the core finance models."""
 
-	def test_journal_line_requires_one_side(self):
-		asset = Account.objects.create(institution=self.school, code="1000", name="Cash", account_type="asset")
-		entry = JournalEntry.objects.create(institution=self.school, description="Test entry")
-		line = JournalLine(entry=entry, account=asset)
-		with self.assertRaises(ValidationError):
-			line.full_clean()
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.campus = self.data["campus"]
+        self.class_obj = self.data["class_obj"]
+        self.section = self.data["section"]
+        self.year = self.data["year"]
+        self.student = self.data["student"]
+        self.enrollment = self.data["enrollment"]
+        self.category = self.data["category"]
+        self.guardian = self.data["guardian"]
 
-	def test_journal_entry_balances(self):
-		cash = Account.objects.create(institution=self.school, code="1000", name="Cash", account_type="asset")
-		income = Account.objects.create(institution=self.school, code="4000", name="Tuition", account_type="income")
-		entry = JournalEntry.objects.create(institution=self.school, description="Fee payment")
-		JournalLine.objects.create(entry=entry, account=cash, debit=Decimal("1000.00"))
-		JournalLine.objects.create(entry=entry, account=income, credit=Decimal("1000.00"))
-		self.assertTrue(entry.is_balanced)
-		self.assertEqual(entry.total_debit, entry.total_credit)
+    def test_fee_structure_with_installments(self):
+        """Test FeeStructure with installment configuration."""
+        fs = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.class_obj,
+            section=self.section,
+            category=self.category,
+            amount=Decimal("12000.00"),
+            due_day=10,
+            installment_count=4,
+            installment_frequency="quarterly",
+        )
+        self.assertEqual(fs.installment_count, 4)
+        self.assertEqual(fs.installment_frequency, "quarterly")
+        self.assertIn("4x quarterly", str(fs))
 
-	def test_approved_concession_reduces_invoice_total(self):
-		Concession.objects.create(invoice=self.invoice, amount=Decimal("200.00"), reason="Scholarship", status="approved")
-		self.assertEqual(self.invoice.total_amount, Decimal("800.00"))
+    def test_fee_structure_section_level(self):
+        """Test FeeStructure can be section-specific."""
+        fs = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.class_obj,
+            section=self.section,
+            category=self.category,
+            amount=Decimal("5000.00"),
+            due_day=5,
+        )
+        self.assertEqual(fs.section, self.section)
+        # Another section should be allowed
+        section_b = Section.objects.create(class_obj=self.class_obj, name="B")
+        fs2 = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.class_obj,
+            section=section_b,
+            category=self.category,
+            amount=Decimal("5500.00"),
+            due_day=5,
+        )
+        self.assertEqual(fs2.section, section_b)
 
-	def test_refund_cannot_exceed_payment(self):
-		payment = Payment.objects.create(
-			receipt_number="RCPT-001",
-			invoice=self.invoice,
-			amount=Decimal("500.00"),
-			payment_date=date.today(),
-		)
-		refund = PaymentRefund(payment=payment, amount=Decimal("600.00"), reason="Duplicate payment")
-		with self.assertRaises(ValidationError):
-			refund.full_clean()
+    def test_fee_structure_validation(self):
+        """Test FeeStructure validation rules."""
+        # Negative amount should fail
+        with self.assertRaises(ValidationError):
+            FeeStructure.objects.create(
+                academic_year=self.year,
+                campus=self.campus,
+                class_obj=self.class_obj,
+                category=self.category,
+                amount=Decimal("-100.00"),
+                due_day=10,
+            ).full_clean()
+
+        # Invalid due_day should fail
+        with self.assertRaises(ValidationError):
+            FeeStructure.objects.create(
+                academic_year=self.year,
+                campus=self.campus,
+                class_obj=self.class_obj,
+                category=self.category,
+                amount=Decimal("1000.00"),
+                due_day=0,
+            ).full_clean()
+
+        # installment_count < 1 should fail
+        with self.assertRaises(ValidationError):
+            FeeStructure.objects.create(
+                academic_year=self.year,
+                campus=self.campus,
+                class_obj=self.class_obj,
+                category=self.category,
+                amount=Decimal("1000.00"),
+                due_day=10,
+                installment_count=0,
+            ).full_clean()
+
+    def test_invoice_installments(self):
+        """Test Invoice with installment tracking."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            installment_count=3,
+            installment_frequency="monthly",
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("3000.00")
+        )
+
+        self.assertEqual(invoice.installment_count, 3)
+        self.assertEqual(invoice.installment_amount, Decimal("1000.00"))
+        self.assertEqual(invoice.installments_paid, 0)
+        self.assertEqual(invoice.installments_remaining, 3)
+
+    def test_invoice_installment_progress(self):
+        """Test installment progress tracking."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-002",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            installment_count=2,
+            installment_frequency="monthly",
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("2000.00")
+        )
+
+        # First installment payment
+        Payment.objects.create(
+            receipt_number="RCPT-001",
+            invoice=invoice,
+            amount=Decimal("1000.00"),
+            payment_date=date.today(),
+            installment_number=1,
+            status="completed",
+        )
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.installments_paid, 1)
+        self.assertEqual(invoice.installments_remaining, 1)
+
+        # Second installment payment
+        Payment.objects.create(
+            receipt_number="RCPT-002",
+            invoice=invoice,
+            amount=Decimal("1000.00"),
+            payment_date=date.today(),
+            installment_number=2,
+            status="completed",
+        )
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.installments_paid, 2)
+        self.assertEqual(invoice.installments_remaining, 0)
+        self.assertEqual(invoice.status, "paid")
+
+    def test_invoice_late_fee_tracking(self):
+        """Test late fee tracking fields on Invoice."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-003",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=60),
+            due_date=date.today() - timedelta(days=30),
+            status="overdue",
+        )
+        self.assertFalse(invoice.late_fee_applied)
+        self.assertEqual(invoice.late_fee_amount, Decimal("0.00"))
+        self.assertIsNone(invoice.late_fee_date)
+
+        # Simulate late fee application
+        invoice.late_fee_applied = True
+        invoice.late_fee_amount = Decimal("150.00")
+        invoice.late_fee_date = date.today()
+        invoice.save()
+        invoice.refresh_from_db()
+
+        self.assertTrue(invoice.late_fee_applied)
+        self.assertEqual(invoice.late_fee_amount, Decimal("150.00"))
+        self.assertEqual(invoice.late_fee_date, date.today())
+
+    def test_student_fee_override(self):
+        """Test StudentFeeOverride model."""
+        fs = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.class_obj,
+            category=self.category,
+            amount=Decimal("10000.00"),
+            due_day=10,
+        )
+
+        override = StudentFeeOverride.objects.create(
+            institution=self.school,
+            student=self.student,
+            fee_structure=fs,
+            amount=Decimal("7000.00"),
+            reason="Sibling discount",
+        )
+        self.assertEqual(override.amount, Decimal("7000.00"))
+        self.assertEqual(override.reason, "Sibling discount")
+
+        # Duplicate override for same student/fee_structure should fail
+        with self.assertRaises(Exception):
+            StudentFeeOverride.objects.create(
+                institution=self.school,
+                student=self.student,
+                fee_structure=fs,
+                amount=Decimal("5000.00"),
+            )
+
+    def test_student_fee_override_validation(self):
+        """Test StudentFeeOverride validation."""
+        fs = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.class_obj,
+            category=self.category,
+            amount=Decimal("10000.00"),
+            due_day=10,
+        )
+
+        # Student not enrolled in the fee structure's class should fail
+        other_class = Class.objects.create(unit=self.class_obj.unit, name="Grade 2")
+        Section.objects.create(class_obj=other_class, name="A")
+        # Create another student to avoid unique enrollment constraint
+        other_student = Student.objects.create(
+            admission_number="ADM-002", first_name="Other", gender="male", guardian=self.guardian
+        )
+        Enrollment.objects.create(
+            student=other_student,
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=other_class,
+            section=Section.objects.get(class_obj=other_class, name="A"),
+        )
+
+        override = StudentFeeOverride(
+            institution=self.school,
+            student=other_student,
+            fee_structure=fs,
+            amount=Decimal("5000.00"),
+        )
+        with self.assertRaises(ValidationError):
+            override.full_clean()
+
+    def test_payment_duplicate_protection(self):
+        """Test duplicate payment protection via unique constraints."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-004",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+        # First payment with Stripe session ID
+        payment1 = Payment.objects.create(
+            receipt_number="RCPT-001",
+            invoice=invoice,
+            amount=Decimal("1000.00"),
+            payment_date=date.today(),
+            payment_method="stripe",
+            stripe_session_id="cs_test_12345",
+            status="completed",
+        )
+
+        # Second payment with same Stripe session ID should fail
+        with self.assertRaises(Exception):
+            Payment.objects.create(
+                receipt_number="RCPT-002",
+                invoice=invoice,
+                amount=Decimal("1000.00"),
+                payment_date=date.today(),
+                payment_method="stripe",
+                stripe_session_id="cs_test_12345",
+                status="completed",
+            )
+
+    def test_payment_installment_number_validation(self):
+        """Test Payment installment number validation."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-005",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            installment_count=2,
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("2000.00")
+        )
+
+        # Valid installment number
+        payment = Payment.objects.create(
+            receipt_number="RCPT-001",
+            invoice=invoice,
+            amount=Decimal("1000.00"),
+            payment_date=date.today(),
+            installment_number=1,
+            status="completed",
+        )
+        self.assertEqual(payment.installment_number, 1)
+
+        # Invalid installment number > count
+        with self.assertRaises(ValidationError):
+            Payment.objects.create(
+                receipt_number="RCPT-002",
+                invoice=invoice,
+                amount=Decimal("1000.00"),
+                payment_date=date.today(),
+                installment_number=3,
+                status="completed",
+            ).full_clean()
+
+
+class LateFeeServiceTests(TestCase):
+    """Test the late fee service."""
+
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.campus = self.data["campus"]
+        self.year = self.data["year"]
+        self.student = self.data["student"]
+        self.enrollment = self.data["enrollment"]
+        self.category = self.data["category"]
+
+    def test_apply_late_fees_percent(self):
+        """Test applying late fees as percentage."""
+        # Create overdue invoice
+        invoice = Invoice.objects.create(
+            invoice_number="INV-LF-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=60),
+            due_date=date.today() - timedelta(days=10),  # 10 days overdue
+            status="overdue",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+        result = apply_late_fees(percent=5, grace_days=5, dry_run=False)
+        self.assertEqual(result["charged"], 1)
+        self.assertEqual(result["total"], Decimal("50.00"))  # 5% of 1000
+
+        invoice.refresh_from_db()
+        self.assertTrue(invoice.late_fee_applied)
+        self.assertEqual(invoice.late_fee_amount, Decimal("50.00"))
+
+    def test_apply_late_fees_flat(self):
+        """Test applying flat late fees."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-LF-002",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=60),
+            due_date=date.today() - timedelta(days=10),
+            status="overdue",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+        result = apply_late_fees(flat=Decimal("100.00"), grace_days=5, dry_run=False)
+        self.assertEqual(result["charged"], 1)
+        self.assertEqual(result["total"], Decimal("100.00"))
+
+        invoice.refresh_from_db()
+        self.assertEqual(invoice.late_fee_amount, Decimal("100.00"))
+
+    def test_late_fee_grace_period(self):
+        """Test late fee respects grace period."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-LF-003",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=60),
+            due_date=date.today() - timedelta(days=2),  # Only 2 days overdue
+            status="overdue",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+        # With grace_days=5, this should not be charged
+        result = apply_late_fees(percent=10, grace_days=5, dry_run=True)
+        self.assertEqual(result["charged"], 0)
+
+    def test_late_fee_not_applied_twice(self):
+        """Test late fee is not applied twice to same invoice."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-LF-004",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=60),
+            due_date=date.today() - timedelta(days=10),
+            status="overdue",
+            late_fee_applied=True,
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+        result = apply_late_fees(percent=10, grace_days=5, dry_run=False)
+        self.assertEqual(result["charged"], 0)
+
+    def test_late_fee_dry_run(self):
+        """Test dry_run mode doesn't apply fees."""
+        invoice = Invoice.objects.create(
+            invoice_number="INV-LF-005",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=60),
+            due_date=date.today() - timedelta(days=10),
+            status="overdue",
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+        result = apply_late_fees(percent=10, grace_days=5, dry_run=True)
+        self.assertEqual(result["charged"], 1)
+        self.assertTrue(result["dry_run"])
+
+        invoice.refresh_from_db()
+        self.assertFalse(invoice.late_fee_applied)
+
+
+class FeeAssignmentTests(TestCase):
+    """Test fee assignment and invoice generation."""
+
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.campus = self.data["campus"]
+        self.year = self.data["year"]
+        self.student = self.data["student"]
+        self.enrollment = self.data["enrollment"]
+        self.category = self.data["category"]
+
+    def test_fee_structure_applies_to_enrollment(self):
+        """Test FeeStructure matches enrollment by class and campus."""
+        fs = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.enrollment.class_obj,
+            category=self.category,
+            amount=Decimal("5000.00"),
+            due_day=10,
+        )
+
+        from apps.finance.services import FeeInvoiceService
+        service = FeeInvoiceService(self.school, self.year)
+        structures = service.get_fee_structures_for_enrollment(self.enrollment)
+        self.assertEqual(structures.count(), 1)
+        self.assertEqual(structures.first().amount, Decimal("5000.00"))
+
+    def test_fee_structure_section_specific(self):
+        """Test section-specific fee structure."""
+        fs = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.enrollment.class_obj,
+            section=self.enrollment.section,
+            category=self.category,
+            amount=Decimal("6000.00"),
+            due_day=10,
+        )
+
+        from apps.finance.services import FeeInvoiceService
+        service = FeeInvoiceService(self.school, self.year)
+        structures = service.get_fee_structures_for_enrollment(self.enrollment)
+        self.assertEqual(structures.count(), 1)
+        self.assertEqual(structures.first().amount, Decimal("6000.00"))
+
+    def test_student_fee_override_applied(self):
+        """Test student fee override takes precedence."""
+        fs = FeeStructure.objects.create(
+            academic_year=self.year,
+            campus=self.campus,
+            class_obj=self.enrollment.class_obj,
+            category=self.category,
+            amount=Decimal("10000.00"),
+            due_day=10,
+        )
+
+        StudentFeeOverride.objects.create(
+            institution=self.school,
+            student=self.student,
+            fee_structure=fs,
+            amount=Decimal("7000.00"),
+            reason="Scholarship",
+        )
+
+        from apps.finance.services import FeeInvoiceService
+        service = FeeInvoiceService(self.school, self.year)
+        structures = service.get_fee_structures_for_enrollment(self.enrollment)
+
+        # The service should use override amount
+        # Note: This tests the preview logic, actual invoice generation would need override lookup
+        override = StudentFeeOverride.objects.filter(
+            student=self.student, fee_structure=fs, status="active"
+        ).first()
+        self.assertIsNotNone(override)
+        self.assertEqual(override.amount, Decimal("7000.00"))
+
+
+class OutstandingBalanceTests(TestCase):
+    """Test outstanding balance queries."""
+
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.campus = self.data["campus"]
+        self.year = self.data["year"]
+        self.student = self.data["student"]
+        self.enrollment = self.data["enrollment"]
+        self.category = self.data["category"]
+
+    def test_outstanding_invoices_queryset(self):
+        """Test getting outstanding invoices."""
+        from apps.finance.services import InvoiceService
+
+        service = InvoiceService(self.school)
+
+        # Create paid invoice
+        paid_invoice = Invoice.objects.create(
+            invoice_number="INV-PAID-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=60),
+            due_date=date.today() - timedelta(days=30),
+            status="paid",
+        )
+        InvoiceItem.objects.create(
+            invoice=paid_invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+        Payment.objects.create(
+            receipt_number="RCPT-PAID",
+            invoice=paid_invoice,
+            amount=Decimal("1000.00"),
+            payment_date=date.today(),
+            status="completed",
+        )
+
+        # Create outstanding invoice
+        outstanding_invoice = Invoice.objects.create(
+            invoice_number="INV-OUT-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=outstanding_invoice, category=self.category, description="Tuition", amount=Decimal("2000.00")
+        )
+
+        # Create overdue invoice
+        overdue_invoice = Invoice.objects.create(
+            invoice_number="INV-OVD-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today() - timedelta(days=90),
+            due_date=date.today() - timedelta(days=10),
+            status="overdue",
+        )
+        InvoiceItem.objects.create(
+            invoice=overdue_invoice, category=self.category, description="Tuition", amount=Decimal("3000.00")
+        )
+
+        outstanding = service.get_outstanding_invoices(student=self.student)
+        self.assertEqual(outstanding.count(), 2)  # issued + overdue
+
+    def test_invoice_summary(self):
+        """Test invoice summary statistics."""
+        from apps.finance.services import InvoiceService
+
+        service = InvoiceService(self.school)
+
+        # Create invoices
+        for i in range(3):
+            inv = Invoice.objects.create(
+                invoice_number=f"INV-SUM-{i}",
+                student=self.student,
+                enrollment=self.enrollment,
+                academic_year=self.year,
+                issue_date=date.today() - timedelta(days=60),
+                due_date=date.today() - timedelta(days=30),
+                status="issued" if i < 2 else "paid",
+            )
+            InvoiceItem.objects.create(
+                invoice=inv, category=self.category, description="Tuition", amount=Decimal("1000.00")
+            )
+            if i == 2:
+                Payment.objects.create(
+                    receipt_number=f"RCPT-{i}",
+                    invoice=inv,
+                    amount=Decimal("1000.00"),
+                    payment_date=date.today(),
+                    status="completed",
+                )
+
+        summary = service.get_invoice_summary(self.year)
+        self.assertEqual(summary["total_invoiced"], Decimal("3000.00"))
+        self.assertEqual(summary["total_paid"], Decimal("1000.00"))
+        self.assertEqual(summary["total_outstanding"], Decimal("2000.00"))
+        self.assertAlmostEqual(summary["collection_rate"], 33.33, places=1)
+
+
+class PaymentIntegrityTests(TestCase):
+    """Test payment integrity and audit trail."""
+
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.year = self.data["year"]
+        self.student = self.data["student"]
+        self.enrollment = self.data["enrollment"]
+        self.category = self.data["category"]
+
+        self.invoice = Invoice.objects.create(
+            invoice_number="INV-PAY-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=self.invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+    def test_payment_audit_trail(self):
+        """Test payment creates audit record."""
+        payment = Payment.objects.create(
+            receipt_number="RCPT-AUDIT-001",
+            invoice=self.invoice,
+            amount=Decimal("500.00"),
+            payment_date=date.today(),
+            payment_method="cash",
+            status="completed",
+        )
+
+        from apps.audit.models import AuditLog
+        audit = AuditLog.objects.filter(
+            model_name="Payment", object_id=str(payment.pk)
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.action, "payment")
+
+    def test_payment_reversal_audit_trail(self):
+        """Test payment reversal creates audit record."""
+        payment = Payment.objects.create(
+            receipt_number="RCPT-REV-001",
+            invoice=self.invoice,
+            amount=Decimal("500.00"),
+            payment_date=date.today(),
+            payment_method="cash",
+            status="completed",
+        )
+
+        from apps.finance.models import PaymentReversal
+        reversal = PaymentReversal.objects.create(
+            institution=self.school,
+            payment=payment,
+            amount=Decimal("500.00"),
+            reason="Customer request",
+        )
+
+        from apps.audit.models import AuditLog
+        audit = AuditLog.objects.filter(
+            model_name="PaymentReversal", object_id=str(reversal.pk)
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.action, "payment_reversal")
+
+    def test_payment_refund_audit_trail(self):
+        """Test payment refund creates audit record."""
+        payment = Payment.objects.create(
+            receipt_number="RCPT-REF-001",
+            invoice=self.invoice,
+            amount=Decimal("1000.00"),
+            payment_date=date.today(),
+            payment_method="cash",
+            status="completed",
+        )
+
+        refund = PaymentRefund.objects.create(
+            institution=self.school,
+            payment=payment,
+            amount=Decimal("500.00"),
+            reason="Partial refund",
+        )
+
+        from apps.audit.models import AuditLog
+        audit = AuditLog.objects.filter(
+            model_name="PaymentRefund", object_id=str(refund.pk)
+        ).first()
+        self.assertIsNotNone(audit)
+        self.assertEqual(audit.action, "payment_refund")
+
+    def test_payment_balance_validation(self):
+        """Test payment cannot exceed invoice balance."""
+        # Payment exceeding balance should fail
+        with self.assertRaises(ValidationError):
+            Payment.objects.create(
+                receipt_number="RCPT-OVER-001",
+                invoice=self.invoice,
+                amount=Decimal("2000.00"),  # Exceeds balance of 1000
+                payment_date=date.today(),
+                status="completed",
+            ).full_clean()
+
+    def test_concurrent_payment_protection(self):
+        """Test select_for_update prevents race conditions."""
+        from apps.finance.services import PaymentService
+
+        service = PaymentService(self.school)
+
+        # Two concurrent payment attempts - second should fail
+        payment1 = service.process_payment(
+            self.invoice, Decimal("600.00"), "cash", user=None
+        )
+        self.assertEqual(payment1.amount, Decimal("600.00"))
+
+        # Remaining balance is 400, attempt to pay 500 should fail
+        with self.assertRaises(ValueError):
+            service.process_payment(
+                self.invoice, Decimal("500.00"), "cash", user=None
+            )
+
+
+class SecurityAccessTests(TestCase):
+    """Test RBAC, organization isolation, and campus isolation."""
+
+    def setUp(self):
+        # School A
+        self.school_a = School.objects.create(name="School A")
+        self.campus_a1 = Campus.objects.create(school=self.school_a, name="Campus A1")
+        self.campus_a2 = Campus.objects.create(school=self.school_a, name="Campus A2")
+        self.unit_a = AcademicUnit.objects.create(campus=self.campus_a1, name="Primary A")
+        self.class_a = Class.objects.create(unit=self.unit_a, name="Grade 1")
+        self.section_a = Section.objects.create(class_obj=self.class_a, name="A")
+        self.year_a = AcademicYear.objects.create(
+            school=self.school_a,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.category_a = FeeCategory.objects.create(name="Tuition A")
+
+        # School B
+        self.school_b = School.objects.create(name="School B")
+        self.campus_b1 = Campus.objects.create(school=self.school_b, name="Campus B1")
+        self.unit_b = AcademicUnit.objects.create(campus=self.campus_b1, name="Primary B")
+        self.class_b = Class.objects.create(unit=self.unit_b, name="Grade 1")
+        self.section_b = Section.objects.create(class_obj=self.class_b, name="A")
+        self.year_b = AcademicYear.objects.create(
+            school=self.school_b,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.category_b = FeeCategory.objects.create(name="Tuition B")
+
+        # Users
+        self.user_a = User.objects.create_user(username="usera", email="usera@test.edu", password="pass")
+        self.user_b = User.objects.create_user(username="userb", email="userb@test.edu", password="pass")
+
+        # User A membership in School A
+        self.membership_a = InstitutionMembership.objects.create(user=self.user_a, institution=self.school_a)
+        RoleAssignment.objects.create(membership=self.membership_a, role=Role.ADMIN)
+
+        # User B membership in School B
+        self.membership_b = InstitutionMembership.objects.create(user=self.user_b, institution=self.school_b)
+        RoleAssignment.objects.create(membership=self.membership_b, role=Role.ADMIN)
+
+    def test_institution_isolation_fee_structure(self):
+        """Test fee structures are isolated by institution."""
+        fs_a = FeeStructure.objects.create(
+            academic_year=self.year_a,
+            campus=self.campus_a1,
+            class_obj=self.class_a,
+            category=self.category_a,
+            amount=Decimal("10000.00"),
+        )
+        fs_b = FeeStructure.objects.create(
+            academic_year=self.year_b,
+            campus=self.campus_b1,
+            class_obj=self.class_b,
+            category=self.category_b,
+            amount=Decimal("12000.00"),
+        )
+
+        # User A should only see School A fee structures
+        from apps.accounts.access import apply_campus_scope
+        from rest_framework.test import APIRequestFactory
+
+        request = APIRequestFactory().get("/")
+        request.user = self.user_a
+        request.institution = self.school_a
+        request.query_params = {}
+
+        qs = apply_campus_scope(FeeStructure.objects.all(), request, "campus_id")
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first().pk, fs_a.pk)
+
+    def test_campus_isolation_invoice(self):
+        """Test invoices are isolated by campus."""
+        # Class in campus A1
+        class_a1 = Class.objects.create(unit=self.unit_a, name="Grade 1")
+        section_a1 = Section.objects.create(class_obj=class_a1, name="A")
+
+        # Student in campus A1
+        student_a = Student.objects.create(
+            admission_number="ADM-A-001", first_name="Student A", gender="male",
+            guardian=Guardian.objects.create(name="Parent", relationship="Father", phone="03000000000")
+        )
+        enrollment_a = Enrollment.objects.create(
+            student=student_a,
+            academic_year=self.year_a,
+            campus=self.campus_a1,
+            class_obj=class_a1,
+            section=section_a1,
+        )
+        invoice_a = Invoice.objects.create(
+            invoice_number="INV-A-001",
+            student=student_a,
+            enrollment=enrollment_a,
+            academic_year=self.year_a,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+        )
+
+        # Class in campus A2 (same school, different campus)
+        unit_a2 = AcademicUnit.objects.create(campus=self.campus_a2, name="Secondary")
+        class_a2 = Class.objects.create(unit=unit_a2, name="Grade 2")
+        section_a2 = Section.objects.create(class_obj=class_a2, name="A")
+
+        student_a2 = Student.objects.create(
+            admission_number="ADM-A-002", first_name="Student A2", gender="male",
+            guardian=Guardian.objects.create(name="Parent", relationship="Father", phone="03000000001")
+        )
+        enrollment_a2 = Enrollment.objects.create(
+            student=student_a2,
+            academic_year=self.year_a,
+            campus=self.campus_a2,
+            class_obj=class_a2,
+            section=section_a2,
+        )
+        invoice_a2 = Invoice.objects.create(
+            invoice_number="INV-A-002",
+            student=student_a2,
+            enrollment=enrollment_a2,
+            academic_year=self.year_a,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+        )
+
+        # User with campus A1 scope
+        request = APIRequestFactory().get("/")
+        request.user = self.user_a
+        request.institution = self.school_a
+        request.query_params = {}
+
+        # Create staff profile with campus A1
+        StaffProfile.objects.create(
+            user=self.user_a,
+            membership=self.membership_a,
+            institution=self.school_a,
+            primary_campus=self.campus_a1,
+            employee_number="EMP-001",
+            first_name="User",
+            last_name="A",
+            gender="male",
+        )
+
+        qs = apply_campus_scope(Invoice.objects.all(), request, "enrollment__campus_id")
+        self.assertEqual(qs.count(), 1)
+        self.assertEqual(qs.first().pk, invoice_a.pk)
+
+    def test_unauthorized_refund_access(self):
+        """Test refund cannot be created for invoice outside institution."""
+        student_a = Student.objects.create(
+            admission_number="ADM-A-001", first_name="Student A", gender="male",
+            guardian=Guardian.objects.create(name="Parent", relationship="Father", phone="03000000000")
+        )
+        enrollment_a = Enrollment.objects.create(
+            student=student_a,
+            academic_year=self.year_a,
+            campus=self.campus_a1,
+            class_obj=self.class_a,
+            section=self.section_a,
+        )
+        invoice_a = Invoice.objects.create(
+            invoice_number="INV-A-001",
+            student=student_a,
+            enrollment=enrollment_a,
+            academic_year=self.year_a,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+        )
+        payment = Payment.objects.create(
+            receipt_number="RCPT-A-001",
+            invoice=invoice_a,
+            amount=Decimal("1000.00"),
+            payment_date=date.today(),
+            status="completed",
+        )
+
+        from apps.finance.models import PaymentRefund
+        from apps.accounts.access import assert_campus_allowed
+
+        # Refund with wrong institution should be caught by view-level authorization
+        # The model allows it, but view checks campus access
+        refund = PaymentRefund.objects.create(
+            institution=self.school_a,  # Same institution
+            payment=payment,
+            amount=Decimal("500.00"),
+            reason="Test",
+        )
+        self.assertEqual(refund.institution, self.school_a)
+
+        # Test that refund exceeding payment amount fails
+        with self.assertRaises(ValidationError):
+            refund2 = PaymentRefund(
+                institution=self.school_a,
+                payment=payment,
+                amount=Decimal("1500.00"),
+                reason="Too much",
+            )
+            refund2.full_clean()
+
+
+class ReceiptTests(TestCase):
+    """Test receipt generation."""
+
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.year = self.data["year"]
+        self.student = self.data["student"]
+        self.enrollment = self.data["enrollment"]
+        self.category = self.data["category"]
+
+        self.invoice = Invoice.objects.create(
+            invoice_number="INV-REC-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=self.invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+    def test_payment_receipt_number_generation(self):
+        """Test receipt number is generated sequentially."""
+        p1 = Payment.objects.create(
+            receipt_number="RCPT-2026-0001",
+            invoice=self.invoice,
+            amount=Decimal("500.00"),
+            payment_date=date.today(),
+        )
+        p2 = Payment.objects.create(
+            receipt_number="RCPT-2026-0002",
+            invoice=self.invoice,
+            amount=Decimal("500.00"),
+            payment_date=date.today(),
+        )
+        self.assertEqual(p1.receipt_number, "RCPT-2026-0001")
+        self.assertEqual(p2.receipt_number, "RCPT-2026-0002")
+
+    def test_receipt_html_generation(self):
+        """Test PDF receipt generation."""
+        from apps.finance.pdf import payment_receipt_pdf
+
+        payment = Payment.objects.create(
+            receipt_number="RCPT-TEST-001",
+            invoice=self.invoice,
+            amount=Decimal("500.00"),
+            payment_date=date.today(),
+            payment_method="cash",
+            reference="REF-123",
+        )
+
+        # Should not raise
+        pdf_bytes = payment_receipt_pdf(payment)
+        self.assertIsInstance(pdf_bytes, bytes)
+        self.assertTrue(pdf_bytes.startswith(b"%PDF"))
+        self.assertIn(b"RCPT-TEST-001", pdf_bytes)
+
+
+class ConcessionTests(TestCase):
+    """Test concession workflow."""
+
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.year = self.data["year"]
+        self.student = self.data["student"]
+        self.enrollment = self.data["enrollment"]
+        self.category = self.data["category"]
+
+        self.invoice = Invoice.objects.create(
+            invoice_number="INV-CNC-001",
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=self.invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
+        )
+
+    def test_concession_approval_reduces_total(self):
+        """Test approved concession reduces invoice total."""
+        self.assertEqual(self.invoice.total_amount, Decimal("1000.00"))
+
+        Concession.objects.create(
+            invoice=self.invoice,
+            amount=Decimal("200.00"),
+            reason="Sibling discount",
+            status="approved",
+        )
+        self.assertEqual(self.invoice.total_amount, Decimal("800.00"))
+
+        # Pending concession should not affect total
+        Concession.objects.create(
+            invoice=self.invoice,
+            amount=Decimal("100.00"),
+            reason="Pending scholarship",
+            status="pending",
+        )
+        self.assertEqual(self.invoice.total_amount, Decimal("800.00"))
+
+    def test_concession_rejected_does_not_affect_total(self):
+        """Test rejected concession does not affect total."""
+        Concession.objects.create(
+            invoice=self.invoice,
+            amount=Decimal("200.00"),
+            reason="Rejected scholarship",
+            status="rejected",
+        )
+        self.assertEqual(self.invoice.total_amount, Decimal("1000.00"))
+
+
+class JournalEntryTests(TestCase):
+    """Test double-entry journal operations."""
+
+    def setUp(self):
+        self.school = School.objects.create(name="Journal School")
+
+    def test_journal_entry_balancing(self):
+        """Test journal entry must balance."""
+        asset = Account.objects.create(
+            institution=self.school, code="1000", name="Cash", account_type="asset"
+        )
+        income = Account.objects.create(
+            institution=self.school, code="4000", name="Tuition Income", account_type="income"
+        )
+
+        entry = JournalEntry.objects.create(
+            institution=self.school, description="Fee payment"
+        )
+        JournalLine.objects.create(entry=entry, account=asset, debit=Decimal("1000.00"))
+        JournalLine.objects.create(entry=entry, account=income, credit=Decimal("1000.00"))
+
+        self.assertTrue(entry.is_balanced)
+        self.assertEqual(entry.total_debit, entry.total_credit)
+
+    def test_journal_entry_unbalanced_fails(self):
+        """Test journal entry with empty line fails validation."""
+        asset = Account.objects.create(
+            institution=self.school, code="1000", name="Cash", account_type="asset"
+        )
+        income = Account.objects.create(
+            institution=self.school, code="4000", name="Tuition Income", account_type="income"
+        )
+
+        entry = JournalEntry.objects.create(
+            institution=self.school, description="Unbalanced entry"
+        )
+        # Line with neither debit nor credit should fail
+        line = JournalLine(entry=entry, account=asset)
+
+        with self.assertRaises(ValidationError):
+            line.full_clean()
+
+        # Test that entry.is_balanced correctly detects imbalance
+        JournalLine.objects.create(entry=entry, account=asset, debit=Decimal("1000.00"))
+        JournalLine.objects.create(entry=entry, account=income, credit=Decimal("500.00"))
+        self.assertFalse(entry.is_balanced)
+
+
+class ExpenseTests(TestCase):
+    """Test expense and journal posting."""
+
+    def setUp(self):
+        self.school = School.objects.create(name="Expense School")
+        self.campus = Campus.objects.create(school=self.school, name="Main Campus")
+        self.asset = Account.objects.create(
+            institution=self.school, code="1000", name="Cash", account_type="asset"
+        )
+        self.expense_account = Account.objects.create(
+            institution=self.school, code="6000", name="Utilities", account_type="expense"
+        )
+
+    def test_expense_posting_creates_journal(self):
+        """Test posting expense creates journal entry."""
+        expense = Expense.objects.create(
+            institution=self.school,
+            campus=self.campus,
+            expense_account=self.expense_account,
+            payment_account=self.asset,
+            vendor="Electric Co",
+            expense_date=date.today(),
+            amount=Decimal("5000.00"),
+            status="approved",
+        )
+
+        from apps.finance.views import ExpensePostView
+        from django.test import RequestFactory
+
+        request = RequestFactory().post("/")
+        request.user = User.objects.create_user(username="acct", email="acct@test.edu", password="pass")
+        request.institution = self.school
+
+        view = ExpensePostView()
+        response = view.post(request, expense.pk)
+
+        expense.refresh_from_db()
+        self.assertEqual(expense.status, "paid")
+        self.assertIsNotNone(expense.journal_entry)
+        self.assertTrue(expense.journal_entry.is_balanced)

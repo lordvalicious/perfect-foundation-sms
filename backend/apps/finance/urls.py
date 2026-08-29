@@ -25,6 +25,14 @@ from .views import (
     ReceivablesReportView,
     BulkInvoiceCreateView,
     BulkPaymentCreateView,
+    LateFeeApplyView,
+    LateFeePreviewView,
+    OutstandingBalanceView,
+    StudentOutstandingBalanceView,
+    StudentFeeOverrideListCreateView,
+    StudentFeeOverrideDetailView,
+    InstallmentScheduleView,
+    FeeAssignmentPreviewView,
 )
 from .stripe_views import StripeCheckoutView, stripe_webhook
 from .jazzcash_views import (
@@ -145,5 +153,45 @@ urlpatterns = [
         "cron/late-fees/",
         LateFeeCronView.as_view(),
         name="late-fee-cron",
+    ),
+    path(
+        "late-fees/apply/",
+        LateFeeApplyView.as_view(),
+        name="late-fee-apply",
+    ),
+    path(
+        "late-fees/preview/",
+        LateFeePreviewView.as_view(),
+        name="late-fee-preview",
+    ),
+    path(
+        "outstanding/",
+        OutstandingBalanceView.as_view(),
+        name="outstanding-balance",
+    ),
+    path(
+        "outstanding/student/<int:student_id>/",
+        StudentOutstandingBalanceView.as_view(),
+        name="student-outstanding-balance",
+    ),
+    path(
+        "fee-overrides/",
+        StudentFeeOverrideListCreateView.as_view(),
+        name="fee-override-list",
+    ),
+    path(
+        "fee-overrides/<int:pk>/",
+        StudentFeeOverrideDetailView.as_view(),
+        name="fee-override-detail",
+    ),
+    path(
+        "invoices/<int:invoice_id>/installments/",
+        InstallmentScheduleView.as_view(),
+        name="installment-schedule",
+    ),
+    path(
+        "fee-assignment/preview/",
+        FeeAssignmentPreviewView.as_view(),
+        name="fee-assignment-preview",
     ),
 ]

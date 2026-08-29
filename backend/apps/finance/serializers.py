@@ -16,6 +16,7 @@ from .models import (
     Expense,
     Concession,
     PaymentRefund,
+    StudentFeeOverride,
 )
 from .services import next_invoice_number, next_receipt_number
 
@@ -170,6 +171,10 @@ class FeeStructureSerializer(serializers.ModelSerializer):
         source="class_obj.name",
         read_only=True,
     )
+    section_name = serializers.CharField(
+        source="section.name",
+        read_only=True,
+    )
     category_name = serializers.CharField(
         source="category.name",
         read_only=True,
@@ -197,12 +202,16 @@ class FeeStructureSerializer(serializers.ModelSerializer):
             "campus_name",
             "class_obj",
             "class_name",
+            "section",
+            "section_name",
             "category",
             "category_name",
             "category_frequency",
             "category_frequency_display",
             "amount",
             "due_day",
+            "installment_count",
+            "installment_frequency",
             "status",
             "status_display",
             "created_at",
@@ -274,11 +283,20 @@ class InvoiceSerializer(serializers.ModelSerializer):
         source="enrollment.class_obj.name",
         read_only=True,
     )
+    section_name = serializers.CharField(
+        source="enrollment.section.name",
+        read_only=True,
+    )
     status_display = serializers.CharField(
         source="get_status_display",
         read_only=True,
     )
     items = InvoiceItemSerializer(many=True, read_only=True)
+    installment_amount = serializers.DecimalField(
+        max_digits=12, decimal_places=2, read_only=True
+    )
+    installments_paid = serializers.IntegerField(read_only=True)
+    installments_remaining = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Invoice
@@ -293,15 +311,25 @@ class InvoiceSerializer(serializers.ModelSerializer):
             "academic_year_name",
             "campus_name",
             "class_name",
+            "section_name",
             "issue_date",
             "due_date",
+            "installment_count",
+            "installment_frequency",
+            "next_installment_due",
             "discount",
             "subtotal",
             "total_amount",
             "paid_amount",
             "balance",
+            "installment_amount",
+            "installments_paid",
+            "installments_remaining",
             "status",
             "status_display",
+            "late_fee_applied",
+            "late_fee_amount",
+            "late_fee_date",
             "notes",
             "items",
             "created_at",
@@ -349,6 +377,7 @@ class PaymentSerializer(serializers.ModelSerializer):
             "status_display",
             "reference",
             "notes",
+            "installment_number",
             "created_at",
             "updated_at",
         ]
@@ -439,3 +468,41 @@ class PaymentRefundSerializer(serializers.ModelSerializer):
             "reason", "status", "status_display", "created_by", "created_at",
         ]
         read_only_fields = ["id", "created_by", "created_at"]
+
+
+class StudentFeeOverrideSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
+    fee_structure_name = serializers.CharField(source="fee_structure.category.name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = StudentFeeOverride
+        fields = [
+            "id", "student", "student_name", "admission_number", "fee_structure",
+            "fee_structure_name", "amount", "reason", "status", "status_display",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_at", "updated_at"]
+
+
+class LateFeeApplySerializer(serializers.Serializer):
+    percent = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, min_value=Decimal("0.01"), max_value=Decimal("100"))
+    flat = serializers.DecimalField(max_digits=12, decimal_places=2, required=False, min_value=Decimal("0.01"))
+    grace_days = serializers.IntegerField(default=5, min_value=0)
+    dry_run = serializers.BooleanField(default=False)
+
+    def validate(self, attrs):
+        if not attrs.get("percent") and not attrs.get("flat"):
+            raise serializers.ValidationError("Provide either percent or flat.")
+        if attrs.get("percent") and attrs.get("flat"):
+            raise serializers.ValidationError("Provide only one of percent or flat.")
+        return attrs
+
+
+class LateFeeResultSerializer(serializers.Serializer):
+    charged = serializers.IntegerField()
+    total = serializers.DecimalField(max_digits=14, decimal_places=2)
+    rows = serializers.ListField(child=serializers.DictField())
+    truncated_rows = serializers.IntegerField()
+    dry_run = serializers.BooleanField()

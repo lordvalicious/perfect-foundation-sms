@@ -32,6 +32,7 @@ def apply_late_fees(percent=None, flat=None, grace_days=5, dry_run=False):
         .filter(
             status__in=["issued", "partial", "overdue"],
             due_date__lt=cutoff,
+            late_fee_applied=False,  # Also exclude invoices that already had late fee applied
         )
         .exclude(items__category__name__iexact="Late Fee")
         .distinct()
@@ -86,6 +87,10 @@ def apply_late_fees(percent=None, flat=None, grace_days=5, dry_run=False):
                     amount=fee,
                     description="Late fee applied automatically.",
                 )
+                invoice.late_fee_applied = True
+                invoice.late_fee_amount += fee
+                invoice.late_fee_date = timezone.localdate()
+                invoice.save(update_fields=["late_fee_applied", "late_fee_amount", "late_fee_date", "updated_at"])
 
     return {
         "charged": len(rows),

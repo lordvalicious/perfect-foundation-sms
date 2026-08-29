@@ -10,7 +10,7 @@ from apps.core.campus_validation import (
     CampusValidationMixin,
 )
 from apps.core.models import SoftDeleteMixin, SoftDeleteManager
-from apps.schools.models import AcademicYear, Campus, Class, School
+from apps.schools.models import AcademicYear, Campus, Class, School, Section
 from apps.students.models import Enrollment, Student
 
 
@@ -86,6 +86,15 @@ class FeeStructure(SoftDeleteMixin):
         related_name="fee_structures",
     )
 
+    section = models.ForeignKey(
+        Section,
+        on_delete=models.PROTECT,
+        related_name="fee_structures",
+        null=True,
+        blank=True,
+        help_text="Optional: restrict to a specific section. Null means all sections.",
+    )
+
     category = models.ForeignKey(
         FeeCategory,
         on_delete=models.PROTECT,
@@ -100,6 +109,22 @@ class FeeStructure(SoftDeleteMixin):
     due_day = models.PositiveIntegerField(
         default=10,
         help_text="Day of month on which the fee is due.",
+    )
+
+    installment_count = models.PositiveIntegerField(
+        default=1,
+        help_text="Number of installments. 1 = single payment.",
+    )
+
+    installment_frequency = models.CharField(
+        max_length=20,
+        choices=[
+            ("monthly", "Monthly"),
+            ("termly", "Per Term"),
+            ("quarterly", "Quarterly"),
+        ],
+        default="monthly",
+        help_text="Frequency of installments when count > 1.",
     )
 
     status = models.CharField(
@@ -118,6 +143,7 @@ class FeeStructure(SoftDeleteMixin):
         ordering = [
             "campus",
             "class_obj",
+            "section",
             "category",
         ]
 
@@ -127,6 +153,7 @@ class FeeStructure(SoftDeleteMixin):
                     "academic_year",
                     "campus",
                     "class_obj",
+                    "section",
                     "category",
                 ],
                 name="unique_fee_structure",
@@ -142,6 +169,10 @@ class FeeStructure(SoftDeleteMixin):
                     "Class must belong to the selected campus."
                 )
 
+        if self.section_id and self.class_obj_id:
+            if self.section.class_obj_id != self.class_obj_id:
+                errors["section"] = "Section must belong to the selected class."
+
         if self.academic_year_id and self.campus_id:
             if self.academic_year.school_id != self.campus.school_id:
                 errors["academic_year"] = (
@@ -155,23 +186,27 @@ class FeeStructure(SoftDeleteMixin):
         if not 1 <= self.due_day <= 31:
             errors["due_day"] = "Due day must be between 1 and 31."
 
+        if self.installment_count < 1:
+            errors["installment_count"] = "Installment count must be at least 1."
+
         if errors:
             raise ValidationError(errors)
-        
-        # Run campus validation
-        # super().clean()  # Removed CampusValidationMixin
 
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
 
     def __str__(self):
-        return (
-            f"{self.campus.name} - "
-            f"{self.class_obj.name} - "
-            f"{self.category.name} - "
-            f"{self.amount}"
-        )
+        parts = [
+            f"{self.campus.name}",
+            f"{self.class_obj.name}",
+        ]
+        if self.section_id:
+            parts.append(f"{self.section.name}")
+        parts.extend([f"{self.category.name}", f"{self.amount}"])
+        if self.installment_count > 1:
+            parts.append(f"{self.installment_count}x {self.installment_frequency}")
+        return " - ".join(parts)
 
 
 class Invoice(SoftDeleteMixin):
@@ -218,6 +253,27 @@ class Invoice(SoftDeleteMixin):
     issue_date = models.DateField()
     due_date = models.DateField()
 
+    # Installment fields
+    installment_count = models.PositiveIntegerField(
+        default=1,
+        help_text="Number of installments this invoice is split into.",
+    )
+    installment_frequency = models.CharField(
+        max_length=20,
+        choices=[
+            ("monthly", "Monthly"),
+            ("termly", "Per Term"),
+            ("quarterly", "Quarterly"),
+        ],
+        default="monthly",
+        blank=True,
+    )
+    next_installment_due = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Due date of the next pending installment.",
+    )
+
     discount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -228,6 +284,23 @@ class Invoice(SoftDeleteMixin):
         max_length=20,
         choices=STATUS_CHOICES,
         default="draft",
+    )
+
+    # Late fee tracking
+    late_fee_applied = models.BooleanField(
+        default=False,
+        help_text="Whether a late fee has been applied to this invoice.",
+    )
+    late_fee_amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Total late fees applied to this invoice.",
+    )
+    late_fee_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when late fee was last applied.",
     )
 
     notes = models.TextField(blank=True)
@@ -300,6 +373,25 @@ class Invoice(SoftDeleteMixin):
             Decimal("0.00"),
         )
 
+    @property
+    def installment_amount(self):
+        """Amount per installment (total / count)."""
+        if self.installment_count > 1:
+            return (self.total_amount / Decimal(str(self.installment_count))).quantize(Decimal("0.01"))
+        return self.total_amount
+
+    @property
+    def installments_paid(self):
+        """Number of installments fully paid."""
+        if self.installment_count <= 1:
+            return 1 if self.status == "paid" else 0
+        paid = self.paid_amount
+        return min(int(paid / self.installment_amount), self.installment_count)
+
+    @property
+    def installments_remaining(self):
+        return max(self.installment_count - self.installments_paid, 0)
+
     def refresh_status(self, save=True):
         """
         Recalculate the invoice status from its payments.
@@ -348,6 +440,9 @@ class Invoice(SoftDeleteMixin):
 
         if self.discount < Decimal("0"):
             errors["discount"] = "Discount cannot be negative."
+
+        if self.installment_count < 1:
+            errors["installment_count"] = "Installment count must be at least 1."
 
         if errors:
             raise ValidationError(errors)
@@ -468,6 +563,12 @@ class Payment(SoftDeleteMixin):
         help_text="Stripe Checkout Session ID for online payments.",
     )
 
+    # Installment tracking
+    installment_number = models.PositiveIntegerField(
+        default=1,
+        help_text="Which installment this payment is for (1-based).",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -476,7 +577,12 @@ class Payment(SoftDeleteMixin):
             models.UniqueConstraint(
                 fields=["institution", "receipt_number"],
                 name="unique_receipt_number_per_institution",
-            )
+            ),
+            models.UniqueConstraint(
+                fields=["stripe_session_id"],
+                name="unique_stripe_session_id",
+                condition=~models.Q(stripe_session_id=""),
+            ),
         ]
         indexes = [
             models.Index(
@@ -502,6 +608,15 @@ class Payment(SoftDeleteMixin):
         if self.invoice_id and self.amount > self.invoice.balance:
             errors["amount"] = (
                 "Payment cannot be greater than the invoice balance."
+            )
+
+        if self.installment_number < 1:
+            errors["installment_number"] = "Installment number must be at least 1."
+
+        if self.invoice_id and self.installment_number > self.invoice.installment_count:
+            errors["installment_number"] = (
+                f"Installment number cannot exceed invoice installment count "
+                f"({self.invoice.installment_count})."
             )
 
         if errors:
@@ -810,4 +925,84 @@ class PaymentRefund(SoftDeleteMixin):
         self.full_clean()
         super().save(*args, **kwargs)
         self.payment.invoice.refresh_status()
+
+
+class StudentFeeOverride(SoftDeleteMixin):
+    """Per-student fee amount override for a specific fee structure."""
+    objects = SoftDeleteManager()
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="student_fee_overrides",
+        null=True,
+        blank=True,
+    )
+
+    student = models.ForeignKey(
+        "students.Student",
+        on_delete=models.PROTECT,
+        related_name="fee_overrides",
+    )
+
+    fee_structure = models.ForeignKey(
+        FeeStructure,
+        on_delete=models.PROTECT,
+        related_name="student_overrides",
+    )
+
+    amount = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        help_text="Override amount. Overrides the fee structure amount for this student.",
+    )
+
+    reason = models.TextField(blank=True, help_text="Reason for the override (e.g., scholarship, sibling discount).")
+
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ("active", "Active"),
+            ("inactive", "Inactive"),
+        ],
+        default="active",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "fee_structure"],
+                name="unique_student_fee_override",
+            )
+        ]
+        ordering = ["student", "fee_structure"]
+
+    def clean(self):
+        errors = {}
+
+        if self.amount < Decimal("0"):
+            errors["amount"] = "Override amount cannot be negative."
+
+        if self.fee_structure_id and self.student_id:
+            enrollment = self.student.enrollments.filter(
+                academic_year=self.fee_structure.academic_year,
+                campus=self.fee_structure.campus,
+                class_obj=self.fee_structure.class_obj,
+                status="active",
+            ).first()
+            if not enrollment:
+                errors["student"] = "Student must be enrolled in the fee structure's class/campus/year."
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.student.full_name} - {self.fee_structure} - {self.amount}"
 

@@ -35,6 +35,7 @@ from .models import (
     Expense,
     Concession,
     PaymentRefund,
+    StudentFeeOverride,
 )
 from .pdf import payment_receipt_pdf
 from .serializers import (
@@ -50,7 +51,11 @@ from .serializers import (
     ExpenseSerializer,
     ConcessionSerializer,
     PaymentRefundSerializer,
+    StudentFeeOverrideSerializer,
+    LateFeeApplySerializer,
+    LateFeeResultSerializer,
 )
+from .services import FeeInvoiceService, PaymentService
 
 
 def institution_filter(queryset, request):
@@ -1068,3 +1073,502 @@ class BulkPaymentCreateView(APIView):
             },
             status=status.HTTP_201_CREATED if created else status.HTTP_400_BAD_REQUEST,
         )
+
+
+class LateFeeApplyView(APIView):
+    """Apply late fees to overdue invoices.
+
+    POST body:
+        percent (decimal, optional) — percentage of balance to charge as late fee
+        flat (decimal, optional) — fixed amount per overdue invoice
+        grace_days (int, optional, default 5) — days past due before late fee applies
+        dry_run (bool, optional, default false) — if true, only calculate without applying
+    """
+
+    permission_classes = [IsAccountantRole]
+
+    def post(self, request):
+        serializer = LateFeeApplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from .late_fee_service import apply_late_fees
+
+        result = apply_late_fees(
+            percent=serializer.validated_data.get("percent"),
+            flat=serializer.validated_data.get("flat"),
+            grace_days=serializer.validated_data.get("grace_days", 5),
+            dry_run=serializer.validated_data.get("dry_run", False),
+        )
+
+        if not serializer.validated_data.get("dry_run", False) and result["charged"] > 0:
+            record_audit(
+                request=request,
+                action="late_fee_applied",
+                model_name="Invoice",
+                object_id="bulk",
+                object_repr=f"Late fees applied to {result['charged']} invoices",
+                details={
+                    "charged": result["charged"],
+                    "total": str(result["total"]),
+                    "grace_days": serializer.validated_data.get("grace_days", 5),
+                    "percent": str(serializer.validated_data.get("percent", "")),
+                    "flat": str(serializer.validated_data.get("flat", "")),
+                },
+            )
+
+        return Response(LateFeeResultSerializer(result).data)
+
+
+class LateFeePreviewView(APIView):
+    """Preview late fees that would be applied without actually applying them."""
+
+    permission_classes = [IsAccountantRole]
+
+    def get(self, request):
+        from .late_fee_service import apply_late_fees
+
+        percent = request.query_params.get("percent")
+        flat = request.query_params.get("flat")
+        grace_days = int(request.query_params.get("grace_days", 5))
+
+        if percent:
+            percent = Decimal(percent)
+        if flat:
+            flat = Decimal(flat)
+
+        result = apply_late_fees(
+            percent=percent,
+            flat=flat,
+            grace_days=grace_days,
+            dry_run=True,
+        )
+
+        return Response(LateFeeResultSerializer(result).data)
+
+
+class OutstandingBalanceView(APIView):
+    """Get outstanding balances for students, optionally filtered."""
+
+    permission_classes = [IsFinanceReaderRole]
+
+    def get(self, request):
+        from .services import InvoiceService
+
+        service = InvoiceService(request.institution)
+
+        student_id = request.query_params.get("student")
+        campus_id = request.query_params.get("campus")
+        academic_year_id = request.query_params.get("academic_year")
+
+        student = None
+        campus = None
+        academic_year = None
+
+        if student_id:
+            from apps.students.models import Student
+            try:
+                student = Student.objects.get(pk=student_id)
+                # Verify student belongs to institution
+                if student.enrollment_set.filter(
+                    academic_year__school=request.institution
+                ).exists():
+                    pass
+                else:
+                    return Response(
+                        {"detail": "Student not found in this institution."},
+                        status=status.HTTP_404_NOT_FOUND,
+                    )
+            except Student.DoesNotExist:
+                return Response(
+                    {"detail": "Student not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        if campus_id:
+            try:
+                campus = Campus.objects.get(pk=campus_id, school=request.institution)
+            except Campus.DoesNotExist:
+                return Response(
+                    {"detail": "Campus not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        if academic_year_id:
+            try:
+                academic_year = AcademicYear.objects.get(
+                    pk=academic_year_id, school=request.institution
+                )
+            except AcademicYear.DoesNotExist:
+                return Response(
+                    {"detail": "Academic year not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+
+        invoices = service.get_outstanding_invoices(
+            student=student,
+            campus=campus,
+            academic_year=academic_year,
+        ).select_related("student", "enrollment__campus", "enrollment__class_obj", "enrollment__section")
+
+        invoices = apply_campus_scope(invoices, request, "enrollment__campus_id")
+
+        rows = []
+        for invoice in invoices:
+            rows.append({
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "student_id": invoice.student_id,
+                "student_name": invoice.student.full_name,
+                "admission_number": invoice.student.admission_number,
+                "campus": invoice.enrollment.campus.name,
+                "class": invoice.enrollment.class_obj.name,
+                "section": invoice.enrollment.section.name if invoice.enrollment.section_id else "",
+                "issue_date": invoice.issue_date,
+                "due_date": invoice.due_date,
+                "total_amount": str(invoice.total_amount),
+                "paid_amount": str(invoice.paid_amount),
+                "balance": str(invoice.balance),
+                "status": invoice.status,
+                "is_overdue": invoice.due_date < date.today() and invoice.balance > 0,
+                "days_overdue": (date.today() - invoice.due_date).days if invoice.due_date < date.today() else 0,
+                "late_fee_applied": invoice.late_fee_applied,
+                "late_fee_amount": str(invoice.late_fee_amount),
+            })
+
+        total_outstanding = sum(Decimal(row["balance"]) for row in rows)
+        overdue_count = sum(1 for row in rows if row["is_overdue"])
+
+        return Response({
+            "rows": rows,
+            "summary": {
+                "total_students": len(set(row["student_id"] for row in rows)),
+                "total_invoices": len(rows),
+                "total_outstanding": str(total_outstanding),
+                "overdue_invoices": overdue_count,
+            },
+        })
+
+
+class StudentOutstandingBalanceView(APIView):
+    """Get outstanding balance for a specific student (parent/student access)."""
+
+    permission_classes = [IsFinanceReaderRole]
+
+    def get(self, request, student_id):
+        from .services import InvoiceService
+        from apps.students.models import Student
+        from apps.accounts.scopes import (
+            is_parent,
+            is_student,
+            parent_student_ids,
+            get_student_profile,
+        )
+
+        user = request.user
+
+        # Determine if user can access this student's data
+        if is_manager(user):
+            pass  # Managers can access all
+        elif is_parent(user):
+            if int(student_id) not in parent_student_ids(user):
+                raise PermissionDenied("You cannot access this student's balance.")
+        elif is_student(user):
+            profile = get_student_profile(user)
+            if profile is None or profile.pk != int(student_id):
+                raise PermissionDenied("You cannot access this student's balance.")
+        else:
+            raise PermissionDenied("Access denied.")
+
+        try:
+            student = Student.objects.select_related("guardian").get(
+                pk=student_id,
+                enrollment__academic_year__school=request.institution,
+            )
+        except Student.DoesNotExist:
+            return Response(
+                {"detail": "Student not found in this institution."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        service = InvoiceService(request.institution)
+        invoices = service.get_outstanding_invoices(student=student).select_related(
+            "enrollment__campus", "enrollment__class_obj", "enrollment__section"
+        )
+
+        rows = []
+        for invoice in invoices:
+            rows.append({
+                "invoice_id": invoice.id,
+                "invoice_number": invoice.invoice_number,
+                "issue_date": invoice.issue_date,
+                "due_date": invoice.due_date,
+                "total_amount": str(invoice.total_amount),
+                "paid_amount": str(invoice.paid_amount),
+                "balance": str(invoice.balance),
+                "status": invoice.status,
+                "is_overdue": invoice.due_date < date.today() and invoice.balance > 0,
+                "days_overdue": (date.today() - invoice.due_date).days if invoice.due_date < date.today() else 0,
+                "late_fee_applied": invoice.late_fee_applied,
+                "late_fee_amount": str(invoice.late_fee_amount),
+            })
+
+        total_outstanding = sum(Decimal(row["balance"]) for row in rows)
+
+        return Response({
+            "student": {
+                "id": student.id,
+                "name": student.full_name,
+                "admission_number": student.admission_number,
+            },
+            "invoices": rows,
+            "total_outstanding": str(total_outstanding),
+        })
+
+
+class StudentFeeOverrideListCreateView(generics.ListCreateAPIView):
+    """Manage student-specific fee overrides."""
+
+    permission_classes = [IsAccountantRole]
+    serializer_class = StudentFeeOverrideSerializer
+
+    def get_queryset(self):
+        return StudentFeeOverride.objects.filter(
+            institution=self.request.institution
+        ).select_related("student", "fee_structure__category", "fee_structure__campus", "fee_structure__class_obj")
+
+    def perform_create(self, serializer):
+        fee_structure = serializer.validated_data["fee_structure"]
+        if fee_structure.academic_year.school_id != self.request.institution.id:
+            raise PermissionDenied("Fee structure belongs to a different institution.")
+        serializer.save(institution=self.request.institution)
+
+        record_audit(
+            request=self.request,
+            action="fee_override_created",
+            model_name="StudentFeeOverride",
+            object_id=str(serializer.instance.pk),
+            object_repr=str(serializer.instance),
+            details={
+                "student": serializer.instance.student.full_name,
+                "fee_structure": str(serializer.instance.fee_structure),
+                "amount": str(serializer.instance.amount),
+            },
+        )
+
+
+class StudentFeeOverrideDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = StudentFeeOverrideSerializer
+
+    def get_queryset(self):
+        return StudentFeeOverride.objects.filter(
+            institution=self.request.institution
+        ).select_related("student", "fee_structure")
+
+    def perform_update(self, serializer):
+        serializer.save()
+        record_audit(
+            request=self.request,
+            action="fee_override_updated",
+            model_name="StudentFeeOverride",
+            object_id=str(serializer.instance.pk),
+            object_repr=str(serializer.instance),
+            details={
+                "student": serializer.instance.student.full_name,
+                "fee_structure": str(serializer.instance.fee_structure),
+                "amount": str(serializer.instance.amount),
+            },
+        )
+
+
+class InstallmentScheduleView(APIView):
+    """Get the installment schedule for an invoice."""
+
+    permission_classes = [IsFinanceReaderRole]
+
+    def get(self, request, invoice_id):
+        invoice = get_object_or_404(
+            Invoice.objects.filter(
+                academic_year__school=request.institution
+            ).select_related("enrollment__campus", "enrollment__class_obj"),
+            pk=invoice_id,
+        )
+
+        from apps.accounts.access import assert_campus_allowed
+        assert_campus_allowed(request.user, invoice.enrollment.campus_id)
+
+        if invoice.installment_count <= 1:
+            return Response({
+                "invoice": invoice.invoice_number,
+                "installment_count": 1,
+                "schedule": [{
+                    "number": 1,
+                    "amount": str(invoice.total_amount),
+                    "due_date": invoice.due_date,
+                    "status": "paid" if invoice.status == "paid" else "pending",
+                }],
+            })
+
+        # Generate installment schedule
+        schedule = []
+        installment_amount = invoice.installment_amount
+        remaining = invoice.total_amount
+
+        from datetime import timedelta
+        import calendar
+
+        def add_months(d, months):
+            month = d.month - 1 + months
+            year = d.year + month // 12
+            month = month % 12 + 1
+            day = min(d.day, calendar.monthrange(year, month)[1])
+            return date(year, month, day)
+
+        current_due = invoice.due_date
+        for i in range(1, invoice.installment_count + 1):
+            amt = installment_amount if i < invoice.installment_count else remaining
+            remaining -= amt
+
+            paid = sum(
+                p.net_amount for p in invoice.payments.filter(
+                    status="completed", installment_number=i
+                )
+            )
+            status = "paid" if paid >= amt else ("partial" if paid > 0 else "pending")
+
+            schedule.append({
+                "number": i,
+                "amount": str(amt),
+                "due_date": current_due,
+                "paid": str(paid),
+                "balance": str(max(amt - paid, Decimal("0"))),
+                "status": status,
+            })
+
+            if i < invoice.installment_count:
+                if invoice.installment_frequency == "monthly":
+                    current_due = add_months(current_due, 1)
+                elif invoice.installment_frequency == "quarterly":
+                    current_due = add_months(current_due, 3)
+                elif invoice.installment_frequency == "termly":
+                    # Approximate: 4 months per term
+                    current_due = add_months(current_due, 4)
+
+        return Response({
+            "invoice": invoice.invoice_number,
+            "installment_count": invoice.installment_count,
+            "installment_frequency": invoice.installment_frequency,
+            "total_amount": str(invoice.total_amount),
+            "paid_amount": str(invoice.paid_amount),
+            "balance": str(invoice.balance),
+            "schedule": schedule,
+        })
+
+
+class FeeAssignmentPreviewView(APIView):
+    """Preview fee assignments for enrollments without creating invoices."""
+
+    permission_classes = [IsAccountantRole]
+
+    def post(self, request):
+        from apps.students.models import Enrollment
+        from .services import FeeInvoiceService
+
+        academic_year_id = request.data.get("academic_year")
+        campus_id = request.data.get("campus")
+        class_obj_id = request.data.get("class_obj")
+        section_id = request.data.get("section")
+
+        if not all([academic_year_id, campus_id, class_obj_id]):
+            return Response(
+                {"detail": "academic_year, campus, and class_obj are required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        from apps.accounts.access import assert_campus_allowed
+        assert_campus_allowed(request.user, campus_id)
+
+        academic_year = get_object_or_404(AcademicYear, pk=academic_year_id)
+        campus = get_object_or_404(Campus, pk=campus_id)
+        class_obj = get_object_or_404(Class, pk=class_obj_id)
+
+        service = FeeInvoiceService(request.institution, academic_year)
+
+        enrollments = Enrollment.objects.filter(
+            academic_year=academic_year,
+            campus=campus,
+            class_obj=class_obj,
+            status="active",
+        ).select_related("student", "section")
+
+        if section_id:
+            enrollments = enrollments.filter(section_id=section_id)
+
+        preview = []
+        for enrollment in enrollments:
+            fee_structures = service.get_fee_structures_for_enrollment(enrollment)
+            if fee_structures.exists():
+                total = sum(fs.amount for fs in fee_structures)
+                items = [{
+                    "category": fs.category.name,
+                    "amount": str(fs.amount),
+                    "frequency": fs.category.frequency,
+                    "installments": fs.installment_count,
+                } for fs in fee_structures]
+
+                # Check for student overrides
+                overrides = StudentFeeOverride.objects.filter(
+                    student=enrollment.student,
+                    fee_structure__in=fee_structures,
+                    status="active",
+                ).select_related("fee_structure")
+
+                if overrides.exists():
+                    total = Decimal("0")
+                    items = []
+                    for fs in fee_structures:
+                        override = overrides.filter(fee_structure=fs).first()
+                        amount = override.amount if override else fs.amount
+                        total += amount
+                        items.append({
+                            "category": fs.category.name,
+                            "amount": str(amount),
+                            "frequency": fs.category.frequency,
+                            "installments": fs.installment_count,
+                            "overridden": bool(override),
+                        })
+
+                preview.append({
+                    "enrollment_id": enrollment.id,
+                    "student_id": enrollment.student_id,
+                    "student_name": enrollment.student.full_name,
+                    "admission_number": enrollment.student.admission_number,
+                    "section": enrollment.section.name if enrollment.section_id else "",
+                    "fee_structures_count": fee_structures.count(),
+                    "total_amount": str(total),
+                    "items": items,
+                    "has_override": overrides.exists(),
+                })
+            else:
+                preview.append({
+                    "enrollment_id": enrollment.id,
+                    "student_id": enrollment.student_id,
+                    "student_name": enrollment.student.full_name,
+                    "admission_number": enrollment.student.admission_number,
+                    "section": enrollment.section.name if enrollment.section_id else "",
+                    "fee_structures_count": 0,
+                    "total_amount": "0.00",
+                    "items": [],
+                    "has_override": False,
+                    "warning": "No fee structure found for this enrollment",
+                })
+
+        return Response({
+            "academic_year": academic_year.name,
+            "campus": campus.name,
+            "class": class_obj.name,
+            "section": section_id,
+            "total_students": len(preview),
+            "total_amount": str(sum(Decimal(p["total_amount"]) for p in preview)),
+            "preview": preview,
+        })
