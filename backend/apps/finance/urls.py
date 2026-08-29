@@ -15,6 +15,10 @@ from .views import (
     PaymentReversalCreateView,
     AccountListCreateView,
     JournalEntryListView,
+    JournalEntryListCreateView,
+    JournalEntryDetailView,
+    JournalEntryPostView,
+    JournalEntryVoidView,
     ExpenseListCreateView,
     ExpensePostView,
     ConcessionListCreateView,
@@ -42,6 +46,16 @@ from .views import (
     AdjustmentListCreateView,
     AdjustmentDetailView,
     AdjustmentApplyView,
+    BankAccountListCreateView,
+    BankAccountDetailView,
+    BankReconciliationListCreateView,
+    BankReconciliationDetailView,
+    BankReconciliationApproveView,
+    BudgetListCreateView,
+    BudgetDetailView,
+    BudgetLineListCreateView,
+    BudgetApproveView,
+    BudgetCloseView,
 )
 from .stripe_views import StripeCheckoutView, stripe_webhook
 from .jazzcash_views import (
@@ -257,5 +271,75 @@ urlpatterns = [
         "refunds/",
         PaymentRefundListCreateView.as_view(),
         name="refund-list",
+    ),
+    path(
+        "journal-entries/",
+        JournalEntryListCreateView.as_view(),
+        name="journal-entry-list",
+    ),
+    path(
+        "journal-entries/<int:pk>/",
+        JournalEntryDetailView.as_view(),
+        name="journal-entry-detail",
+    ),
+    path(
+        "journal-entries/<int:pk>/post/",
+        JournalEntryPostView.as_view(),
+        name="journal-entry-post",
+    ),
+    path(
+        "journal-entries/<int:pk>/void/",
+        JournalEntryVoidView.as_view(),
+        name="journal-entry-void",
+    ),
+    path(
+        "bank-accounts/",
+        BankAccountListCreateView.as_view(),
+        name="bank-account-list",
+    ),
+    path(
+        "bank-accounts/<int:pk>/",
+        BankAccountDetailView.as_view(),
+        name="bank-account-detail",
+    ),
+    path(
+        "bank-reconciliations/",
+        BankReconciliationListCreateView.as_view(),
+        name="bank-reconciliation-list",
+    ),
+    path(
+        "bank-reconciliations/<int:pk>/",
+        BankReconciliationDetailView.as_view(),
+        name="bank-reconciliation-detail",
+    ),
+    path(
+        "bank-reconciliations/<int:pk>/approve/",
+        BankReconciliationApproveView.as_view(),
+        name="bank-reconciliation-approve",
+    ),
+    path(
+        "budgets/",
+        BudgetListCreateView.as_view(),
+        name="budget-list",
+    ),
+    path(
+        "budgets/<int:pk>/",
+        BudgetDetailView.as_view(),
+        name="budget-detail",
+    ),
+    path(
+        "budgets/<int:budget_id>/lines/",
+        BudgetLineListCreateView.as_view(),
+        name="budget-line-list",
+    ),
+    path(
+        "budgets/<int:pk>/approve/",
+        BudgetApproveView.as_view(),
+        name="budget-approve",
+    ),
+    path(
+        "budgets/<int:pk>/close/",
+        BudgetCloseView.as_view(),
+        name="budget-close",
     ),
 ]

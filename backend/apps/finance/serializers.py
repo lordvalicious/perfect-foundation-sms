@@ -19,6 +19,10 @@ from .models import (
     StudentFeeOverride,
     Fine,
     Adjustment,
+    BankAccount,
+    BankReconciliation,
+    Budget,
+    BudgetLine,
 )
 from .services import next_invoice_number, next_receipt_number
 
@@ -556,4 +560,167 @@ class AdjustmentSerializer(serializers.ModelSerializer):
 
 
 class AdjustmentApplySerializer(serializers.Serializer):
+    pass
+
+
+class JournalEntrySerializer(serializers.ModelSerializer):
+    lines = JournalLineSerializer(many=True, read_only=True)
+    total_debit = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    total_credit = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    is_balanced = serializers.BooleanField(read_only=True)
+    posted_by_name = serializers.CharField(source="posted_by.get_full_name", read_only=True)
+    voided_by_name = serializers.CharField(source="voided_by.get_full_name", read_only=True)
+    reversal_id = serializers.IntegerField(source="reversed_entry.id", read_only=True)
+
+    class Meta:
+        model = JournalEntry
+        fields = [
+            "id", "institution", "campus", "posting_date", "description", "reference",
+            "source_type", "source_id", "status", "created_by", "posted_by", "posted_by_name",
+            "posted_at", "voided_by", "voided_by_name", "voided_at", "void_reason",
+            "reversed_entry", "reversal_id", "created_at", "updated_at",
+            "lines", "total_debit", "total_credit", "is_balanced",
+        ]
+        read_only_fields = ["id", "institution", "created_by", "posted_by", "posted_at", 
+                           "voided_by", "voided_at", "reversed_entry", "created_at", "updated_at"]
+
+
+class JournalEntryCreateSerializer(serializers.ModelSerializer):
+    lines = JournalLineSerializer(many=True, write_only=True)
+
+    class Meta:
+        model = JournalEntry
+        fields = [
+            "id", "campus", "posting_date", "description", "reference",
+            "source_type", "source_id", "lines",
+        ]
+
+    def validate_lines(self, lines):
+        if not lines:
+            raise serializers.ValidationError("At least one journal line is required.")
+        total_debit = sum(Decimal(str(line.get("debit", 0))) for line in lines)
+        total_credit = sum(Decimal(str(line.get("credit", 0))) for line in lines)
+        if total_debit != total_credit:
+            raise serializers.ValidationError(
+                f"Journal entry unbalanced: debit={total_debit}, credit={total_credit}"
+            )
+        return lines
+
+    def create(self, validated_data):
+        lines = validated_data.pop("lines")
+        validated_data["institution"] = self.context["request"].institution
+        validated_data["created_by"] = self.context["request"].user
+        validated_data["status"] = "draft"
+
+        entry = JournalEntry.objects.create(**validated_data)
+        for line in lines:
+            JournalLine.objects.create(entry=entry, **line)
+        return entry
+
+
+class JournalEntryPostSerializer(serializers.Serializer):
+    pass
+
+
+class JournalEntryVoidSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=True)
+
+
+class BankAccountSerializer(serializers.ModelSerializer):
+    account_code = serializers.CharField(source="account.code", read_only=True)
+    account_name = serializers.CharField(source="account.name", read_only=True)
+    current_balance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+
+    class Meta:
+        model = BankAccount
+        fields = [
+            "id", "institution", "campus", "account", "account_code", "account_name",
+            "bank_name", "account_number", "account_holder", "branch",
+            "swift_code", "iban", "currency", "opening_balance", "opening_date",
+            "current_balance", "is_active", "last_reconciled_date",
+            "last_reconciled_balance", "created_by", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "institution", "current_balance", "last_reconciled_date",
+                           "last_reconciled_balance", "created_by", "created_at", "updated_at"]
+
+
+class BankReconciliationSerializer(serializers.ModelSerializer):
+    bank_account_name = serializers.CharField(source="bank_account.__str__", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    prepared_by_name = serializers.CharField(source="prepared_by.get_full_name", read_only=True)
+    approved_by_name = serializers.CharField(source="approved_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = BankReconciliation
+        fields = [
+            "id", "bank_account", "bank_account_name", "statement_date",
+            "statement_balance", "book_balance", "difference", "status",
+            "status_display", "prepared_by", "prepared_by_name",
+            "approved_by", "approved_by_name", "approved_at", "notes",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "difference", "prepared_by", "approved_by",
+                           "approved_at", "created_at", "updated_at"]
+
+
+class BankReconciliationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BankReconciliation
+        fields = [
+            "id", "bank_account", "statement_date", "statement_balance",
+            "book_balance", "notes",
+        ]
+
+    def create(self, validated_data):
+        validated_data["institution"] = self.context["request"].institution
+        validated_data["prepared_by"] = self.context["request"].user
+        validated_data["status"] = "draft"
+        return super().create(validated_data)
+
+
+class BudgetSerializer(serializers.ModelSerializer):
+    campus_name = serializers.CharField(source="campus.name", read_only=True)
+    academic_year_name = serializers.CharField(source="academic_year.name", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    lines_count = serializers.IntegerField(source="lines.count", read_only=True)
+    created_by_name = serializers.CharField(source="created_by.get_full_name", read_only=True)
+    approved_by_name = serializers.CharField(source="approved_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = Budget
+        fields = [
+            "id", "institution", "campus", "campus_name", "academic_year",
+            "academic_year_name", "name", "description", "start_date", "end_date",
+            "status", "status_display", "total_budgeted_income", "total_budgeted_expense",
+            "lines_count", "created_by", "created_by_name", "approved_by",
+            "approved_by_name", "approved_at", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "institution", "total_budgeted_income",
+                           "total_budgeted_expense", "created_by", "approved_by",
+                           "approved_at", "created_at", "updated_at"]
+
+
+class BudgetLineSerializer(serializers.ModelSerializer):
+    account_code = serializers.CharField(source="account.code", read_only=True)
+    account_name = serializers.CharField(source="account.name", read_only=True)
+    type_display = serializers.CharField(source="get_type_display", read_only=True)
+    variance = serializers.DecimalField(max_digits=14, decimal_places=2, read_only=True)
+
+    class Meta:
+        model = BudgetLine
+        fields = [
+            "id", "budget", "account", "account_code", "account_name",
+            "type", "type_display", "budgeted_amount", "actual_amount",
+            "variance", "period_start", "period_end", "notes",
+            "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "actual_amount", "variance", "created_at", "updated_at"]
+
+
+class BudgetApproveSerializer(serializers.Serializer):
+    pass
+
+
+class BudgetCloseSerializer(serializers.Serializer):
     pass

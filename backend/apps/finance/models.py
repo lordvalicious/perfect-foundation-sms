@@ -743,7 +743,11 @@ class Account(SoftDeleteMixin):
 
 class JournalEntry(SoftDeleteMixin):
     objects = SoftDeleteManager()
-    STATUS_CHOICES = [("posted", "Posted"), ("void", "Void")]
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("posted", "Posted"),
+        ("void", "Void"),
+    ]
 
     institution = models.ForeignKey(
         School,
@@ -759,9 +763,10 @@ class JournalEntry(SoftDeleteMixin):
     )
     posting_date = models.DateField(default=date.today)
     description = models.CharField(max_length=255)
+    reference = models.CharField(max_length=100, blank=True)
     source_type = models.CharField(max_length=50, blank=True)
     source_id = models.CharField(max_length=50, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="posted")
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
     created_by = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,
@@ -769,15 +774,136 @@ class JournalEntry(SoftDeleteMixin):
         blank=True,
         related_name="created_journal_entries",
     )
+    posted_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="posted_journal_entries",
+    )
+    posted_at = models.DateTimeField(null=True, blank=True)
+    voided_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="voided_journal_entries",
+    )
+    voided_at = models.DateTimeField(null=True, blank=True)
+    void_reason = models.TextField(blank=True)
+    reversed_entry = models.ForeignKey(
+        "self",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="reversal_entries",
+    )
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-posting_date", "-id"]
+        indexes = [
+            models.Index(fields=["institution", "status", "posting_date"]),
+            models.Index(fields=["source_type", "source_id"]),
+        ]
 
     def clean(self):
+        errors = {}
         if self.campus_id and self.campus.school_id != self.institution_id:
-            raise ValidationError({"campus": "Campus must belong to the institution."})
+            errors["campus"] = "Campus must belong to the institution."
+
+        # Validate balance for posted entries
+        if self.status == "posted" and self.pk:
+            total_debit = sum((line.debit for line in self.lines.all()), Decimal("0.00"))
+            total_credit = sum((line.credit for line in self.lines.all()), Decimal("0.00"))
+            if total_debit != total_credit:
+                errors["__all__"] = f"Journal entry unbalanced: debit={total_debit}, credit={total_credit}"
+
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+    def post(self, user):
+        """Post a draft journal entry."""
+        if self.status != "draft":
+            raise ValueError("Only draft entries can be posted.")
+        
+        total_debit = sum((line.debit for line in self.lines.all()), Decimal("0.00"))
+        total_credit = sum((line.credit for line in self.lines.all()), Decimal("0.00"))
+        if total_debit != total_credit:
+            raise ValueError(f"Journal entry unbalanced: debit={total_debit}, credit={total_credit}")
+        
+        if not self.lines.exists():
+            raise ValueError("Journal entry must have at least one line.")
+        
+        from django.utils import timezone
+        self.status = "posted"
+        self.posted_by = user
+        self.posted_at = timezone.now()
+        self.save(update_fields=["status", "posted_by", "posted_at", "updated_at"])
+        
+        record_audit(
+            user=user,
+            action="journal_posted",
+            model_name="JournalEntry",
+            object_id=str(self.pk),
+            object_repr=str(self),
+            details={"total_debit": str(total_debit), "total_credit": str(total_credit)},
+        )
+        return self
+
+    def void(self, user, reason):
+        """Void a posted journal entry and create reversing entry."""
+        if self.status != "posted":
+            raise ValueError("Only posted entries can be voided.")
+        if self.reversed_entry_id:
+            raise ValueError("Entry already has a reversal.")
+
+        from django.utils import timezone
+        from .services import JournalService
+        
+        # Create reversing entry
+        lines = []
+        for line in self.lines.all():
+            lines.append({
+                "account_id": line.account_id,
+                "debit": str(line.credit),
+                "credit": str(line.debit),
+                "memo": f"Reversal of {self.description}",
+            })
+        
+        reversal = JournalService(self.institution).create_journal_entry(
+            posting_date=date.today(),
+            description=f"Reversal: {self.description}",
+            lines=lines,
+            campus=self.campus,
+            source_type="journal_reversal",
+            source_id=str(self.pk),
+            user=user,
+        )
+        reversal.post(user)
+
+        # Mark original as void
+        self.status = "void"
+        self.voided_by = user
+        self.voided_at = timezone.now()
+        self.void_reason = reason
+        self.reversed_entry = reversal
+        self.save(update_fields=["status", "voided_by", "voided_at", "void_reason", "reversed_entry", "updated_at"])
+
+        record_audit(
+            user=user,
+            action="journal_voided",
+            model_name="JournalEntry",
+            object_id=str(self.pk),
+            object_repr=str(self),
+            details={"reversal_id": str(reversal.pk), "reason": reason},
+        )
+        return reversal
 
     @property
     def total_debit(self):
@@ -790,6 +916,9 @@ class JournalEntry(SoftDeleteMixin):
     @property
     def is_balanced(self):
         return self.total_debit == self.total_credit
+
+def __str__(self):
+        return f"{self.posting_date} - {self.description} ({self.status})"
 
 
 class JournalLine(models.Model):
@@ -817,7 +946,366 @@ class JournalLine(models.Model):
         return super().save(*args, **kwargs)
 
 
+class BankAccount(SoftDeleteMixin):
+    """Bank account / cash book for recording bank transactions."""
+    objects = SoftDeleteManager()
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="bank_accounts",
+    )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="bank_accounts",
+    )
+    account = models.OneToOneField(
+        Account,
+        on_delete=models.PROTECT,
+        related_name="bank_account",
+        help_text="The GL account representing this bank account",
+    )
+    bank_name = models.CharField(max_length=200)
+    account_number = models.CharField(max_length=50)
+    account_holder = models.CharField(max_length=200, blank=True)
+    branch = models.CharField(max_length=200, blank=True)
+    swift_code = models.CharField(max_length=20, blank=True)
+    iban = models.CharField(max_length=50, blank=True)
+    currency = models.CharField(max_length=3, default="PKR")
+    opening_balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    opening_date = models.DateField(default=date.today)
+    is_active = models.BooleanField(default=True)
+    last_reconciled_date = models.DateField(null=True, blank=True)
+    last_reconciled_balance = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_bank_accounts",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["bank_name", "account_number"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "account_number"],
+                name="unique_bank_account_per_institution",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.campus_id and self.campus.school_id != self.institution_id:
+            errors["campus"] = "Campus must belong to the institution."
+        if self.account_id and self.account.institution_id != self.institution_id:
+            errors["account"] = "GL account must belong to the same institution."
+        if self.account_id and self.account.account_type != "asset":
+            errors["account"] = "Bank account must be linked to an asset account."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.bank_name} - {self.account_number}"
+
+    @property
+    def current_balance(self):
+        """Calculate current balance from journal lines."""
+        from django.db.models import Sum
+        total_debit = self.account.journal_lines.filter(
+            entry__status="posted"
+        ).aggregate(total=Sum("debit"))["total"] or Decimal("0.00")
+        total_credit = self.account.journal_lines.filter(
+            entry__status="posted"
+        ).aggregate(total=Sum("credit"))["total"] or Decimal("0.00")
+        return self.opening_balance + total_debit - total_credit
+
+
+class BankReconciliation(SoftDeleteMixin):
+    """Bank reconciliation statement."""
+    objects = SoftDeleteManager()
+
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("completed", "Completed"),
+        ("approved", "Approved"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="bank_reconciliations",
+    )
+    bank_account = models.ForeignKey(
+        BankAccount,
+        on_delete=models.PROTECT,
+        related_name="reconciliations",
+    )
+    statement_date = models.DateField()
+    statement_balance = models.DecimalField(max_digits=14, decimal_places=2)
+    book_balance = models.DecimalField(max_digits=14, decimal_places=2)
+    difference = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    prepared_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="prepared_reconciliations",
+    )
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_reconciliations",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-statement_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["bank_account", "statement_date"],
+                name="unique_reconciliation_per_account_date",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        self.difference = self.statement_balance - self.book_balance
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.difference = self.statement_balance - self.book_balance
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def approve(self, user):
+        if self.status != "completed":
+            raise ValueError("Only completed reconciliations can be approved.")
+        from django.utils import timezone
+        self.status = "approved"
+        self.approved_by = user
+        self.approved_at = timezone.now()
+        self.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+
+    def __str__(self):
+        return f"{self.bank_account} - {self.statement_date} ({self.status})"
+
+
+class Budget(SoftDeleteMixin):
+    """Budget for tracking planned vs actual income/expense."""
+    objects = SoftDeleteManager()
+
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("active", "Active"),
+        ("closed", "Closed"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="budgets",
+    )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="budgets",
+    )
+    academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.PROTECT,
+        related_name="budgets",
+    )
+    name = models.CharField(max_length=200)
+    description = models.TextField(blank=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    total_budgeted_income = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    total_budgeted_expense = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_budgets",
+    )
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_budgets",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-start_date"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "academic_year", "name"],
+                name="unique_budget_name_per_year_institution",
+            )
+        ]
+
+    def clean(self):
+        errors = {}
+        if self.campus_id and self.campus.school_id != self.institution_id:
+            errors["campus"] = "Campus must belong to the institution."
+        if self.academic_year_id and self.academic_year.school_id != self.institution_id:
+            errors["academic_year"] = "Academic year must belong to the institution."
+        if self.start_date > self.end_date:
+            errors["end_date"] = "End date must be after start date."
+        if self.academic_year_id:
+            if self.start_date < self.academic_year.start_date or self.end_date > self.academic_year.end_date:
+                errors["academic_year"] = "Budget dates must be within the academic year."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def approve(self, user):
+        if self.status != "draft":
+            raise ValueError("Only draft budgets can be approved.")
+        from django.utils import timezone
+        self.status = "active"
+        self.approved_by = user
+        self.approved_at = timezone.now()
+        self.save(update_fields=["status", "approved_by", "approved_at", "updated_at"])
+
+    def close(self, user):
+        if self.status != "active":
+            raise ValueError("Only active budgets can be closed.")
+        from django.utils import timezone
+        self.status = "closed"
+        self.save(update_fields=["status", "updated_at"])
+
+    def __str__(self):
+        return f"{self.name} ({self.academic_year})"
+
+
+class BudgetLine(SoftDeleteMixin):
+    """Individual budget line items."""
+    objects = SoftDeleteManager()
+
+    TYPE_CHOICES = [
+        ("income", "Income"),
+        ("expense", "Expense"),
+    ]
+
+    budget = models.ForeignKey(
+        Budget,
+        on_delete=models.CASCADE,
+        related_name="lines",
+    )
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.PROTECT,
+        related_name="budget_lines",
+    )
+    type = models.CharField(max_length=10, choices=TYPE_CHOICES)
+    budgeted_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    actual_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    period_start = models.DateField()
+    period_end = models.DateField()
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["period_start", "account__code"]
+
+    def clean(self):
+        errors = {}
+        if self.account_id and self.account.institution_id != self.budget.institution_id:
+            errors["account"] = "Account must belong to the budget institution."
+        if self.period_start > self.period_end:
+            errors["period_end"] = "Period end must be after period start."
+        if self.budget_id:
+            if self.period_start < self.budget.start_date or self.period_end > self.budget.end_date:
+                errors["period"] = "Budget line period must be within budget period."
+        if self.budgeted_amount < 0:
+            errors["budgeted_amount"] = "Budgeted amount cannot be negative."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    @property
+    def variance(self):
+        return self.actual_amount - self.budgeted_amount
+
+    def __str__(self):
+        return f"{self.budget.name} - {self.account.code} - {self.get_type_display()}"
+
+
 class Expense(SoftDeleteMixin):
+    objects = SoftDeleteManager()
+    STATUS_CHOICES = [
+        ("draft", "Draft"),
+        ("approved", "Approved"),
+        ("paid", "Paid"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    institution = models.ForeignKey(School, on_delete=models.CASCADE, related_name="expenses")
+    campus = models.ForeignKey(Campus, on_delete=models.PROTECT, null=True, blank=True, related_name="expenses")
+    expense_account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="expenses")
+    payment_account = models.ForeignKey(Account, on_delete=models.PROTECT, related_name="paid_expenses")
+    vendor = models.CharField(max_length=200, blank=True)
+    expense_date = models.DateField(default=date.today)
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="draft")
+    reference = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True)
+    journal_entry = models.OneToOneField(JournalEntry, on_delete=models.PROTECT, null=True, blank=True, related_name="expense")
+    created_by = models.ForeignKey("accounts.User", on_delete=models.SET_NULL, null=True, blank=True, related_name="created_expenses")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        errors = {}
+        if self.campus_id and self.campus.school_id != self.institution_id:
+            errors["campus"] = "Campus must belong to the institution."
+        for field in ("expense_account", "payment_account"):
+            account = getattr(self, f"{field}_id", None) and getattr(self, field, None)
+            if account and account.institution_id != self.institution_id:
+                errors[field] = "Account must belong to the institution."
+        if self.amount <= 0:
+            errors["amount"] = "Expense amount must be greater than zero."
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.vendor or self.reference or self.id} - {self.amount}"
     objects = SoftDeleteManager()
     STATUS_CHOICES = [
         ("draft", "Draft"),

@@ -38,6 +38,10 @@ from .models import (
     StudentFeeOverride,
     Fine,
     Adjustment,
+    BankAccount,
+    BankReconciliation,
+    Budget,
+    BudgetLine,
 )
 from .pdf import payment_receipt_pdf
 from .serializers import (
@@ -50,6 +54,9 @@ from .serializers import (
     PaymentSerializer,
     AccountSerializer,
     JournalEntrySerializer,
+    JournalEntryCreateSerializer,
+    JournalEntryPostSerializer,
+    JournalEntryVoidSerializer,
     ExpenseSerializer,
     ConcessionSerializer,
     PaymentRefundSerializer,
@@ -61,8 +68,15 @@ from .serializers import (
     FineWaiveSerializer,
     AdjustmentSerializer,
     AdjustmentApplySerializer,
+    BankAccountSerializer,
+    BankReconciliationSerializer,
+    BankReconciliationCreateSerializer,
+    BudgetSerializer,
+    BudgetLineSerializer,
+    BudgetApproveSerializer,
+    BudgetCloseSerializer,
 )
-from .services import FeeInvoiceService, PaymentService
+from .services import FeeInvoiceService, PaymentService, JournalService
 
 
 def institution_filter(queryset, request):
@@ -1878,3 +1892,303 @@ class PaymentRefundListCreateView(generics.ListCreateAPIView):
             object_repr=str(refund),
             details={"amount": str(refund.amount), "payment": payment.receipt_number},
         )
+
+
+class JournalEntryListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return JournalEntryCreateSerializer
+        return JournalEntrySerializer
+
+    def get_queryset(self):
+        queryset = institution_filter(
+            JournalEntry.objects.prefetch_related("lines__account").order_by("-posting_date", "-id"),
+            self.request,
+        )
+        return apply_campus_scope(queryset, self.request, "campus_id")
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution, created_by=self.request.user)
+
+
+class JournalEntryDetailView(generics.RetrieveAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = JournalEntrySerializer
+
+    def get_queryset(self):
+        queryset = JournalEntry.objects.prefetch_related("lines__account").filter(
+            institution=self.request.institution
+        )
+        return apply_campus_scope(queryset, self.request, "campus_id")
+
+
+class JournalEntryPostView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        serializer = JournalEntryPostSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        entry = get_object_or_404(
+            JournalEntry.objects.filter(
+                institution=request.institution
+            ).prefetch_related("lines__account"),
+            pk=pk,
+        )
+
+        if entry.campus_id:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(request.user, entry.campus_id)
+
+        try:
+            entry.post(request.user)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=400)
+
+        record_audit(
+            request=request,
+            action="journal_posted",
+            model_name="JournalEntry",
+            object_id=str(entry.pk),
+            object_repr=str(entry),
+            details={"total_debit": str(entry.total_debit), "total_credit": str(entry.total_credit)},
+        )
+
+        return Response(JournalEntrySerializer(entry).data)
+
+
+class JournalEntryVoidView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        serializer = JournalEntryVoidSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        entry = get_object_or_404(
+            JournalEntry.objects.filter(
+                institution=request.institution
+            ).prefetch_related("lines__account"),
+            pk=pk,
+        )
+
+        if entry.campus_id:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(request.user, entry.campus_id)
+
+        reason = serializer.validated_data["reason"]
+
+        try:
+            reversal = entry.void(request.user, reason)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=400)
+
+        record_audit(
+            request=request,
+            action="journal_voided",
+            model_name="JournalEntry",
+            object_id=str(entry.pk),
+            object_repr=str(entry),
+            details={"reversal_id": str(reversal.pk), "reason": reason},
+        )
+
+        return Response(JournalEntrySerializer(entry).data)
+
+
+class BankAccountListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = BankAccountSerializer
+
+    def get_queryset(self):
+        queryset = institution_filter(BankAccount.objects.select_related("account", "campus"), self.request)
+        active = self.request.query_params.get("active")
+        if active is not None:
+            queryset = queryset.filter(is_active=active.lower() == "true")
+        return queryset
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution, created_by=self.request.user)
+
+
+class BankAccountDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = BankAccountSerializer
+
+    def get_queryset(self):
+        queryset = BankAccount.objects.select_related("account", "campus").filter(
+            institution=self.request.institution
+        )
+        return apply_campus_scope(queryset, self.request, "campus_id")
+
+
+class BankReconciliationListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return BankReconciliationCreateSerializer
+        return BankReconciliationSerializer
+
+    def get_queryset(self):
+        queryset = BankReconciliation.objects.select_related("bank_account", "bank_account__campus").filter(
+            institution=self.request.institution
+        )
+        return apply_campus_scope(queryset, self.request, "bank_account__campus_id")
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution, prepared_by=self.request.user)
+
+
+class BankReconciliationDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = BankReconciliationSerializer
+
+    def get_queryset(self):
+        queryset = BankReconciliation.objects.select_related("bank_account", "bank_account__campus").filter(
+            institution=self.request.institution
+        )
+        return apply_campus_scope(queryset, self.request, "bank_account__campus_id")
+
+
+class BankReconciliationApproveView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        reconciliation = get_object_or_404(
+            BankReconciliation.objects.select_related("bank_account"),
+            pk=pk,
+            institution=request.institution,
+        )
+
+        if reconciliation.bank_account.campus_id:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(request.user, reconciliation.bank_account.campus_id)
+
+        if reconciliation.status != "completed":
+            return Response({"detail": "Only completed reconciliations can be approved."}, status=400)
+
+        reconciliation.approve(request.user)
+
+        record_audit(
+            request=request,
+            action="bank_reconciliation_approved",
+            model_name="BankReconciliation",
+            object_id=str(reconciliation.pk),
+            object_repr=str(reconciliation),
+            details={"difference": str(reconciliation.difference)},
+        )
+
+        return Response(BankReconciliationSerializer(reconciliation).data)
+
+
+class BudgetListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = BudgetSerializer
+
+    def get_queryset(self):
+        queryset = institution_filter(
+            Budget.objects.select_related("campus", "academic_year").order_by("-start_date", "-id"),
+            self.request,
+        )
+        return apply_campus_scope(queryset, self.request, "campus_id")
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution, created_by=self.request.user)
+
+
+class BudgetDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = BudgetSerializer
+
+    def get_queryset(self):
+        queryset = Budget.objects.select_related("campus", "academic_year").filter(
+            institution=self.request.institution
+        )
+        return apply_campus_scope(queryset, self.request, "campus_id")
+
+
+class BudgetLineListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = BudgetLineSerializer
+
+    def get_queryset(self):
+        budget_id = self.kwargs.get("budget_id")
+        return BudgetLine.objects.select_related("account").filter(
+            budget_id=budget_id,
+            budget__institution=self.request.institution,
+        )
+
+    def perform_create(self, serializer):
+        budget = get_object_or_404(
+            Budget.objects.filter(institution=self.request.institution),
+            pk=self.kwargs.get("budget_id"),
+        )
+        serializer.save(budget=budget)
+
+
+class BudgetApproveView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        budget = get_object_or_404(
+            Budget.objects.select_related("campus"),
+            pk=pk,
+            institution=request.institution,
+        )
+
+        if budget.campus_id:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(request.user, budget.campus_id)
+
+        if budget.status != "draft":
+            return Response({"detail": "Only draft budgets can be approved."}, status=400)
+
+        budget.approve(request.user)
+
+        record_audit(
+            request=request,
+            action="budget_approved",
+            model_name="Budget",
+            object_id=str(budget.pk),
+            object_repr=str(budget),
+            details={"total_income": str(budget.total_budgeted_income), "total_expense": str(budget.total_budgeted_expense)},
+        )
+
+        return Response(BudgetSerializer(budget).data)
+
+
+class BudgetCloseView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        budget = get_object_or_404(
+            Budget.objects.select_related("campus"),
+            pk=pk,
+            institution=request.institution,
+        )
+
+        if budget.campus_id:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(request.user, budget.campus_id)
+
+        if budget.status != "active":
+            return Response({"detail": "Only active budgets can be closed."}, status=400)
+
+        budget.close(request.user)
+
+        record_audit(
+            request=request,
+            action="budget_closed",
+            model_name="Budget",
+            object_id=str(budget.pk),
+            object_repr=str(budget),
+            details={},
+        )
+
+        return Response(BudgetSerializer(budget).data)
