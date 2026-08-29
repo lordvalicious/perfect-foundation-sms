@@ -4,7 +4,8 @@ from apps.workflow.views import (
     WorkflowApprovalDecideView,
     WorkflowApprovalListView,
     WorkflowDefinitionListView,
-    WorkflowDefinitionCreateUpdateDeleteView,
+    WorkflowDefinitionCreateView,
+    WorkflowDefinitionUpdateDeleteView,
     WorkflowDefinitionTestView,
     WorkflowInstanceActionView,
     WorkflowInstanceDetailView,
@@ -21,12 +22,12 @@ urlpatterns = [
     ),
     path(
         "definitions/create/",
-        WorkflowDefinitionCreateUpdateDeleteView.as_view(),
+        WorkflowDefinitionCreateView.as_view(),
         name="workflow-definition-create",
     ),
     path(
         "definitions/<int:pk>/",
-        WorkflowDefinitionCreateUpdateDeleteView.as_view(),
+        WorkflowDefinitionUpdateDeleteView.as_view(),
         name="workflow-definition-detail",
     ),
     path(

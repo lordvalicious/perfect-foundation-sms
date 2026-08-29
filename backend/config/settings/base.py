@@ -60,6 +60,7 @@ INSTALLED_APPS = [
     "apps.lms",
     "apps.portal",
     "apps.workflow",
+    "apps.white_label",
     "apps.helpdesk",
     "apps.visitors",
     "apps.digital_ids",

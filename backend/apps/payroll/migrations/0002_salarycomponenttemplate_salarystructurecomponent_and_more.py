@@ -70,10 +70,6 @@ class Migration(migrations.Migration):
             model_name='salarystructure',
             name='allowances',
         ),
-        migrations.RemoveField(
-            model_name='salarystructure',
-            name='teacher',
-        ),
         migrations.AddField(
             model_name='payrollrecord',
             name='approved_at',
@@ -193,10 +189,6 @@ class Migration(migrations.Migration):
         migrations.RemoveField(
             model_name='payrollrecord',
             name='structure',
-        ),
-        migrations.RemoveField(
-            model_name='payrollrecord',
-            name='teacher',
         ),
         migrations.AddConstraint(
             model_name='salarycomponenttemplate',

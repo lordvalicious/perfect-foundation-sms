@@ -196,8 +196,8 @@ class WorkflowApprovalDecideView(APIView):
         )
 
 
-class WorkflowDefinitionCreateUpdateDeleteView(generics.CreateUpdateAPIView):
-    """Create, update, or delete workflow definitions (admin only)."""
+class WorkflowDefinitionCreateView(generics.CreateAPIView):
+    """Create workflow definitions (admin only)."""
 
     permission_classes = [IsAuthenticated]
     serializer_class = WorkflowDefinitionWriteSerializer
@@ -212,6 +212,20 @@ class WorkflowDefinitionCreateUpdateDeleteView(generics.CreateUpdateAPIView):
     def create(self, request, *args, **kwargs):
         self.check_admin_permission(request)
         return super().create(request, *args, **kwargs)
+
+
+class WorkflowDefinitionUpdateDeleteView(generics.RetrieveUpdateDestroyAPIView):
+    """Update or delete workflow definitions (admin only)."""
+
+    permission_classes = [IsAuthenticated]
+    serializer_class = WorkflowDefinitionWriteSerializer
+    queryset = WorkflowDefinition.objects.all()
+
+    def check_admin_permission(self, request):
+        """Ensure user is admin."""
+        user = request.user
+        if not user.is_staff and not user.is_superuser:
+            raise PermissionDenied("Only administrators can manage workflow definitions.")
 
     def update(self, request, *args, **kwargs):
         self.check_admin_permission(request)

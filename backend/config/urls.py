@@ -161,6 +161,11 @@ urlpatterns = [
     ),
 
     path(
+        "api/white-label/",
+        include("apps.white_label.urls"),
+    ),
+
+    path(
         "api/workflow/",
         include("apps.workflow.urls"),
     ),
