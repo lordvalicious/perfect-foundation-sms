@@ -17,6 +17,8 @@ from .models import (
     Concession,
     PaymentRefund,
     StudentFeeOverride,
+    Fine,
+    Adjustment,
 )
 from .services import next_invoice_number, next_receipt_number
 
@@ -447,12 +449,14 @@ class ExpenseSerializer(serializers.ModelSerializer):
 class ConcessionSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(source="get_status_display", read_only=True)
     invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
+    type_display = serializers.CharField(source="get_type_display", read_only=True)
 
     class Meta:
         model = Concession
         fields = [
-            "id", "invoice", "invoice_number", "amount", "reason", "status",
-            "status_display", "approved_by", "approved_at", "created_at",
+            "id", "invoice", "invoice_number", "type", "type_display",
+            "amount", "reason", "status", "status_display",
+            "approved_by", "approved_at", "created_at",
         ]
         read_only_fields = ["id", "approved_by", "approved_at", "created_at"]
 
@@ -506,3 +510,50 @@ class LateFeeResultSerializer(serializers.Serializer):
     rows = serializers.ListField(child=serializers.DictField())
     truncated_rows = serializers.IntegerField()
     dry_run = serializers.BooleanField()
+
+
+class FineSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    type_display = serializers.CharField(source="get_type_display", read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    admission_number = serializers.CharField(source="student.admission_number", read_only=True)
+
+    class Meta:
+        model = Fine
+        fields = [
+            "id", "student", "student_name", "admission_number", "academic_year",
+            "type", "type_display", "amount", "reason", "status", "status_display",
+            "issued_by", "approved_by", "approved_at", "waived_by", "waived_at",
+            "waiver_reason", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "issued_by", "approved_by", "approved_at", "waived_by", "waived_at", "created_at", "updated_at"]
+
+
+class FineApproveSerializer(serializers.Serializer):
+    pass
+
+
+class FineWaiveSerializer(serializers.Serializer):
+    waiver_reason = serializers.CharField(required=True)
+
+
+class AdjustmentSerializer(serializers.ModelSerializer):
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    type_display = serializers.CharField(source="get_type_display", read_only=True)
+    student_name = serializers.CharField(source="student.full_name", read_only=True)
+    invoice_number = serializers.CharField(source="invoice.invoice_number", read_only=True)
+    receipt_number = serializers.CharField(source="payment.receipt_number", read_only=True)
+
+    class Meta:
+        model = Adjustment
+        fields = [
+            "id", "student", "student_name", "invoice", "invoice_number",
+            "payment", "receipt_number", "type", "type_display", "amount",
+            "reason", "status", "status_display", "created_by", "approved_by",
+            "approved_at", "applied_at", "created_at", "updated_at",
+        ]
+        read_only_fields = ["id", "created_by", "approved_by", "approved_at", "applied_at", "created_at", "updated_at"]
+
+
+class AdjustmentApplySerializer(serializers.Serializer):
+    pass

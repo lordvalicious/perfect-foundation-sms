@@ -18,8 +18,10 @@ from .views import (
     ExpenseListCreateView,
     ExpensePostView,
     ConcessionListCreateView,
+    ConcessionDetailView,
     ConcessionApproveView,
     PaymentRefundCreateView,
+    PaymentRefundListCreateView,
     TrialBalanceReportView,
     IncomeExpenseReportView,
     ReceivablesReportView,
@@ -33,6 +35,13 @@ from .views import (
     StudentFeeOverrideDetailView,
     InstallmentScheduleView,
     FeeAssignmentPreviewView,
+    FineListCreateView,
+    FineDetailView,
+    FineApproveView,
+    FineWaiveView,
+    AdjustmentListCreateView,
+    AdjustmentDetailView,
+    AdjustmentApplyView,
 )
 from .stripe_views import StripeCheckoutView, stripe_webhook
 from .jazzcash_views import (
@@ -193,5 +202,60 @@ urlpatterns = [
         "fee-assignment/preview/",
         FeeAssignmentPreviewView.as_view(),
         name="fee-assignment-preview",
+    ),
+    path(
+        "concessions/",
+        ConcessionListCreateView.as_view(),
+        name="concession-list",
+    ),
+    path(
+        "concessions/<int:pk>/",
+        ConcessionDetailView.as_view(),
+        name="concession-detail",
+    ),
+    path(
+        "concessions/<int:pk>/approve/",
+        ConcessionApproveView.as_view(),
+        name="concession-approve",
+    ),
+    path(
+        "fines/",
+        FineListCreateView.as_view(),
+        name="fine-list",
+    ),
+    path(
+        "fines/<int:pk>/",
+        FineDetailView.as_view(),
+        name="fine-detail",
+    ),
+    path(
+        "fines/<int:pk>/approve/",
+        FineApproveView.as_view(),
+        name="fine-approve",
+    ),
+    path(
+        "fines/<int:pk>/waive/",
+        FineWaiveView.as_view(),
+        name="fine-waive",
+    ),
+    path(
+        "adjustments/",
+        AdjustmentListCreateView.as_view(),
+        name="adjustment-list",
+    ),
+    path(
+        "adjustments/<int:pk>/",
+        AdjustmentDetailView.as_view(),
+        name="adjustment-detail",
+    ),
+    path(
+        "adjustments/<int:pk>/apply/",
+        AdjustmentApplyView.as_view(),
+        name="adjustment-apply",
+    ),
+    path(
+        "refunds/",
+        PaymentRefundListCreateView.as_view(),
+        name="refund-list",
     ),
 ]

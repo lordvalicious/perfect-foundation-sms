@@ -36,6 +36,8 @@ from .models import (
     Concession,
     PaymentRefund,
     StudentFeeOverride,
+    Fine,
+    Adjustment,
 )
 from .pdf import payment_receipt_pdf
 from .serializers import (
@@ -54,6 +56,11 @@ from .serializers import (
     StudentFeeOverrideSerializer,
     LateFeeApplySerializer,
     LateFeeResultSerializer,
+    FineSerializer,
+    FineApproveSerializer,
+    FineWaiveSerializer,
+    AdjustmentSerializer,
+    AdjustmentApplySerializer,
 )
 from .services import FeeInvoiceService, PaymentService
 
@@ -1572,3 +1579,302 @@ class FeeAssignmentPreviewView(APIView):
             "total_amount": str(sum(Decimal(p["total_amount"]) for p in preview)),
             "preview": preview,
         })
+
+
+class ConcessionListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = ConcessionSerializer
+
+    def get_queryset(self):
+        queryset = Concession.objects.filter(
+            institution=self.request.institution
+        ).select_related("invoice", "invoice__student", "invoice__enrollment__campus")
+        return apply_campus_scope(queryset, self.request, "invoice__enrollment__campus_id")
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution)
+
+
+class ConcessionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = ConcessionSerializer
+
+    def get_queryset(self):
+        queryset = Concession.objects.filter(
+            institution=self.request.institution
+        ).select_related("invoice", "invoice__student", "invoice__enrollment__campus")
+        return apply_campus_scope(queryset, self.request, "invoice__enrollment__campus_id")
+
+
+class ConcessionApproveView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        concession = get_object_or_404(
+            Concession.objects.select_related("invoice__enrollment"),
+            pk=pk,
+            institution=request.institution,
+        )
+        from apps.accounts.access import assert_campus_allowed
+        assert_campus_allowed(request.user, concession.invoice.enrollment.campus_id)
+
+        if concession.status != "pending":
+            return Response({"detail": "Only pending concessions can be approved."}, status=400)
+
+        from django.utils import timezone
+        concession.status = "approved"
+        concession.approved_by = request.user
+        concession.approved_at = timezone.now()
+        concession.save(update_fields=["status", "approved_by", "approved_at"])
+        concession.invoice.refresh_status()
+
+        record_audit(
+            request=request,
+            action="concession_approved",
+            model_name="Concession",
+            object_id=str(pk),
+            object_repr=str(concession),
+            details={"amount": str(concession.amount), "type": concession.type},
+        )
+        return Response(ConcessionSerializer(concession).data)
+
+
+class FineListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = FineSerializer
+
+    def get_queryset(self):
+        queryset = Fine.objects.filter(
+            institution=self.request.institution
+        ).select_related("student", "academic_year")
+        return apply_campus_scope(queryset, self.request, "student__enrollments__campus_id")
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution, issued_by=self.request.user)
+
+
+class FineDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = FineSerializer
+
+    def get_queryset(self):
+        queryset = Fine.objects.filter(
+            institution=self.request.institution
+        ).select_related("student", "academic_year")
+        return apply_campus_scope(queryset, self.request, "student__enrollments__campus_id")
+
+
+class FineApproveView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        fine = get_object_or_404(
+            Fine.objects.select_related("student__enrollments"),
+            pk=pk,
+            institution=request.institution,
+        )
+
+        # Check campus access for the student's enrollment
+        enrollment = fine.student.enrollments.filter(
+            academic_year=fine.academic_year, status="active"
+        ).first()
+        if enrollment:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(request.user, enrollment.campus_id)
+
+        if fine.status != "pending":
+            return Response({"detail": "Only pending fines can be approved."}, status=400)
+
+        from django.utils import timezone
+        fine.status = "approved"
+        fine.approved_by = request.user
+        fine.approved_at = timezone.now()
+        fine.save(update_fields=["status", "approved_by", "approved_at"])
+
+        record_audit(
+            request=request,
+            action="fine_approved",
+            model_name="Fine",
+            object_id=str(pk),
+            object_repr=str(fine),
+            details={"amount": str(fine.amount), "type": fine.type},
+        )
+        return Response(FineSerializer(fine).data)
+
+
+class FineWaiveView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        fine = get_object_or_404(
+            Fine.objects.select_related("student__enrollments"),
+            pk=pk,
+            institution=request.institution,
+        )
+
+        enrollment = fine.student.enrollments.filter(
+            academic_year=fine.academic_year, status="active"
+        ).first()
+        if enrollment:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(request.user, enrollment.campus_id)
+
+        serializer = FineWaiveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        from django.utils import timezone
+        fine.status = "waived"
+        fine.waived_by = request.user
+        fine.waived_at = timezone.now()
+        fine.waiver_reason = serializer.validated_data["waiver_reason"]
+        fine.save(update_fields=["status", "waived_by", "waived_at", "waiver_reason"])
+
+        record_audit(
+            request=request,
+            action="fine_waived",
+            model_name="Fine",
+            object_id=str(pk),
+            object_repr=str(fine),
+            details={"amount": str(fine.amount), "reason": fine.waiver_reason},
+        )
+        return Response(FineSerializer(fine).data)
+
+
+class AdjustmentListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = AdjustmentSerializer
+
+    def get_queryset(self):
+        queryset = Adjustment.objects.filter(
+            institution=self.request.institution
+        ).select_related("student", "invoice", "payment")
+        return apply_campus_scope(queryset, self.request, "student__enrollments__campus_id")
+
+    def perform_create(self, serializer):
+        serializer.save(institution=self.request.institution, created_by=self.request.user)
+
+
+class AdjustmentDetailView(generics.RetrieveUpdateDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = AdjustmentSerializer
+
+    def get_queryset(self):
+        queryset = Adjustment.objects.filter(
+            institution=self.request.institution
+        ).select_related("student", "invoice", "payment")
+        return apply_campus_scope(queryset, self.request, "student__enrollments__campus_id")
+
+
+class AdjustmentApplyView(APIView):
+    permission_classes = [IsAccountantRole]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        adjustment = get_object_or_404(
+            Adjustment.objects.select_related("student", "invoice", "payment"),
+            pk=pk,
+            institution=request.institution,
+        )
+
+        if adjustment.status != "pending":
+            return Response({"detail": "Only pending adjustments can be applied."}, status=400)
+
+        # Apply the adjustment
+        from django.utils import timezone
+        if adjustment.type == "credit" and adjustment.invoice:
+            # Create a concession for credit adjustments
+            Concession.objects.create(
+                institution=adjustment.institution,
+                invoice=adjustment.invoice,
+                type="adjustment",
+                amount=adjustment.amount,
+                reason=f"Adjustment: {adjustment.reason}",
+                status="approved",
+            )
+            adjustment.invoice.refresh_status()
+
+        elif adjustment.type == "debit" and adjustment.invoice:
+            # Create a fine for debit adjustments
+            Fine.objects.create(
+                institution=adjustment.institution,
+                student=adjustment.student,
+                academic_year=adjustment.invoice.academic_year,
+                type="other",
+                amount=adjustment.amount,
+                reason=f"Adjustment: {adjustment.reason}",
+                status="approved",
+            )
+
+        elif adjustment.type == "write_off" and adjustment.invoice:
+            # Write off the invoice balance
+            Concession.objects.create(
+                institution=adjustment.institution,
+                invoice=adjustment.invoice,
+                type="waiver",
+                amount=adjustment.invoice.balance,
+                reason=f"Write off: {adjustment.reason}",
+                status="approved",
+            )
+            adjustment.invoice.refresh_status()
+
+        adjustment.status = "applied"
+        adjustment.approved_by = request.user
+        adjustment.approved_at = timezone.now()
+        adjustment.applied_at = timezone.now()
+        adjustment.save(update_fields=["status", "approved_by", "approved_at", "applied_at"])
+
+        record_audit(
+            request=request,
+            action="adjustment_applied",
+            model_name="Adjustment",
+            object_id=str(pk),
+            object_repr=str(adjustment),
+            details={"amount": str(adjustment.amount), "type": adjustment.type},
+        )
+        return Response(AdjustmentSerializer(adjustment).data)
+
+
+class PaymentRefundListCreateView(generics.ListCreateAPIView):
+    """Enhanced refund view with duplicate protection."""
+
+    permission_classes = [IsAccountantRole]
+    serializer_class = PaymentRefundSerializer
+
+    def get_queryset(self):
+        queryset = PaymentRefund.objects.filter(
+            institution=self.request.institution
+        ).select_related("payment", "payment__invoice", "payment__invoice__enrollment__campus")
+        return apply_campus_scope(queryset, self.request, "payment__invoice__enrollment__campus_id")
+
+    def perform_create(self, serializer):
+        payment = serializer.validated_data["payment"]
+        invoice = payment.invoice
+
+        # Verify access to the invoice
+        from apps.finance.views import scoped_invoice_queryset
+        if not scoped_invoice_queryset(self.request).filter(pk=invoice.pk).exists():
+            raise PermissionDenied("You cannot refund a payment outside your institution or campus.")
+
+        # Check for duplicate refund on same payment with same amount
+        existing = PaymentRefund.objects.filter(
+            payment=payment,
+            amount=serializer.validated_data["amount"],
+            status="completed",
+        ).first()
+        if existing:
+            raise serializers.ValidationError(
+                {"detail": "A refund with the same amount already exists for this payment."}
+            )
+
+        refund = serializer.save(created_by=self.request.user)
+        record_audit(
+            request=self.request,
+            action="payment_refund",
+            model_name="PaymentRefund",
+            object_id=str(refund.pk),
+            object_repr=str(refund),
+            details={"amount": str(refund.amount), "payment": payment.receipt_number},
+        )

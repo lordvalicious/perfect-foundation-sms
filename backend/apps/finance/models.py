@@ -862,6 +862,13 @@ class Expense(SoftDeleteMixin):
 class Concession(SoftDeleteMixin):
     objects = SoftDeleteManager()
     STATUS_CHOICES = [("pending", "Pending"), ("approved", "Approved"), ("rejected", "Rejected")]
+    TYPE_CHOICES = [
+        ("discount", "Discount"),
+        ("scholarship", "Scholarship"),
+        ("waiver", "Waiver"),
+        ("fine", "Fine/Penalty"),
+        ("adjustment", "Adjustment"),
+    ]
 
     institution = models.ForeignKey(
         School,
@@ -872,6 +879,7 @@ class Concession(SoftDeleteMixin):
     )
 
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="concessions")
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="discount")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     reason = models.TextField()
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
@@ -888,6 +896,189 @@ class Concession(SoftDeleteMixin):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_type_display()} - {self.amount} - {self.invoice.invoice_number}"
+
+
+class Fine(SoftDeleteMixin):
+    """Disciplinary fines and penalties separate from concessions."""
+    objects = SoftDeleteManager()
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("paid", "Paid"),
+        ("waived", "Waived"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="fines",
+        null=True,
+        blank=True,
+    )
+
+    student = models.ForeignKey(
+        "students.Student",
+        on_delete=models.PROTECT,
+        related_name="fines",
+    )
+
+    academic_year = models.ForeignKey(
+        AcademicYear,
+        on_delete=models.PROTECT,
+        related_name="fines",
+    )
+
+    TYPE_CHOICES = [
+        ("late_payment", "Late Payment"),
+        ("disciplinary", "Disciplinary"),
+        ("library", "Library Fine"),
+        ("damage", "Property Damage"),
+        ("attendance", "Attendance Penalty"),
+        ("other", "Other"),
+    ]
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="disciplinary")
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    issued_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="issued_fines",
+    )
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_fines",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    waived_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="waived_fines",
+    )
+    waived_at = models.DateTimeField(null=True, blank=True)
+    waiver_reason = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        if self.amount <= 0:
+            raise ValidationError({"amount": "Fine amount must be greater than zero."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_type_display()} - {self.student.full_name} - {self.amount}"
+
+
+class Adjustment(SoftDeleteMixin):
+    """Financial adjustment for historical corrections (never rewrites history)."""
+    objects = SoftDeleteManager()
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("applied", "Applied"),
+    ]
+
+    TYPE_CHOICES = [
+        ("credit", "Credit Adjustment"),
+        ("debit", "Debit Adjustment"),
+        ("write_off", "Write Off"),
+        ("correction", "Correction"),
+    ]
+
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="adjustments",
+        null=True,
+        blank=True,
+    )
+
+    student = models.ForeignKey(
+        "students.Student",
+        on_delete=models.PROTECT,
+        related_name="adjustments",
+        null=True,
+        blank=True,
+    )
+
+    invoice = models.ForeignKey(
+        Invoice,
+        on_delete=models.PROTECT,
+        related_name="adjustments",
+        null=True,
+        blank=True,
+    )
+
+    payment = models.ForeignKey(
+        Payment,
+        on_delete=models.PROTECT,
+        related_name="adjustments",
+        null=True,
+        blank=True,
+    )
+
+    type = models.CharField(max_length=20, choices=TYPE_CHOICES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField()
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+
+    created_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_adjustments",
+    )
+    approved_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_adjustments",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def clean(self):
+        if self.amount <= 0:
+            raise ValidationError({"amount": "Adjustment amount must be greater than zero."})
+        # Must be linked to at least one entity
+        if not any([self.student_id, self.invoice_id, self.payment_id]):
+            raise ValidationError({"__all__": "Adjustment must be linked to a student, invoice, or payment."})
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
+    def __str__(self):
+        return f"{self.get_type_display()} - {self.amount} - {self.status}"
 
 
 class PaymentRefund(SoftDeleteMixin):
