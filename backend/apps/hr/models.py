@@ -1897,4 +1897,3 @@ class Interview(models.Model):
 
     def __str__(self):
         return f"Interview: {self.application.candidate} - {self.application.position}"
->>>>>>> A
