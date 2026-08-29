@@ -52,8 +52,7 @@ INSTALLED_APPS = [
     "apps.reports",
     "apps.search",
     "apps.documents",
-    "apps.discipline",
-    "apps.homework",
+    "discipline",
     "apps.health",
     "apps.alumni",
     "apps.hostel",
@@ -64,6 +63,7 @@ INSTALLED_APPS = [
     "apps.helpdesk",
     "apps.visitors",
     "apps.digital_ids",
+    "ratelimit",
 
     "corsheaders",
     "rest_framework",
@@ -79,6 +79,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "ratelimit.middleware.RatelimitMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
