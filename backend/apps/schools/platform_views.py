@@ -110,6 +110,7 @@ class TenantListCreateView(APIView):
             {
                 "id": school.id,
                 "name": school.name,
+                "code": school.code,
                 "detail": "Tenant created.",
             },
             status=201,

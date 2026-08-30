@@ -1,3 +1,6 @@
+import secrets
+import string
+
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -81,18 +84,19 @@ class School(models.Model):
     def __str__(self):
         return self.name
 
+    @staticmethod
+    def generate_random_code(prefix="PF", length=5):
+        """Generate a random unique school code like PF-8F3K2."""
+        alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        while True:
+            suffix = "".join(secrets.choice(alphabet) for _ in range(length))
+            candidate = f"{prefix}-{suffix}"
+            if not School.objects.filter(code=candidate).exists():
+                return candidate
+
     def save(self, *args, **kwargs):
         if not self.code:
-            base = slugify(self.name)[:40] or "school"
-            candidate = base
-
-            suffix = 2
-
-            while type(self).objects.filter(code=candidate).exclude(pk=self.pk).exists():
-                candidate = f"{base[:40 - len(str(suffix)) - 1]}-{suffix}"
-                suffix += 1
-
-            self.code = candidate
+            self.code = self.generate_random_code()
 
         return super().save(*args, **kwargs)
 

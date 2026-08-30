@@ -32,6 +32,11 @@ import {
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
 import { apiDownload } from "../api";
+import {
+  SingleStudentDetail,
+  SingleTeacherDetail,
+  SingleStaffDetail,
+} from "./SingleDetailReports";
 
 const BASE = "/api/reports/";
 
@@ -187,6 +192,9 @@ const REPORTS = [
 
 const GRADEBOOK_KEY = "gradebook";
 const AT_RISK_KEY = "at-risk";
+const STUDENT_DETAIL_KEY = "single-student";
+const TEACHER_DETAIL_KEY = "single-teacher";
+const STAFF_DETAIL_KEY = "single-staff";
 
 export default function ReportsPage() {
   const [active, setActive] = useState("enrollment");
@@ -428,6 +436,30 @@ export default function ReportsPage() {
           <Siren size={15} />
           At-Risk
         </button>
+
+        <button
+          className={`tab-button ${active === STUDENT_DETAIL_KEY ? "active" : ""}`}
+          onClick={() => setActive(STUDENT_DETAIL_KEY)}
+        >
+          <UserCheck size={15} />
+          Student Detail
+        </button>
+
+        <button
+          className={`tab-button ${active === TEACHER_DETAIL_KEY ? "active" : ""}`}
+          onClick={() => setActive(TEACHER_DETAIL_KEY)}
+        >
+          <GraduationCap size={15} />
+          Teacher Detail
+        </button>
+
+        <button
+          className={`tab-button ${active === STAFF_DETAIL_KEY ? "active" : ""}`}
+          onClick={() => setActive(STAFF_DETAIL_KEY)}
+        >
+          <Users size={15} />
+          Staff Detail
+        </button>
       </div>
 
       <div className="panel">
@@ -437,7 +469,13 @@ export default function ReportsPage() {
               ? "Gradebook"
               : active === AT_RISK_KEY
                 ? "At-Risk Students"
-                : REPORTS.find((item) => item.key === active)?.title || "Report"
+                : active === STUDENT_DETAIL_KEY
+                  ? "Single Student Report"
+                  : active === TEACHER_DETAIL_KEY
+                    ? "Single Teacher Report"
+                    : active === STAFF_DETAIL_KEY
+                      ? "Single Staff Report"
+                      : REPORTS.find((item) => item.key === active)?.title || "Report"
           }
           subtitle="generated from live data"
           action={
@@ -536,6 +574,10 @@ export default function ReportsPage() {
               )}
             </>
           )}
+
+          {active === STUDENT_DETAIL_KEY && <SingleStudentDetail />}
+          {active === TEACHER_DETAIL_KEY && <SingleTeacherDetail />}
+          {active === STAFF_DETAIL_KEY && <SingleStaffDetail />}
 
           {(needsExam || needsStudent || active === "chronic-absentee") && (
             <div className="filter-row">
