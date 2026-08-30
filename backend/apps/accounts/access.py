@@ -85,6 +85,11 @@ def user_allowed_campus_ids(user):
         if institution is not None:
             campuses = campuses.filter(school=institution)
 
+        # Fallback: if the user's primary institution has no campuses,
+        # allow all active campuses so global users are not blocked.
+        if not campuses:
+            campuses = Campus.objects.filter(status="active")
+
         return set(campuses.values_list("id", flat=True))
 
     ids = set()
