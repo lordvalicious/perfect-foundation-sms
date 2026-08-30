@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, createElement } from "react";
 import { X, Plus, Trash2, Edit, AlertTriangle } from "lucide-react";
 import { apiFetch } from "../api";
 import { useApiList } from "./useApiList";
@@ -6,13 +6,6 @@ import { PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatDate } from "./format";
 
 const API_URL = "/api/discipline/";
-
-// Build status options array without destructuring in map
-const STATUS_OPTIONS = [
-  { value: "minor", label: "Minor" },
-  { value: "moderate", label: "Moderate" },
-  { value: "major", label: "Major" },
-];
 
 export default function DisciplinePage() {
   const [incidents, setIncidents] = useState([]);
@@ -88,6 +81,13 @@ export default function DisciplinePage() {
     });
   };
 
+  const severityClass = (sev) => {
+    const s = (sev || "").toLowerCase();
+    if (s === "major") return "danger";
+    if (s === "moderate") return "warning";
+    return "success";
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
     setLoading(true);
@@ -146,8 +146,7 @@ export default function DisciplinePage() {
     setLoading(true);
     setError("");
 
-    const toListOrEmpty = (response) =>
-      response.ok ? response.json() : [];
+    const toListOrEmpty = (response) => response.ok ? response.json() : [];
 
     fetch(API_URL, { credentials: "include" })
       .then(toListOrEmpty)
@@ -164,34 +163,54 @@ export default function DisciplinePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Helper: render severity badge class
-  const severityClass = (sev) => {
-    const s = (sev || "").toLowerCase();
-    if (s === "major") return "danger";
-    if (s === "moderate") return "warning";
-    return "success";
-  };
+  // Build table rows using createElement to avoidrolldown JSX parsing issues
+  const buildTableRows = () => {
+    const rows = [];
+    for (let i = 0; i < incidents.length; i++) {
+      const incident = incidents[i];
+      const sev = (incident.severity || "").toLowerCase();
+      const sevClass = sev === "major" ? "row-danger" : sev === "moderate" ? "row-warning" : "";
+      const severityStyle = {
+        padding: "2px 6px",
+        borderRadius: "10px",
+        fontSize: "11px",
+        fontWeight: 600,
+        color:
+          severityClass(incident.severity) === "danger"
+            ? "var(--danger)"
+            : severityClass(incident.severity) === "warning"
+              ? "var(--warning)"
+              : "var(--success)",
+      };
 
-  // Helper: render row CSS class
-  const rowClasses = (incident) => {
-    const s = (incident.severity || "").toLowerCase();
-    if (s === "major") return "row-danger";
-    if (s === "moderate") return "row-warning";
-    return "";
-  };
-
-  // Render status options <option> elements
-  const renderSeverityOptions = () => {
-    const options = [];
-    for (let i = 0; i < STATUS_OPTIONS.length; i++) {
-      const opt = STATUS_OPTIONS[i];
-      options.push(
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
-        </option>
+      rows.push(
+        createElement(
+          "tr",
+          { key: incident.id, className: sevClass },
+          createElement("td", null,
+            createElement("strong", null, incident.title || "—")
+          ),
+          createElement("td", null,
+            createElement("span", { style: severityStyle }, incident.severity || "—")
+          ),
+          createElement("td", null, incident.category || "—"),
+          createElement("td", null, formatDate(incident.created_at)),
+          createElement("td", { style: { whiteSpace: "nowrap" } },
+            createElement("button", {
+              className: "table-action",
+              title: "Edit incident",
+              onClick: () => openEdit(incident),
+            }, createElement("Edit", { size: 14 })),
+            createElement("button", {
+              className: "table-action danger",
+              title: "Delete incident",
+              onClick: () => handleDelete(incident),
+            }, createElement("Trash2", { size: 14 }))
+          )
+        )
       );
     }
-    return options;
+    return rows;
   };
 
   return (
@@ -226,179 +245,11 @@ export default function DisciplinePage() {
                     <th style={{ width: 140 }}>Actions</th>
                   </tr>
                 </thead>
-
-                <tbody>
-                  {incidents.map((incident) => {
-                    const sev = (incident.severity || "").toLowerCase();
-                    const sevClass = sev === "major" ? "row-danger" : sev === "moderate" ? "row-warning" : "";
-                    return (
-                      <tr key={incident.id} className={sevClass}>
-                        <td>
-                          <strong>{incident.title || "—"}</strong>
-                        </td>
-
-                        <td>
-                          <span
-                            style={{
-                              padding: "2px 6px",
-                              borderRadius: "10px",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              color:
-                                severityClass(incident.severity) === "danger"
-                                  ? "var(--danger)"
-                                  : severityClass(incident.severity) === "warning"
-                                    ? "var(--warning)"
-                                    : "var(--success)",
-                          }}
-                        >
-                          {incident.severity || "—"}
-                        </span>
-                      </td>
-
-                      <td>{incident.category || "—"}</td>
-
-                      <td>
-                        {incident.status
-                          ? `<span style={{ padding: "2px 6px", borderRadius: "10px", fontSize: "11px", color: "var(--text-muted)" }}>{incident.status}</span>`
-                          : "—"}
-                      </td>
-
-                      <td>{formatDate(incident.created_at)}</td>
-
-                      <td style={{ whiteSpace: "nowrap" }}>
-                        <button
-                          className="table-action"
-                          title="Edit incident"
-                          onClick={() => openEdit(incident)}
-                        >
-                          <Edit size={14} />
-                        </button>
-                        <button
-                          className="table-action danger"
-                          title="Delete incident"
-                          onClick={() => handleDelete(incident)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
+                <tbody>{buildTableRows()}</tbody>
               </table>
             </div>
           )}
         </StateArea>
-
-        {showForm && (
-          <div
-            className="modal-overlay"
-            onMouseDown={(event) => {
-              if (event.target === event.currentTarget) closeForm();
-            }}
-          >
-            <div className="modal">
-              <div className="modal-header">
-                <div>
-                  <h3>{editing ? "Edit Incident" : "Add Incident"}</h3>
-                  <p>
-                    {editing ? "Update the incident details." : "Record a new discipline incident."}
-                  </p>
-                </div>
-                <button className="modal-close" onClick={closeForm}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              <form onSubmit={handleSubmit}>
-                <div className="modal-body">
-                  <div className="form-section">
-                    <h4>Incident details</h4>
-
-                    <div className="form-grid">
-                      <div>
-                        <strong>Title</strong>
-                        <input
-                          type="text"
-                          required
-                          value={form.title}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              title: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <strong>Category</strong>
-                        <input
-                          type="text"
-                          value={form.category}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              category: event.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-
-                      <div>
-                        <strong>Severity</strong>
-                        <select
-                          value={form.severity}
-                          onChange={(event) =>
-                            setForm((current) => ({
-                              ...current,
-                              severity: event.target.value,
-                            }))
-                        >
-                          {renderSeverityOptions()}
-                        </select>
-                      </div>
-                  </div>
-
-                  <div className="form-section">
-                    <h4>Description</h4>
-
-                    <textarea
-                      value={form.description}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          description: event.target.value,
-                        }))
-                      />
-                    </textarea>
-                  </div>
-                </div>
-
-                {actionError && <div className="alert alert-error">{actionError}</div>}
-
-                <div className="modal-footer">
-                  <button
-                    type="button"
-                    className="secondary-button"
-                    onClick={closeForm}
-                    disabled={loading}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="primary-button"
-                    disabled={loading}
-                  >
-                    {loading ? "Saving..." : editing ? "Save changes" : "Create incident"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
       </div>
     </section>
   );
