@@ -14,10 +14,11 @@ Implements the ERP permission rules:
 
 Role to campus-scope mapping:
 
-- ``super_admin``, ``admin``, ``academic`` -> GLOBAL (every campus).
+- ``super_admin``, ``admin``, ``org_admin``, ``head_office``,
+  ``academic`` -> GLOBAL (every campus).
 - ``campus_admin``, ``principal``, ``vice_principal``, ``accountant``,
-  ``hr``, ``receptionist``, ``librarian``, ``teacher``, ``staff``
-  -> own campus only (from the user's profile).
+  ``hr``, ``receptionist``, ``librarian``, ``guard``, ``teacher``,
+  ``staff`` -> own campus only (from the user's profile).
 - ``student`` / ``parent`` -> the campus(es) linked to the student or the
   guardian's children. Their record-level scope is applied separately by
   the per-app scoping helpers.
@@ -26,7 +27,13 @@ Role to campus-scope mapping:
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 
-GLOBAL_ROLES = ["super_admin", "admin", "academic"]
+GLOBAL_ROLES = [
+    "super_admin",
+    "admin",
+    "org_admin",
+    "head_office",
+    "academic",
+]
 
 
 # ---------------------------------------------------------------------------

@@ -273,7 +273,12 @@ class GlobalSearchView(APIView):
             queryset = Subject.objects.filter(
                 Q(name__icontains=query)
                 | Q(code__icontains=query),
-                offerings__class_obj__unit__campus__school=self.request.institution,
+                subject_offerings__class_obj__unit__campus__school=self.request.institution,
+            )
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "subject_offerings__class_obj__unit__campus_id",
             ).distinct()
 
         return [
@@ -328,17 +333,38 @@ class GlobalSearchView(APIView):
     def _search_users(self, query):
         from apps.accounts.models import User
 
-        users = (
-            User.objects
-            .filter(
-                Q(first_name__icontains=query)
-                | Q(last_name__icontains=query)
-                | Q(username__icontains=query)
-                | Q(email__icontains=query),
-                memberships__institution=self.request.institution,
+        from apps.accounts.access import is_global, user_allowed_campus_ids
+
+        users = User.objects.filter(
+            Q(first_name__icontains=query)
+            | Q(last_name__icontains=query)
+            | Q(username__icontains=query)
+            | Q(email__icontains=query),
+            memberships__institution=self.request.institution,
+        ).distinct()
+
+        if not is_global(self.request.user):
+            allowed = user_allowed_campus_ids(self.request.user)
+
+            no_profile = (
+                Q(staff_profile__isnull=True)
+                & Q(teacher_profile__isnull=True)
+                & Q(student_profile__isnull=True)
+                & Q(guardian_profile__isnull=True)
             )
-            .distinct()[:10]
-        )
+
+            if allowed:
+                campus_linked = (
+                    Q(staff_profile__primary_campus_id__in=allowed)
+                    | Q(teacher_profile__primary_campus_id__in=allowed)
+                    | Q(student_profile__primary_campus_id__in=allowed)
+                    | Q(guardian_profile__students__primary_campus_id__in=allowed)
+                )
+                users = users.filter(campus_linked | no_profile)
+            else:
+                users = users.filter(no_profile)
+
+        users = users.order_by("first_name", "last_name")[:10]
 
         results = []
 

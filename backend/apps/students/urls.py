@@ -56,6 +56,7 @@ from .views import (
     TransferCertificateCancelView,
     TransferCertificateDetailView,
     TransferCertificateIssueView,
+    StudentTransferCreateView,
     TransferCertificateListCreateView,
     TransferCertificateVerifyView,
 )
@@ -102,6 +103,11 @@ urlpatterns = [
         "campus-transfers/<int:pk>/cancel/",
         CampusTransferCancelView.as_view(),
         name="campus-transfer-cancel",
+    ),
+    path(
+        "students/transfer/",
+        StudentTransferCreateView.as_view(),
+        name="student-transfer-create",
     ),
     path(
         "campus-transfers/<int:pk>/reverse/",

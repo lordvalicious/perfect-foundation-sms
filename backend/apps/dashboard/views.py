@@ -6,6 +6,7 @@ from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
+from apps.accounts.access import apply_campus_scope
 from apps.accounts.scopes import (
     get_guardian_profile,
     get_student_profile,
@@ -25,6 +26,61 @@ from apps.exams.models import Exam, StudentResult
 from apps.schools.models import Campus, Class, Section
 from apps.students.models import Student, Enrollment
 from apps.teachers.models import Teacher
+
+
+def _institution_overview_counts(request):
+    """Institution- and campus-scoped headcounts for manager users."""
+    institution = getattr(request, "institution", None)
+
+    students = Student.objects.all()
+    teachers = Teacher.objects.all()
+    campuses = Campus.objects.all()
+    classes = Class.objects.all()
+    sections = Section.objects.all()
+    enrollments = Enrollment.objects.filter(status="active")
+
+    if institution is not None:
+        students = students.filter(institution=institution)
+        teachers = teachers.filter(institution=institution)
+
+        campuses = campuses.filter(school=institution)
+        classes = classes.filter(unit__campus__school=institution)
+        sections = sections.filter(class_obj__unit__campus__school=institution)
+        enrollments = enrollments.filter(academic_year__school=institution)
+
+    students = apply_campus_scope(
+        students, request, "primary_campus_id", institution_field=None
+    )
+    teachers = apply_campus_scope(
+        teachers, request, "primary_campus_id", institution_field=None
+    )
+    campuses = apply_campus_scope(
+        campuses, request, "id", institution_field=None
+    )
+    classes = apply_campus_scope(
+        classes, request, "unit__campus_id", institution_field=None
+    )
+    sections = apply_campus_scope(
+        sections, request, "class_obj__unit__campus_id", institution_field=None
+    )
+    enrollments = apply_campus_scope(
+        enrollments, request, "campus_id", institution_field=None
+    )
+
+    return {
+        "students": {
+            "total": students.count(),
+            "active": students.filter(status="active").count(),
+        },
+        "teachers": {
+            "total": teachers.count(),
+            "active": teachers.filter(status="active").count(),
+        },
+        "campuses": campuses.count(),
+        "classes": classes.count(),
+        "sections": sections.count(),
+        "enrollments": enrollments.count(),
+    }
 
 
 @api_view(["GET"])
@@ -129,22 +185,7 @@ def dashboard_overview(request):
 
         return JsonResponse(data)
 
-    data = {
-        "students": {
-            "total": Student.objects.count(),
-            "active": Student.objects.filter(status="active").count(),
-        },
-        "teachers": {
-            "total": Teacher.objects.count(),
-            "active": Teacher.objects.filter(status="active").count(),
-        },
-        "campuses": Campus.objects.count(),
-        "classes": Class.objects.count(),
-        "sections": Section.objects.count(),
-        "enrollments": Enrollment.objects.filter(
-            status="active"
-        ).count(),
-    }
+    data = _institution_overview_counts(request)
 
     return JsonResponse(data)
 
@@ -197,6 +238,7 @@ def dashboard_attendance(request):
 @permission_classes([IsAuthenticated])
 def dashboard_finance(request):
     from apps.finance.models import InvoiceItem
+    from apps.finance.views import scoped_invoice_queryset
 
     item_totals = InvoiceItem.objects.filter(
         invoice=OuterRef("pk")
@@ -211,18 +253,24 @@ def dashboard_finance(request):
         total=Sum("amount")
     ).values("total")
 
-    invoices = Invoice.objects.annotate(
+    invoices = scoped_invoice_queryset(request).annotate(
         items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
         paid=Coalesce(Subquery(paid_totals), Decimal("0.00")),
     )
 
+    payments = Payment.objects.filter(
+        status="completed",
+        invoice__academic_year__school=request.institution,
+    )
+    payments = apply_campus_scope(
+        payments,
+        request,
+        "invoice__enrollment__campus_id",
+        institution_field=None,
+    )
+
     payments_total = (
-        Payment.objects.filter(
-            status="completed"
-        ).aggregate(
-            total=Sum("amount")
-        )["total"]
-        or 0
+        payments.aggregate(total=Sum("amount"))["total"] or 0
     )
 
     counts = {}
@@ -266,6 +314,7 @@ def dashboard_finance_breakdown(request):
         )
 
     from apps.finance.models import InvoiceItem
+    from apps.finance.views import scoped_invoice_queryset
 
     item_totals = InvoiceItem.objects.filter(
         invoice=OuterRef("pk")
@@ -280,12 +329,16 @@ def dashboard_finance_breakdown(request):
         total=Sum("amount")
     ).values("total")
 
-    invoices = Invoice.objects.select_related(
-        "enrollment__campus",
-        "student",
-    ).annotate(
-        items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
-        paid=Coalesce(Subquery(paid_totals_sub), Decimal("0.00")),
+    invoices = (
+        scoped_invoice_queryset(request)
+        .select_related(
+            "enrollment__campus",
+            "student",
+        )
+        .annotate(
+            items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
+            paid=Coalesce(Subquery(paid_totals_sub), Decimal("0.00")),
+        )
     )
 
     campus_totals = {}
@@ -316,7 +369,14 @@ def dashboard_finance_breakdown(request):
             )
 
     completed_payments = Payment.objects.filter(
-        status="completed"
+        status="completed",
+        invoice__academic_year__school=request.institution,
+    )
+    completed_payments = apply_campus_scope(
+        completed_payments,
+        request,
+        "invoice__enrollment__campus_id",
+        institution_field=None,
     ).select_related("invoice__enrollment__campus")
 
     method_totals = {}
@@ -428,6 +488,29 @@ def dashboard_exams(request):
             )
         else:
             results_queryset = results_queryset.none()
+    else:
+        institution = getattr(request, "institution", None)
+
+        if institution is not None:
+            exams_queryset = exams_queryset.filter(
+                academic_year__school=institution
+            )
+            results_queryset = results_queryset.filter(
+                exam__academic_year__school=institution
+            )
+
+        exams_queryset = apply_campus_scope(
+            exams_queryset,
+            request,
+            "campus_id",
+            institution_field=None,
+        )
+        results_queryset = apply_campus_scope(
+            results_queryset,
+            request,
+            "exam__campus_id",
+            institution_field=None,
+        )
 
     data = {
         "exams": exams_queryset.count(),

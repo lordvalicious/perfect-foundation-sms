@@ -3,6 +3,8 @@
 import pyotp
 import secrets
 import hashlib
+import hmac
+from django.conf import settings
 from django.contrib.auth import authenticate
 from django.db import models
 from django.utils import timezone
@@ -11,6 +13,32 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import TwoFABackupCode
+
+BACKUP_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def _generate_backup_code():
+    raw = "".join(secrets.choice(BACKUP_ALPHABET) for _ in range(8))
+    return f"{raw[:4]}-{raw[4:]}"
+
+
+def _hash_backup_code(code, salt):
+    """HMAC-SHA256 of the code keyed by SECRET_KEY plus the per-code salt."""
+    return hmac.new(
+        settings.SECRET_KEY.encode(),
+        f"{salt}{code}".encode(),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _backup_code_row():
+    code = _generate_backup_code()
+    salt = secrets.token_urlsafe(16)
+    return {
+        "code": code,
+        "hash": _hash_backup_code(code, salt),
+        "salt": salt,
+    }
 
 
 class TwoFAStatusView(APIView):
@@ -91,21 +119,14 @@ class TwoFAActivateView(APIView):
         # Delete existing unused backup codes
         user.twofa_backup_codes.filter(used_at__isnull=True).delete()
 
-        codes = []
-        for _ in range(10):
-            # Generate 8-character alphanumeric code
-            code = secrets.token_hex(4).upper()
-            # Format as XXXX-XXXX
-            formatted = f"{code[:4]}-{code[4:]}"
-            # Hash for storage
-            code_hash = hashlib.sha256(formatted.encode()).hexdigest()
-            codes.append({
-                "code": formatted,
-                "hash": code_hash,
-            })
+        codes = [_backup_code_row() for _ in range(10)]
 
         TwoFABackupCode.objects.bulk_create([
-            TwoFABackupCode(user=user, code_hash=c["hash"])
+            TwoFABackupCode(
+                user=user,
+                code_hash=c["hash"],
+                salt=c["salt"],
+            )
             for c in codes
         ])
 
@@ -126,21 +147,17 @@ class TwoFABackupCodesView(APIView):
             )
 
         # Generate new backup codes
-        codes = []
-        for _ in range(10):
-            code = secrets.token_hex(4).upper()
-            formatted = f"{code[:4]}-{code[4:]}"
-            code_hash = hashlib.sha256(formatted.encode()).hexdigest()
-            codes.append({
-                "code": formatted,
-                "hash": code_hash,
-            })
+        codes = [_backup_code_row() for _ in range(10)]
 
         # Invalidate old codes
         user.twofa_backup_codes.filter(used_at__isnull=True).update(used_at=timezone.now())
 
         TwoFABackupCode.objects.bulk_create([
-            TwoFABackupCode(user=user, code_hash=c["hash"])
+            TwoFABackupCode(
+                user=user,
+                code_hash=c["hash"],
+                salt=c["salt"],
+            )
             for c in codes
         ])
 
@@ -179,7 +196,13 @@ class TwoFAVerifyBackupCodeView(APIView):
         # Check backup codes
         unused_codes = user.twofa_backup_codes.filter(used_at__isnull=True)
         for code_obj in unused_codes:
-            if hashlib.sha256(backup_code.encode()).hexdigest() == code_obj.code_hash:
+            if code_obj.salt:
+                candidate = _hash_backup_code(backup_code, code_obj.salt)
+            else:
+                # Legacy pre-hardening rows (bare SHA-256).
+                candidate = hashlib.sha256(backup_code.encode()).hexdigest()
+
+            if candidate == code_obj.code_hash:
                 code_obj.used_at = timezone.now()
                 code_obj.save(update_fields=["used_at"])
                 return Response({"valid": True})

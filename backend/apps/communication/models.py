@@ -2,6 +2,13 @@ from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
 
+JOB_TYPE_CHOICES = [
+    ("notification", "Notification"),
+    ("automation", "Automation Action"),
+    ("import", "Data Import"),
+    ("custom", "Custom Job"),
+]
+
 from apps.schools.models import Campus, Class, School, Section
 
 
@@ -596,6 +603,12 @@ class NotificationDispatch(models.Model):
         help_text="Stable per-target key, e.g. 'fee:{student}:{isoweek}'.",
     )
     channel = models.CharField(max_length=10, choices=CHANNEL_CHOICES)
+    job_type = models.CharField(
+        max_length=24,
+        choices=JOB_TYPE_CHOICES,
+        default="notification",
+        help_text="Type of background job.",
+    )
     recipient = models.CharField(max_length=200)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -724,6 +737,7 @@ class QueuedNotification(models.Model):
 
     STATUS_CHOICES = [
         ("queued", "Queued"),
+        ("processing", "Processing"),
         ("sent", "Sent"),
         ("failed", "Failed"),
     ]

@@ -86,8 +86,25 @@ def get_client_ip(request):
 
 
 def record_failed_login(request, user, username_or_email):
-    """Record a failed login attempt and apply lockout if threshold exceeded."""
+    """Record a failed login attempt and apply lockout if threshold exceeded.
+
+    Rapid retries of the same account from the same address inside a
+    15-second window are collapsed into one record so the in-view failure
+    handler and the frontend-facing ``LoginFailedView`` do not double-count
+    a single bad attempt.
+    """
     ip = get_client_ip(request)
+
+    recent_cutoff = timezone.now() - timezone.timedelta(seconds=15)
+
+    if FailedLoginAttempt.objects.filter(
+        user=user,
+        ip_address=ip,
+        username_or_email=username_or_email,
+        attempted_at__gte=recent_cutoff,
+    ).exists():
+        return
+
     user_agent = request.META.get("HTTP_USER_AGENT", "")[:500]
 
     FailedLoginAttempt.objects.create(
@@ -120,6 +137,40 @@ def clear_failed_logins(user):
         user.save(update_fields=["failed_login_attempts", "locked_until"])
 
 
+def _check_new_password(user, password):
+    """Validate a new password and prevent reuse of a recent one."""
+    from django.contrib.auth import hashers
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import (
+        ValidationError as DjangoValidationError,
+    )
+
+    try:
+        validate_password(password, user=user)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError(
+            {"new_password": exc.messages}
+        )
+
+    # Reject the current password and any previously stored one. The stored
+    # history entries are encoded hashes, so they are verified as encodings
+    # (not as raw password candidates).
+    if user.password and user.check_password(password):
+        raise serializers.ValidationError(
+            {"new_password": "You cannot reuse a recent password."}
+        )
+
+    for hist in user.password_history.all():
+        try:
+            if hashers.check_password(password, hist.password_hash):
+                raise serializers.ValidationError(
+                    {"new_password": "You cannot reuse a recent password."}
+                )
+        except (ValueError, TypeError):
+            # Unparseable/stale history entry — ignore it.
+            continue
+
+
 class LoginView(APIView):
     """Session-based login. Sets the session cookie on success."""
 
@@ -133,7 +184,31 @@ class LoginView(APIView):
             context={"request": request},
         )
 
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except serializers.ValidationError:
+            identifier = str(
+                request.data.get("username")
+                or request.data.get("email")
+                or ""
+            ).strip()
+
+            if identifier:
+                user = User.objects.filter(
+                    Q(email__iexact=identifier)
+                    | Q(username=identifier)
+                ).first()
+
+                if user is not None:
+                    record_failed_login(request, user, identifier)
+
+                record_audit(
+                    request=request,
+                    action="login_failed",
+                    details={"username": identifier},
+                )
+
+            raise
 
         user = serializer.validated_data["user"]
         username_or_email = serializer.validated_data.get("username") or serializer.validated_data.get("email", "")
@@ -524,6 +599,8 @@ class PasswordResetConfirmView(APIView):
                 {"token": "The reset link is invalid or has expired."}
             )
 
+        _check_new_password(user, new_password)
+
         # Store current password hash in history before changing
         PasswordHistory.objects.create(
             user=user,
@@ -558,29 +635,6 @@ class PasswordResetConfirmView(APIView):
         return Response({"detail": "Password has been reset."})
 
 
-class PasswordChangeSerializer(serializers.Serializer):
-    current_password = serializers.CharField(
-        style={"input_type": "password"},
-        write_only=True,
-    )
-    new_password = serializers.CharField(
-        min_length=8,
-        style={"input_type": "password"},
-        write_only=True,
-    )
-    confirm_password = serializers.CharField(
-        style={"input_type": "password"},
-        write_only=True,
-    )
-
-    def validate(self, attrs):
-        if attrs["new_password"] != attrs["confirm_password"]:
-            raise serializers.ValidationError(
-                "The two passwords do not match."
-            )
-        return attrs
-
-
 class PasswordChangeView(APIView):
     """Change password for authenticated user."""
 
@@ -601,12 +655,7 @@ class PasswordChangeView(APIView):
                 {"current_password": "Current password is incorrect."}
             )
 
-        # Check password history
-        for hist in user.password_history.all():
-            if user.check_password(hist.password_hash):
-                raise serializers.ValidationError(
-                    {"new_password": "You cannot reuse a recent password."}
-                )
+        _check_new_password(user, new_password)
 
         # Store current password hash in history
         PasswordHistory.objects.create(

@@ -63,7 +63,7 @@ class CampusAccessMiddleware:
         campus_param = request.GET.get("campus") or request.GET.get("campus_id")
         if campus_param:
             try:
-                campus_id = int(campus_id)
+                campus_id = int(campus_param)
             except (TypeError, ValueError):
                 return JsonResponse(
                     {"detail": "Invalid campus ID."},

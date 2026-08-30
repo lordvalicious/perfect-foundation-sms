@@ -627,6 +627,20 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
             else:
                 queryset = queryset.filter(teacher_scope_filter(user))
 
+        access = campus_access(self.request)
+
+        if not access["global"]:
+            allowed = access["allowed_ids"]
+            queryset = queryset.filter(
+                enrollments__campus_id__in=allowed or [-1],
+                enrollments__status="active",
+            )
+        elif access["requested"]:
+            queryset = queryset.filter(
+                enrollments__campus_id=access["requested"],
+                enrollments__status="active",
+            )
+
         return queryset
 
 
@@ -1552,3 +1566,102 @@ class StudentAlumniDetailView(generics.RetrieveUpdateAPIView):
         return StudentAlumni.objects.filter(
             student__institution=self.request.institution
         ).select_related("student", "final_campus", "final_class", "final_section", "final_academic_year")
+
+
+class StudentTransferCreateView(APIView):
+    """Create a student transfer request to another campus."""
+    
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, format=None):
+        user = request.user
+        to_campus_id = request.data.get("to_campus_id")
+        reason = request.data.get("reason", "").strip()
+        
+        if not to_campus_id:
+            return Response(
+                {"detail": "to_campus_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        try:
+            to_campus = Campus.objects.get(pk=to_campus_id)
+        except Campus.DoesNotExist:
+            return Response(
+                {"detail": "Invalid campus ID."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        
+        student = user.primary_institution.students.first() if user.primary_institution else None
+        # In a real implementation, the student would be identified from the
+        # request context or session. For now, we'll use a placeholder.
+        # TODO: Identify the correct student from the request.
+        
+        if not student:
+            return Response(
+                {"detail": "Student not found in request context."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        
+        from accounts.models import StudentTransfer, Role
+        from accounts.access import restrict_to_allowed_campuses
+        
+        user_roles = user.get_roles(user.primary_institution)
+        is_super_admin = Role.SUPER_ADMIN in user_roles
+        is_campus_admin = Role.CAMPUS_ADMIN in user_roles
+        
+        if not is_super_admin and not is_campus_admin:
+            return Response(
+                {"detail": "You do not have permission to transfer students."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        
+        # For campus admins, restrict to their assigned campus.
+        if not is_super_admin:
+            allowed = restrict_to_allowed_campuses(
+                InstitutionMembership.objects.none(),
+                user,
+                "campus_id",
+                institution_field="institution",
+            )
+            target_campus_ids = allowed.values_list("id", flat=True)
+            if to_campus.id not in target_campus_ids:
+                return Response(
+                    {"detail": "Target campus is not within your assigned campus."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        
+        # Create the transfer record - student will be resolved later.
+        transfer = StudentTransfer.objects.create(
+            student=student,
+            from_campus=student.primary_campus if student and student.primary_campus else None,
+            to_campus=to_campus,
+            status="pending",
+            reason=reason,
+            approved_by=user,
+        )
+        
+        # Record audit log.
+        from apps.audit.models import record_audit
+        
+        record_audit(
+            request=request,
+            user=user,
+            action="student_transfer_initiated",
+            details={
+                "student_id": student.pk,
+                "student_name": str(student),
+                "from_campus": str(student.primary_campus) if student and student.primary_campus else None,
+                "to_campus": str(to_campus),
+                "reason": reason,
+            },
+        )
+        
+        return Response(
+            {
+                "detail": "Transfer request created.",
+                "transfer_id": transfer.pk,
+                "status": transfer.status,
+            },
+            status=status.HTTP_201_CREATED,
+        )

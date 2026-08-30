@@ -685,7 +685,23 @@ class PasswordChangeSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "The two passwords do not match."
             )
+
+        _validate_password_policy(attrs["new_password"])
+
         return attrs
+
+
+def _validate_password_policy(password):
+    """Run the configured Django validators (no user attribute checks)."""
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import (
+        ValidationError as DjangoValidationError,
+    )
+
+    try:
+        validate_password(password)
+    except DjangoValidationError as exc:
+        raise serializers.ValidationError({"new_password": exc.messages})
 
 
 class PasswordResetRequestSerializer(serializers.Serializer):
@@ -715,6 +731,8 @@ class PasswordResetConfirmSerializer(serializers.Serializer):
             raise serializers.ValidationError(
                 "The two passwords do not match."
             )
+
+        _validate_password_policy(attrs["new_password"])
 
         return attrs
 

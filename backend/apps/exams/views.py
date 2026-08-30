@@ -184,6 +184,13 @@ class StudentResultListView(generics.ListCreateAPIView):
                     return queryset.none()
 
                 queryset = queryset.filter(student_id__in=student_ids)
+        else:
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
 
         search = self.request.query_params.get("search")
 
@@ -277,6 +284,13 @@ class StudentResultDetailView(generics.RetrieveUpdateDestroyAPIView):
                     return queryset.none()
 
                 queryset = queryset.filter(student_id__in=student_ids)
+        else:
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
 
         return queryset
 

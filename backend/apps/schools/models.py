@@ -50,7 +50,44 @@ class School(models.Model):
         help_text="Pause all operations for this school (login, attendance, fees, etc.)",
     )
 
-    paused_at = models.DateTimeField(null=True, blank=True)
+    
+    # =========================================================================
+    # WHITE LABEL BRANDING
+    # =========================================================================
+    logo = models.ImageField(
+        upload_to='branding/logos/',
+        blank=True,
+        null=True,
+    ),
+    favicon = models.ImageField(
+        upload_to='branding/favicons/',
+        blank=True,
+        null=True,
+    ),
+    primary_color = models.CharField(
+        max_length=7,
+        default='#2E86C1',
+        help_text='Primary brand color (hex without #).',
+    ),
+    secondary_color = models.CharField(
+        max_length=7,
+        default='#7F8C8D',
+        help_text='Secondary brand color (hex without #).',
+    ),
+    login_background = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text='Custom login page background URL or color.',
+    ),
+    login_text_color = models.CharField(
+        max_length=7,
+        blank=True,
+        help_text='Custom login page text color (hex without #).',
+),
+    paused_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
     paused_by = models.ForeignKey(
         "accounts.User",
         on_delete=models.SET_NULL,

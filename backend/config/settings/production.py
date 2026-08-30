@@ -30,14 +30,24 @@ for _fallback in (".vercel.app", "localhost", "127.0.0.1"):
     if _fallback not in ALLOWED_HOSTS:
         ALLOWED_HOSTS.append(_fallback)
 
-# Merge code defaults (base.py) with any env-provided origins.
+# Merge code defaults (base.py) with env-provided origins and the Vercel hosts.
+_VERCEL_DEFAULT_ORIGINS = [
+    "https://perfect-foundation-api.vercel.app",
+    "https://perfect-foundation-sms.vercel.app",
+]
 _env_origins = [
     origin.strip()
     for origin in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",")
     if origin.strip()
 ]
 CSRF_TRUSTED_ORIGINS = list(
-    dict.fromkeys([*CSRF_TRUSTED_ORIGINS, *_env_origins])
+    dict.fromkeys(
+        [
+            *CSRF_TRUSTED_ORIGINS,
+            *_VERCEL_DEFAULT_ORIGINS,
+            *_env_origins,
+        ]
+    )
 )
 
 SESSION_COOKIE_SECURE = (
@@ -46,21 +56,16 @@ SESSION_COOKIE_SECURE = (
 CSRF_COOKIE_SECURE = (
     os.environ.get("DJANGO_CSRF_COOKIE_SECURE", "1") == "1"
 )
-# Add after CSRF_COOKIE_SECURE
-CSRF_TRUSTED_ORIGINS = [
-    "https://perfect-foundation-api.vercel.app",
-    "https://perfect-foundation-sms.vercel.app",
-]
+
+# 14-day session lifetime; do not expire on browser close.
+SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_HTTPONLY = True
+
 # The frontend reads the csrf token from document.cookie and sends
 # it back as the X-CSRFToken header, so it must not be HttpOnly.
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = CSRF_COOKIE_SAMESITE
-
-# CSRF trusted origins for Vercel
-CSRF_TRUSTED_ORIGINS = [
-    "https://perfect-foundation-api.vercel.app",
-    "https://perfect-foundation-sms.vercel.app",
-]
 
 SECURE_PROXY_SSL_HEADER = (
     "HTTP_X_FORWARDED_PROTO",

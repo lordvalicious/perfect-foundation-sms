@@ -54,8 +54,15 @@ def _active_year(institution):
     )
 
 
-def _portal_announcements(user, limit=6):
-    qs = Announcement.objects.filter(status="published").order_by(
+def _portal_announcements(user, institution=None, limit=6):
+    qs = Announcement.objects.filter(status="published")
+
+    if institution is not None:
+        qs = qs.filter(
+            Q(institution=institution) | Q(institution__isnull=True)
+        )
+
+    qs = qs.order_by(
         "-published_at", "-created_at"
     )[:40]
 
@@ -445,7 +452,7 @@ def teacher_portal(request):
             "timetable": timetable,
             "homework": homework,
             "leave": leave,
-            "announcements": _portal_announcements(user),
+            "announcements": _portal_announcements(user, institution=request.institution),
         }
     )
 
@@ -546,7 +553,7 @@ def student_portal(request):
             "attendance": recent_attendance,
             "invoices": invoice_rows,
             "leave": leave_requests,
-            "announcements": _portal_announcements(user),
+            "announcements": _portal_announcements(user, institution=request.institution),
         }
     )
 
@@ -732,6 +739,6 @@ def parent_portal(request):
             "portal": "parent",
             "profile": profile,
             "children": children_data,
-            "announcements": _portal_announcements(user),
+            "announcements": _portal_announcements(user, institution=request.institution),
         }
     )

@@ -81,6 +81,8 @@ class IsAdminRole(BasePermission):
     roles = [
         "super_admin",
         "admin",
+        "org_admin",
+        "head_office",
         "principal",
         "vice_principal",
         "campus_admin",
@@ -100,6 +102,8 @@ class IsAccountantRole(BasePermission):
     roles = [
         "super_admin",
         "admin",
+        "org_admin",
+        "head_office",
         "principal",
         "vice_principal",
         "campus_admin",
@@ -122,6 +126,8 @@ class IsTeacherRole(BasePermission):
     roles = [
         "super_admin",
         "admin",
+        "org_admin",
+        "head_office",
         "principal",
         "vice_principal",
         "campus_admin",
@@ -146,6 +152,8 @@ class IsLibrarianRole(BasePermission):
     roles = [
         "super_admin",
         "admin",
+        "org_admin",
+        "head_office",
         "principal",
         "vice_principal",
         "campus_admin",
@@ -168,6 +176,8 @@ class IsStaffRole(BasePermission):
     roles = [
         "super_admin",
         "admin",
+        "org_admin",
+        "head_office",
         "principal",
         "vice_principal",
         "campus_admin",

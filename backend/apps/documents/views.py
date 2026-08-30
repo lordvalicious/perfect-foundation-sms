@@ -30,7 +30,7 @@ class DocumentListView(APIView):
         if show_student:
             qs = StudentDocument.objects.select_related(
                 "student", "uploaded_by"
-            ).all()
+            )
 
             campus_filter = request.query_params.get("campus")
             if campus_filter:
@@ -46,6 +46,12 @@ class DocumentListView(APIView):
                     | Q(student__last_name__icontains=search)
                     | Q(student__admission_number__icontains=search)
                 )
+
+            qs = apply_campus_scope(
+                qs,
+                request,
+                "student__enrollments__campus_id",
+            ).distinct()
 
             for d in qs:
                 student_name = f"{d.student.first_name} {d.student.last_name}".strip()
@@ -70,7 +76,7 @@ class DocumentListView(APIView):
         if show_employee:
             qs = EmployeeDocument.objects.select_related(
                 "employee", "uploaded_by"
-            ).all()
+            )
 
             campus_filter = request.query_params.get("campus")
             if campus_filter:
@@ -86,6 +92,13 @@ class DocumentListView(APIView):
                     | Q(employee__last_name__icontains=search)
                     | Q(employee__employee_number__icontains=search)
                 )
+
+            qs = apply_campus_scope(
+                qs,
+                request,
+                "employee__primary_campus_id",
+                institution_field="employee__institution_id",
+            )
 
             for d in qs:
                 emp_name = f"{d.employee.first_name} {d.employee.last_name}".strip()
@@ -134,9 +147,19 @@ class DocumentUploadView(APIView):
                 )
 
             from apps.students.models import Student
-            try:
-                student = Student.objects.get(pk=student_id)
-            except Student.DoesNotExist:
+            from apps.accounts.access import restrict_to_allowed_campuses
+
+            student = (
+                restrict_to_allowed_campuses(
+                    Student.objects.filter(pk=student_id),
+                    request.user,
+                    "primary_campus_id",
+                )
+                .filter(institution=request.institution)
+                .first()
+            )
+
+            if student is None:
                 return Response(
                     {"detail": "Student not found."},
                     status=status.HTTP_404_NOT_FOUND,
@@ -160,9 +183,19 @@ class DocumentUploadView(APIView):
                 )
 
             from apps.hr.models import Employee
-            try:
-                employee = Employee.objects.get(pk=employee_id)
-            except Employee.DoesNotExist:
+            from apps.accounts.access import restrict_to_allowed_campuses
+
+            employee = (
+                restrict_to_allowed_campuses(
+                    Employee.objects.filter(pk=employee_id),
+                    request.user,
+                    "primary_campus_id",
+                )
+                .filter(institution=request.institution)
+                .first()
+            )
+
+            if employee is None:
                 return Response(
                     {"detail": "Employee not found."},
                     status=status.HTTP_404_NOT_FOUND,

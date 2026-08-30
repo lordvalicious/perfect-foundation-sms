@@ -401,7 +401,9 @@ class FeeCategoryListView(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        queryset = FeeCategory.objects.all().order_by("name")
+        queryset = FeeCategory.objects.filter(
+            institution=self.request.institution
+        ).order_by("name")
 
         status = self.request.query_params.get("status")
 

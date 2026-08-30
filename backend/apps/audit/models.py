@@ -28,6 +28,9 @@ class AuditLog(models.Model):
         ("staff_leave_approved", "Staff Leave Approved"),
         ("staff_leave_rejected", "Staff Leave Rejected"),
         ("other", "Other"),
+        ("student_transfer_initiated", "Student Transfer Initiated"),
+        ("student_transfer_approved", "Student Transfer Approved"),
+        ("student_transfer_rejected", "Student Transfer Rejected"),
     ]
 
     institution = models.ForeignKey(
@@ -50,6 +53,8 @@ class AuditLog(models.Model):
         max_length=30,
         choices=ACTION_CHOICES,
     )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.CharField(max_length=500, blank=True)
 
     model_name = models.CharField(
         max_length=100,

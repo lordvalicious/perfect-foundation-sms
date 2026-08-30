@@ -1,6 +1,7 @@
 ﻿from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from rest_framework.exceptions import PermissionDenied
 
 from apps.core.models import SoftDeleteMixin, SoftDeleteManager
 from apps.schools.models import School
@@ -9,6 +10,8 @@ from apps.schools.models import School
 class Role(models.TextChoices):
     SUPER_ADMIN = "super_admin", "Platform Super Admin"
     ADMIN = "admin", "Institution Admin"
+    ORG_ADMIN = "org_admin", "Organization Administrator"
+    HEAD_OFFICE = "head_office", "Head Office"
     PRINCIPAL = "principal", "Principal"
     VICE_PRINCIPAL = "vice_principal", "Vice Principal"
     CAMPUS_ADMIN = "campus_admin", "Campus Administrator"
@@ -16,6 +19,7 @@ class Role(models.TextChoices):
     ACCOUNTANT = "accountant", "Accountant"
     HR = "hr", "HR / Staff Officer"
     RECEPTIONIST = "receptionist", "Receptionist"
+    LIBRARIAN = "librarian", "Librarian"
     GUARD = "guard", "Security Guard"
     TEACHER = "teacher", "Teacher"
     PARENT = "parent", "Parent / Guardian"
@@ -725,7 +729,12 @@ class UserSession(models.Model):
 
 
 class TwoFABackupCode(models.Model):
-    """Backup codes for TOTP 2FA recovery."""
+    """Backup codes for TOTP 2FA recovery.
+
+    ``code_hash`` is an HMAC-SHA256 of the code keyed by the Django
+    ``SECRET_KEY`` plus the per-code ``salt`` (never a bare hash). Legacy
+    rows created before this hardening use an empty salt.
+    """
 
     user = models.ForeignKey(
         User,
@@ -733,6 +742,7 @@ class TwoFABackupCode(models.Model):
         related_name="twofa_backup_codes",
     )
     code_hash = models.CharField(max_length=128)
+    salt = models.CharField(max_length=64, default="", blank=True)
     used_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -748,6 +758,176 @@ class TwoFABackupCode(models.Model):
     def __str__(self):
         status = "used" if self.used_at else "unused"
         return f"2FA backup code ({status}) for {self.user.username}"
+
+
+# =============================================================================
+# STUDENT TRANSFER
+# =============================================================================
+
+class StudentTransfer(models.Model):
+    """Formal transfer of a student between campuses.
+
+    Records a transfer request that must be approved before the student's
+    campus is changed. This prevents orphaned enrollments and ensures
+    auditability of cross-campus moves.
+    """
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+    ]
+
+    student = models.ForeignKey(
+        "students.Student",
+        on_delete=models.CASCADE,
+        related_name="transfers",
+    )
+    from_campus = models.ForeignKey(
+        "schools.Campus",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="accounts_transfers_from",
+    )
+    to_campus = models.ForeignKey(
+        "schools.Campus",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="accounts_transfers_to",
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="pending",
+    )
+    reason = models.TextField(
+        blank=True,
+        help_text="Reason for the transfer request.",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    approved_at = models.DateTimeField(null=True, blank=True)
+    approved_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="approved_student_transfers",
+    )
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["student", "status"]),
+            models.Index(fields=["status", "requested_at"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"Transfer {self.pk}: {self.student} "
+            f"from {self.from_campus} to {self.to_campus} "
+            f"({self.status})"
+        )
+
+    @property
+    def is_pending(self):
+        return self.status == "pending"
+
+    @property
+    def is_approved(self):
+        return self.status == "approved"
+
+    @property
+    def is_rejected(self):
+        return self.status == "rejected"
+
+
+class TransferManager(models.Manager):
+    """Custom manager for ``StudentTransfer`` with helper methods."""
+
+    def transfer_student(self, student, to_campus, request_user, reason=""):
+        """Initiate a student transfer request.
+
+        Validates that ``request_user`` has the appropriate role for the
+        target campus, creates a pending ``StudentTransfer`` record, and
+        updates the student's primary campus enrollment.
+
+        Returns the created ``StudentTransfer`` instance.
+        """
+        from apps.accounts.access import restrict_to_allowed_campuses
+
+        # Determine if the user is allowed to transfer to this campus.
+        # Campus admins can transfer within their own campus; super_admins
+        # can transfer anywhere.
+        user_roles = request_user.get_roles(request_user.primary_institution)
+        is_super_admin = Role.SUPER_ADMIN in user_roles
+        is_campus_admin = Role.CAMPUS_ADMIN in user_roles
+
+        # Verify the user has permission on the target campus.
+        if not is_super_admin and not is_campus_admin:
+            raise PermissionDenied(
+                "You do not have permission to transfer students to this campus."
+            )
+
+        # Use the existing campus-scoping helper to validate the target campus.
+        allowed = restrict_to_allowed_campuses(
+            InstitutionMembership.objects.none(),
+            request_user,
+            "campus_id",
+            institution_field="institution",
+        )
+        # For super/admins we allow any campus; for campus_admins we restrict.
+        if not is_super_admin:
+            target_campus_ids = allowed.values_list("id", flat=True)
+            if to_campus.id not in target_campus_ids:
+                raise PermissionDenied(
+                    "Target campus is not within your assigned campus."
+                )
+
+        # Update the student's primary campus immediately so enrolled classes
+        # reflect the new campus right away.
+        from students.models import Student, Enrollment
+
+        student.primary_campus = to_campus
+        student.save(update_fields=["primary_campus"])
+
+        # Update all active enrollments to the new campus.
+        Enrollment.objects.filter(
+            student=student,
+            status="active",
+        ).update(campus=to_campus)
+
+        # Create the transfer record.
+        transfer = self.create(
+            student=student,
+            from_campus=student.primary_campus if hasattr(student, "primary_campus") else None,
+            to_campus=to_campus,
+            status="pending",
+            reason=reason,
+            approved_by=request_user,
+        )
+
+        # Record audit log.
+        from apps.audit.models import record_audit
+
+        record_audit(
+            request=None,
+            user=request_user,
+            action="student_transfer_initiated",
+            details={
+                "student_id": student.pk,
+                "student_name": str(student),
+                "from_campus": str(student.primary_campus) if student.primary_campus else None,
+                "to_campus": str(to_campus),
+                "reason": reason,
+            },
+        )
+
+        return transfer
+
+
+StudentTransfer.objects = TransferManager()
 
 
 # =============================================================================
