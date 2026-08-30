@@ -120,6 +120,10 @@ class Exam(models.Model):
             f"{self.class_obj.name}"
         )
 
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
+
 
 class ExamSubject(models.Model):
     exam = models.ForeignKey(
@@ -171,6 +175,10 @@ class ExamSubject(models.Model):
             f"{self.exam.name} - "
             f"{self.subject.name}"
         )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
 
 class StudentResult(models.Model):
@@ -573,6 +581,15 @@ class ExamSchedule(models.Model):
         help_text="Room, hall or location for the exam.",
     )
 
+    invigilator = models.ForeignKey(
+        "teachers.Teacher",
+        on_delete=models.SET_NULL,
+        related_name="exam_invigilations",
+        null=True,
+        blank=True,
+        help_text="Teacher supervising this exam slot.",
+    )
+
     notes = models.TextField(blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -678,4 +695,108 @@ class ExamSchedule(models.Model):
             f"{self.section} | "
             f"{self.date} "
             f"{self.start_time}-{self.end_time}"
+        )
+
+
+class ExamSeating(models.Model):
+    """Seat allocation for a student in an examination section.
+
+    A student is seated once per exam, and seat numbers are unique
+    within a section so examinations can be invigilated confidently.
+    """
+
+    exam = models.ForeignKey(
+        "exams.Exam",
+        on_delete=models.CASCADE,
+        related_name="seating",
+    )
+
+    section = models.ForeignKey(
+        Section,
+        on_delete=models.PROTECT,
+        related_name="exam_seating",
+    )
+
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="exam_seating",
+    )
+
+    seat_number = models.PositiveIntegerField()
+
+    room = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Room or hall assigned for the student.",
+    )
+
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["section", "seat_number", "student__first_name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exam", "student"],
+                name="unique_student_seat_per_exam",
+            ),
+            models.UniqueConstraint(
+                fields=["exam", "section", "seat_number"],
+                name="unique_seat_number_per_section_exam",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["exam", "section", "seat_number"],
+                name="seating_exam_section_seat_idx",
+            ),
+        ]
+
+    def clean(self):
+        errors = {}
+
+        if self.seat_number and self.seat_number <= 0:
+            errors["seat_number"] = (
+                "Seat number must be greater than zero."
+            )
+
+        if self.exam_id and self.section_id:
+            if self.section.class_obj_id != self.exam.class_obj_id:
+                errors["section"] = (
+                    "The selected section does not belong "
+                    "to the exam's class."
+                )
+
+        if self.exam_id and self.student_id:
+            from apps.students.models import Enrollment
+
+            enrolled = Enrollment.objects.filter(
+                student=self.student,
+                academic_year=self.exam.academic_year,
+                campus=self.exam.campus,
+                class_obj=self.exam.class_obj,
+                status="active",
+            ).exists()
+
+            if not enrolled:
+                errors["student"] = (
+                    "The student is not actively enrolled "
+                    "in this exam's class and campus."
+                )
+
+        if errors:
+            raise ValidationError(errors)
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
+
+    def __str__(self):
+        return (
+            f"{self.student.full_name} - "
+            f"{self.exam.name} - "
+            f"Seat {self.seat_number}"
         )

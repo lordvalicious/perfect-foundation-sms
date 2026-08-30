@@ -2,9 +2,14 @@ from django.urls import path
 
 from .gradebook import ClassGradebookView
 from .views import (
+    ExamDetailView,
     ExamListView,
     ExamScheduleDetailView,
     ExamScheduleListView,
+    ExamSeatingBulkView,
+    ExamSeatingDetailView,
+    ExamSeatingListView,
+    ExamSubjectDetailView,
     ExamSubjectListView,
     PracticalResultDetailView,
     PracticalResultListCreateView,
@@ -15,13 +20,18 @@ from .views import (
 
 urlpatterns = [
     path("", ExamListView.as_view(), name="exam-list"),
+    path("<int:pk>/", ExamDetailView.as_view(), name="exam-detail"),
     path("subjects/", ExamSubjectListView.as_view(), name="exam-subject-list"),
+    path("subjects/<int:pk>/", ExamSubjectDetailView.as_view(), name="exam-subject-detail"),
     path("schedules/", ExamScheduleListView.as_view(), name="exam-schedule-list"),
     path(
         "schedules/<int:pk>/",
         ExamScheduleDetailView.as_view(),
         name="exam-schedule-detail",
     ),
+    path("seating/", ExamSeatingListView.as_view(), name="exam-seating-list"),
+    path("seating/bulk/", ExamSeatingBulkView.as_view(), name="exam-seating-bulk"),
+    path("seating/<int:pk>/", ExamSeatingDetailView.as_view(), name="exam-seating-detail"),
     path("results/", StudentResultListView.as_view(), name="student-result-list"),
     path(
         "results/<int:pk>/",

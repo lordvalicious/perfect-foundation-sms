@@ -87,6 +87,8 @@ import MessagesPage from "./pages/MessagesPage";
 import SMSPage from "./pages/SMSPage";
 import Dashboard from "./pages/Dashboard";
 import StudentsPage from "./pages/StudentsPage";
+import Student360Page from "./pages/Student360Page";
+import AcademicsPage from "./pages/AcademicsPage";
 import TeachersPage from "./pages/TeachersPage";
 import HRPage from "./pages/HRPage";
 import AdmissionsPage from "./pages/AdmissionsPage";
@@ -302,6 +304,7 @@ const navigation = [
   { label: "Parent Portal", path: "/parent-portal", icon: HeartHandshake, roles: ["parent"] },
   { label: "Students", module: "students", path: "/students", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"] },
   { label: "Admissions", module: "students", path: "/admissions", icon: FilePlus2, roles: ["super_admin", "admin", "principal", "academic"] },
+  { label: "Academics", module: "students", path: "/academics", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "vice_principal", "campus_admin", "hr"] },
   { label: "Staff Leave & Attendance", path: "/staff-operations", icon: CalendarClock, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr"] },
@@ -362,7 +365,7 @@ const navGroups = [
   },
   {
     label: "Academics",
-    items: ["/attendance", "/discipline", "/exams", "/homework", "/lms", "/report-cards", "/timetable", "/assignments"]
+    items: ["/attendance", "/discipline", "/exams", "/homework", "/lms", "/report-cards", "/timetable", "/assignments", "/academics"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -668,6 +671,18 @@ function Shell() {
         <Route path="/students" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"]}>
             <StudentsPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/students/:id" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"]}>
+            <Student360Page />
+          </RequireRoles>
+        } />
+
+        <Route path="/academics" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <AcademicsPage />
           </RequireRoles>
         } />
 

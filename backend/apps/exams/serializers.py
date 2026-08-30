@@ -3,10 +3,49 @@ from rest_framework import serializers
 from .models import (
     Exam,
     ExamSchedule,
+    ExamSeating,
     ExamSubject,
     PracticalResult,
     StudentResult,
 )
+
+
+class ExamWriteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Exam
+        fields = [
+            "id",
+            "name",
+            "exam_type",
+            "academic_year",
+            "term",
+            "campus",
+            "class_obj",
+            "start_date",
+            "end_date",
+            "status",
+        ]
+
+    def create(self, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        try:
+            return Exam.objects.create(**validated_data)
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+    def update(self, instance, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+
+        try:
+            instance.save()
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+        return instance
 
 
 class ExamSerializer(serializers.ModelSerializer):
@@ -95,6 +134,27 @@ class ExamSubjectSerializer(serializers.ModelSerializer):
             "maximum_marks",
             "passing_marks",
         ]
+
+    def create(self, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        try:
+            return ExamSubject.objects.create(**validated_data)
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+    def update(self, instance, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+
+        try:
+            instance.save()
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+        return instance
 
 
 class StudentResultSerializer(serializers.ModelSerializer):
@@ -337,6 +397,10 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
     )
     subject = serializers.SerializerMethodField()
     subject_name = serializers.SerializerMethodField()
+    invigilator_name = serializers.CharField(
+        source="invigilator.full_name",
+        read_only=True,
+    )
 
     class Meta:
         model = ExamSchedule
@@ -354,6 +418,8 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             "start_time",
             "end_time",
             "room",
+            "invigilator",
+            "invigilator_name",
             "notes",
             "created_at",
             "updated_at",
@@ -389,3 +455,166 @@ class ExamScheduleSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(exc.message_dict)
 
         return instance
+
+
+class ExamSeatingSerializer(serializers.ModelSerializer):
+    student_name = serializers.CharField(
+        source="student.full_name",
+        read_only=True,
+    )
+    admission_number = serializers.CharField(
+        source="student.admission_number",
+        read_only=True,
+    )
+    section_name = serializers.CharField(
+        source="section.name",
+        read_only=True,
+    )
+
+    class Meta:
+        model = ExamSeating
+        fields = [
+            "id",
+            "exam",
+            "section",
+            "section_name",
+            "student",
+            "student_name",
+            "admission_number",
+            "seat_number",
+            "room",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+
+    def create(self, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        try:
+            return ExamSeating.objects.create(**validated_data)
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+    def update(self, instance, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        for key, value in validated_data.items():
+            setattr(instance, key, value)
+
+        try:
+            instance.save()
+        except ModelValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict)
+
+        return instance
+
+
+class ExamSeatingBulkSerializer(serializers.Serializer):
+    """Assign a whole section roster in one call.
+
+    Each item maps a student to a seat. Validation errors are collected
+    so a single bad seat does not block the remaining assignments.
+    """
+
+    exam = serializers.IntegerField()
+    section = serializers.IntegerField()
+    items = serializers.ListField(child=serializers.DictField())
+
+    def create(self, validated_data):
+        from django.core.exceptions import ValidationError as ModelValidationError
+
+        from .models import ExamSeating
+
+        exam_id = validated_data["exam"]
+        section_id = validated_data["section"]
+        items = validated_data["items"]
+
+        created = []
+        errors = []
+        seen_seats = set()
+        seen_students = set()
+
+        for raw in items:
+            seat_number = raw.get("seat_number")
+            student_id = raw.get("student")
+
+            if student_id is None or seat_number in (None, ""):
+                errors.append(
+                    {
+                        "student": student_id,
+                        "errors": {
+                            "seat_number": "Seat number and student are required."
+                        },
+                    }
+                )
+                continue
+
+            try:
+                seat_number = int(seat_number)
+                if seat_number <= 0:
+                    raise ValueError
+            except ValueError:
+                errors.append(
+                    {
+                        "student": student_id,
+                        "errors": {
+                            "seat_number": "Seat number must be a positive integer."
+                        },
+                    }
+                )
+                continue
+
+            if (section_id, seat_number) in seen_seats:
+                errors.append(
+                    {
+                        "student": student_id,
+                        "errors": {
+                            "seat_number": (
+                                f"Seat number {seat_number} is already used "
+                                "for this section."
+                            )
+                        },
+                    }
+                )
+                continue
+
+            if student_id in seen_students:
+                errors.append(
+                    {
+                        "student": student_id,
+                        "errors": {
+                            "student": "Student already has a seat in this batch."
+                        },
+                    }
+                )
+                continue
+
+            seen_seats.add((section_id, seat_number))
+            seen_students.add(student_id)
+
+            try:
+                instance = ExamSeating(
+                    exam_id=exam_id,
+                    section_id=section_id,
+                    student_id=student_id,
+                    seat_number=seat_number,
+                    room=raw.get("room", ""),
+                    notes=raw.get("notes", ""),
+                )
+                instance.full_clean()
+                created.append(instance)
+            except ModelValidationError as exc:
+                errors.append(
+                    {
+                        "student": student_id,
+                        "errors": exc.message_dict,
+                    }
+                )
+
+        if errors:
+            raise serializers.ValidationError(
+                {"items": [f"Student {e.get('student')}: {e['errors']}" for e in errors]}
+            )
+
+        return ExamSeating.objects.bulk_create(created)

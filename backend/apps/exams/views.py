@@ -21,11 +21,14 @@ from apps.accounts.scopes import (
 )
 from apps.audit.models import record_audit
 
-from .models import Exam, ExamSchedule, ExamSubject, PracticalResult, StudentResult
+from .models import Exam, ExamSchedule, ExamSeating, ExamSubject, PracticalResult, StudentResult
 from .serializers import (
     ExamScheduleSerializer,
+    ExamSeatingBulkSerializer,
+    ExamSeatingSerializer,
     ExamSerializer,
     ExamSubjectSerializer,
+    ExamWriteSerializer,
     PracticalResultSerializer,
     StudentResultSerializer,
     StudentResultWriteSerializer,
@@ -59,7 +62,7 @@ class ExamListPagination(PageNumberPagination):
     max_page_size = 500
 
 
-class ExamListView(generics.ListAPIView):
+class ExamListView(generics.ListCreateAPIView):
     serializer_class = ExamSerializer
     permission_classes = [IsAcademicMemberRole]
     pagination_class = ExamListPagination
@@ -118,8 +121,129 @@ class ExamListView(generics.ListAPIView):
 
         return queryset
 
+    def get_serializer_class(self):
+        if self.request.method in ("POST", "PUT", "PATCH"):
+            return ExamWriteSerializer
 
-class ExamSubjectListView(generics.ListAPIView):
+        return ExamSerializer
+
+    def perform_create(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can create exams."
+            )
+
+        campus = serializer.validated_data["campus"]
+        assert_campus_allowed(user, campus.id)
+
+        exam = serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="create",
+            model_name="Exam",
+            object_id=str(exam.pk),
+            object_repr=str(exam),
+            details={
+                "name": exam.name,
+                "exam_type": exam.get_exam_type_display(),
+                "campus": exam.campus.name,
+                "class": exam.class_obj.name,
+                "start_date": str(exam.start_date),
+                "end_date": str(exam.end_date),
+            },
+        )
+
+
+class ExamDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ExamSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def get_queryset(self):
+        queryset = (
+            Exam.objects
+            .select_related("academic_year", "campus", "class_obj", "term")
+            .prefetch_related("exam_subjects", "results")
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
+            elif is_parent(user):
+                class_ids = parent_student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
+            elif is_teacher(user):
+                class_ids = teacher_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(class_obj_id__in=class_ids)
+
+        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+
+        return queryset
+
+    def get_serializer_class(self):
+        if self.request.method in ("PUT", "PATCH"):
+            return ExamWriteSerializer
+
+        return ExamSerializer
+
+    def perform_update(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can update exams."
+            )
+
+        exam = self.get_object()
+        assert_campus_allowed(user, exam.campus_id)
+        serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="update",
+            model_name="Exam",
+            object_id=str(exam.pk),
+            object_repr=str(exam),
+        )
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can delete exams."
+            )
+
+        assert_campus_allowed(user, instance.campus_id)
+        instance.delete()
+
+        record_audit(
+            request=self.request,
+            action="delete",
+            model_name="Exam",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+        )
+
+
+class ExamSubjectListView(generics.ListCreateAPIView):
     serializer_class = ExamSubjectSerializer
     permission_classes = [IsAcademicMemberRole]
     pagination_class = None
@@ -137,6 +261,99 @@ class ExamSubjectListView(generics.ListAPIView):
             queryset = queryset.filter(exam_id=exam)
 
         return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can add exam subjects."
+            )
+
+        exam = serializer.validated_data["exam"]
+        assert_campus_allowed(user, exam.campus_id)
+
+        if exam.status != "draft":
+            raise PermissionDenied(
+                "Subjects can only be added while the exam is in draft."
+            )
+
+        exam_subject = serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="create",
+            model_name="ExamSubject",
+            object_id=str(exam_subject.pk),
+            object_repr=str(exam_subject),
+            details={
+                "exam": exam.name,
+                "subject": exam_subject.subject.name,
+                "maximum_marks": exam_subject.maximum_marks,
+            },
+        )
+
+
+class ExamSubjectDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ExamSubjectSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def get_queryset(self):
+        return (
+            ExamSubject.objects
+            .select_related("exam", "subject")
+        )
+
+    def perform_update(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can update exam subjects."
+            )
+
+        exam_subject = self.get_object()
+        assert_campus_allowed(user, exam_subject.exam.campus_id)
+
+        if exam_subject.exam.status != "draft":
+            raise PermissionDenied(
+                "Subjects can only be changed while the exam is in draft."
+            )
+
+        serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="update",
+            model_name="ExamSubject",
+            object_id=str(exam_subject.pk),
+            object_repr=str(exam_subject),
+        )
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can remove exam subjects."
+            )
+
+        assert_campus_allowed(user, instance.exam.campus_id)
+
+        if instance.exam.status != "draft":
+            raise PermissionDenied(
+                "Subjects can only be removed while the exam is in draft."
+            )
+
+        instance.delete()
+
+        record_audit(
+            request=self.request,
+            action="delete",
+            model_name="ExamSubject",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+        )
 
 
 class StudentResultListView(generics.ListCreateAPIView):
@@ -540,6 +757,11 @@ class ExamScheduleListView(generics.ListCreateAPIView):
         exam = serializer.validated_data["exam"]
         assert_campus_allowed(user, exam.campus_id)
 
+        if exam.status == "completed":
+            raise PermissionDenied(
+                "Schedules cannot be changed for a completed exam."
+            )
+
         schedule = serializer.save()
 
         record_audit(
@@ -650,4 +872,228 @@ class ExamScheduleDetailView(generics.RetrieveUpdateDestroyAPIView):
             model_name="ExamSchedule",
             object_id=str(instance.pk),
             object_repr=str(instance),
+        )
+
+
+class ExamSeatingListView(generics.ListCreateAPIView):
+    serializer_class = ExamSeatingSerializer
+    permission_classes = [IsAcademicMemberRole]
+    pagination_class = ExamListPagination
+
+    def get_queryset(self):
+        queryset = (
+            ExamSeating.objects
+            .select_related("exam", "section", "student")
+            .order_by("section", "seat_number", "student__first_name")
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_parent(user):
+                class_ids = parent_student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_teacher(user):
+                class_ids = teacher_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
+        )
+
+        exam = self.request.query_params.get("exam")
+
+        if exam:
+            queryset = queryset.filter(exam_id=exam)
+
+        section = self.request.query_params.get("section")
+
+        if section:
+            queryset = queryset.filter(section_id=section)
+
+        return queryset
+
+    def perform_create(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can assign seating."
+            )
+
+        exam = serializer.validated_data["exam"]
+        assert_campus_allowed(user, exam.campus_id)
+
+        seating = serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="create",
+            model_name="ExamSeating",
+            object_id=str(seating.pk),
+            object_repr=str(seating),
+            details={
+                "exam": seating.exam.name,
+                "student": seating.student.full_name,
+                "seat_number": seating.seat_number,
+            },
+        )
+
+
+class ExamSeatingDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = ExamSeatingSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def get_queryset(self):
+        queryset = (
+            ExamSeating.objects
+            .select_related("exam", "section", "student")
+        )
+
+        user = self.request.user
+
+        if not is_manager(user):
+            if is_student(user):
+                class_ids = student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_parent(user):
+                class_ids = parent_student_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+            elif is_teacher(user):
+                class_ids = teacher_class_ids(user)
+
+                if not class_ids:
+                    return queryset.none()
+
+                queryset = queryset.filter(
+                    section__class_obj_id__in=class_ids
+                )
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
+        )
+
+        return queryset
+
+    def perform_update(self, serializer):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can update seating."
+            )
+
+        seating = self.get_object()
+        assert_campus_allowed(user, seating.exam.campus_id)
+        serializer.save()
+
+        record_audit(
+            request=self.request,
+            action="update",
+            model_name="ExamSeating",
+            object_id=str(seating.pk),
+            object_repr=str(seating),
+        )
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can remove seating."
+            )
+
+        assert_campus_allowed(user, instance.exam.campus_id)
+        instance.delete()
+
+        record_audit(
+            request=self.request,
+            action="delete",
+            model_name="ExamSeating",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+        )
+
+
+class ExamSeatingBulkView(generics.GenericAPIView):
+    serializer_class = ExamSeatingBulkSerializer
+    permission_classes = [IsAcademicMemberRole]
+
+    def post(self, request):
+        user = request.user
+
+        if not is_manager(user):
+            raise PermissionDenied(
+                "Only academic managers can assign seating."
+            )
+
+        lookup_kwargs = {"pk": request.data.get("exam")}
+        try:
+            exam = Exam.objects.get(**lookup_kwargs)
+        except Exam.DoesNotExist:
+            return Response(
+                {"detail": "Exam not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        assert_campus_allowed(user, exam.campus_id)
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        created = serializer.save()
+
+        record_audit(
+            request=request,
+            action="bulk_create",
+            model_name="ExamSeating",
+            object_id=",".join(str(item.pk) for item in created),
+            object_repr=f"Seating for exam {exam.name}",
+            details={
+                "exam": exam.name,
+                "count": len(created),
+            },
+        )
+
+        return Response(
+            {"detail": f"{len(created)} seats assigned.", "count": len(created)},
+            status=status.HTTP_201_CREATED,
         )
