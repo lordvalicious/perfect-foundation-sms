@@ -14,6 +14,12 @@ const STATUS_OPTIONS = [
   { value: "major", label: "Major" },
 ];
 
+// Helper to get status tag HTML
+const getStatusTag = (status) =>
+  status
+    ? `<span style={{ padding: "2px 6px", borderRadius: "10px", fontSize: "11px", color: "var(--text-muted)" }}>{status}</span>`
+    : "—";
+
 export default function DisciplinePage() {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -228,28 +234,29 @@ export default function DisciplinePage() {
                 </thead>
 
                 <tbody>
-                  {incidents.map((incident) => {
+{incidents.map((incident) => {
                     const sev = (incident.severity || "").toLowerCase();
                     const sevClass = sev === "major" ? "row-danger" : sev === "moderate" ? "row-warning" : "";
                     return (
-                      <tr key={incident.id} className={sevClass}>
-                        <td>
-                          <strong>{incident.title || "—"}</strong>
-                        </td>
+                      <div>
+                        <tr key={incident.id} className={sevClass}>
+                          <td>
+                            <strong>{incident.title || "—"}</strong>
+                          </td>
 
-                        <td>
-                          <span
-                            style={{
-                              padding: "2px 6px",
-                              borderRadius: "10px",
-                              fontSize: "11px",
-                              fontWeight: 600,
-                              color:
-                                severityClass(incident.severity) === "danger"
-                                  ? "var(--danger)"
-                                  : severityClass(incident.severity) === "warning"
-                                    ? "var(--warning)"
-                                    : "var(--success)",
+                          <td>
+                            <span
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: "10px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                color:
+                                  severityClass(incident.severity) === "danger"
+                                    ? "var(--danger)"
+                                    : severityClass(incident.severity) === "warning"
+                                      ? "var(--warning)"
+                                      : "var(--success)",
                           }}
                         >
                           {incident.severity || "—"}
@@ -258,11 +265,7 @@ export default function DisciplinePage() {
 
                       <td>{incident.category || "—"}</td>
 
-                      <td>
-                        {incident.status
-                          ? `<span style={{ padding: "2px 6px", borderRadius: "10px", fontSize: "11px", color: "var(--text-muted)" }}>{incident.status}</span>`
-                          : "—"}
-                      </td>
+                      <td>{getStatusTag(incident.status)}</td>
 
                       <td>{formatDate(incident.created_at)}</td>
 
@@ -282,8 +285,9 @@ export default function DisciplinePage() {
                           <Trash2 size={14} />
                         </button>
                       </td>
-                    </tr>
-                  ))}
+                        </tr>
+                      </div>
+                    })}
                 </tbody>
               </table>
             </div>
