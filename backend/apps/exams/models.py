@@ -223,6 +223,11 @@ class StudentResult(models.Model):
 
     is_pass = models.BooleanField(default=False)
 
+    is_locked = models.BooleanField(
+        default=False,
+        help_text='Prevents editing of this result record.',
+    )
+
     remarks = models.CharField(
         max_length=255,
         blank=True,

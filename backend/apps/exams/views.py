@@ -303,6 +303,10 @@ class StudentResultDetailView(generics.RetrieveUpdateDestroyAPIView):
                 "You can only edit marks for subjects you are "
                 "assigned to teach."
             )
+        if result.is_locked:
+            raise PermissionDenied(
+                "Cannot edit a locked result. Request rechecking instead."
+            )
 
     def perform_update(self, serializer):
         instance = self.get_object()
@@ -328,6 +332,22 @@ class StudentResultDetailView(generics.RetrieveUpdateDestroyAPIView):
             model_name="StudentResult",
             object_id=str(instance.pk),
             object_repr=str(instance),
+        )
+
+    def perform_recheck(self, serializer):
+        """Toggle the lock status on a result and record the action."""
+        instance = self.get_object()
+        instance.is_locked = not instance.is_locked
+        instance.save(update_fields=["is_locked"])
+        
+        action = "lock" if instance.is_locked else "unlock"
+        record_audit(
+            request=self.request,
+            action=action,
+            model_name="StudentResult",
+            object_id=str(instance.pk),
+            object_repr=str(instance),
+            details={"locked": instance.is_locked},
         )
 
 
