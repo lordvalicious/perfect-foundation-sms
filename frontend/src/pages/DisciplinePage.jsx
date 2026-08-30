@@ -270,20 +270,7 @@ export default function DisciplinePage() {
                       <td>{formatDate(incident.created_at)}</td>
 
                       <td style={{ whiteSpace: "nowrap" }}>
-                        <button
-                          className="table-action"
-                          title="Edit incident"
-                          onClick={() => openEdit(incident)}
-                        >
-                          <Edit size={14} />
-                        </button>
-                        <button
-                          className="table-action danger"
-                          title="Delete incident"
-                          onClick={() => handleDelete(incident)}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        —
                       </td>
                         </tr>
                       </div>
