@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   BarChart3,
   Download,
@@ -34,6 +41,7 @@ import {
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
 import { apiDownload } from "../api";
+import { DEMO_REPORTS } from "./demoReports";
 import {
   SingleStudentDetail,
   SingleTeacherDetail,
@@ -198,6 +206,17 @@ const STUDENT_DETAIL_KEY = "single-student";
 const TEACHER_DETAIL_KEY = "single-teacher";
 const STAFF_DETAIL_KEY = "single-staff";
 
+const ReportQueryContext = createContext("");
+
+function reportWithFallback(key, json) {
+  const demo = DEMO_REPORTS[key];
+  if (!demo) return json;
+
+  const hasLiveRows = demo.rowKeys.some((field) => Array.isArray(json[field]) && json[field].length > 0);
+
+  return hasLiveRows ? json : demo.data;
+}
+
 export default function ReportsPage() {
   const [active, setActive] = useState("enrollment");
   const [data, setData] = useState({});
@@ -221,6 +240,7 @@ export default function ReportsPage() {
   const [classList, setClassList] = useState([]);
   const [sectionList, setSectionList] = useState([]);
   const [subjectList, setSubjectList] = useState([]);
+  const [queries, setQueries] = useState({});
 
   const [atRisk, setAtRisk] = useState(null);
   const [arLoading, setArLoading] = useState(false);
@@ -313,7 +333,7 @@ export default function ReportsPage() {
       fetch(`${BASE}${config.url}${query}`, { credentials: "include" })
         .then((response) => (response.ok ? response.json() : {}))
         .then((json) => {
-          setData((previous) => ({ ...previous, [key]: json }));
+          setData((previous) => ({ ...previous, [key]: reportWithFallback(key, json) }));
           setLoading(false);
         })
         .catch((err) => {
@@ -423,6 +443,8 @@ export default function ReportsPage() {
   };
 
   const current = data[active] || {};
+  const reportTitle = REPORTS.find((item) => item.key === active)?.title || "Report";
+  const isStandardReport = REPORTS.some((item) => item.key === active);
 
   return (
     <section className="content">
@@ -510,15 +532,43 @@ export default function ReportsPage() {
           }
           subtitle="generated from live data"
           action={
-            <button
-              type="button"
-              className="primary-button"
-              onClick={handleDownload}
-              disabled={downloading || !data[active]}
-            >
-              <Download size={15} />
-              {downloading ? "Preparing..." : "Export CSV"}
-            </button>
+            <div className="report-toolbar">
+              {isStandardReport && (
+                <div className="filter-search report-search">
+                  <input
+                    type="text"
+                    placeholder={`Search ${reportTitle}...`}
+                    value={queries[active] || ""}
+                    onChange={(event) =>
+                      setQueries((previous) => ({ ...previous, [active]: event.target.value }))
+                    }
+                  />
+
+                  {queries[active] && (
+                    <button
+                      type="button"
+                      className="report-search-clear"
+                      aria-label="Clear search"
+                      onClick={() =>
+                        setQueries((previous) => ({ ...previous, [active]: "" }))
+                      }
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <button
+                type="button"
+                className="primary-button"
+                onClick={handleDownload}
+                disabled={downloading || !data[active]}
+              >
+                <Download size={15} />
+                {downloading ? "Preparing..." : "Export CSV"}
+              </button>
+            </div>
           }
         />
 
@@ -527,6 +577,7 @@ export default function ReportsPage() {
           error={error}
           onRetry={() => load(active)}
         >
+          <ReportQueryContext.Provider value={queries[active] || ""}>
           {active === AT_RISK_KEY && (
             <>
               <div className="filter-row">
@@ -1336,6 +1387,7 @@ export default function ReportsPage() {
               )}
             </>
           )}
+          </ReportQueryContext.Provider>
         </StateArea>
       </div>
     </section>
@@ -1343,12 +1395,30 @@ export default function ReportsPage() {
 }
 
 function ReportContent({ summary = [], headers, rows, emptyHint }) {
+  const query = useContext(ReportQueryContext).trim().toLowerCase();
+
   if (rows.length === 0) {
     return (
       <div className="empty-state">
         <BarChart3 size={42} />
         <h3>No data available</h3>
         <p>{emptyHint || "Adjust the filters to generate this report."}</p>
+      </div>
+    );
+  }
+
+  const filtered = query
+    ? rows.filter((row) =>
+        row.some((cell) => String(cell).toLowerCase().includes(query))
+      )
+    : rows;
+
+  if (filtered.length === 0) {
+    return (
+      <div className="empty-state">
+        <Search size={42} />
+        <h3>No matches found</h3>
+        <p>Clear the search to see all rows again.</p>
       </div>
     );
   }
@@ -1375,7 +1445,7 @@ function ReportContent({ summary = [], headers, rows, emptyHint }) {
           </thead>
 
           <tbody>
-            {rows.map((row, index) => (
+            {filtered.map((row, index) => (
               <tr key={index}>
                 {row.map((cell, cellIndex) => (
                   <td key={cellIndex}>
