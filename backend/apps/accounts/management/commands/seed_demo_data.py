@@ -19,7 +19,12 @@ PARTS = {
     ],
     2: [
         ("part2_academics", part2_academics.run),
-        ("part2_people", part2_people.run),
+        ("2 teachers", part2_people.seed_teachers),
+        ("2 support staff", part2_people.seed_support_staff),
+        ("2 guardians", part2_people.seed_guardians),
+        ("2 students", part2_people.seed_students),
+        ("2 class teachers", part2_people.seed_class_teachers),
+        ("2 special students", part2_people.seed_special_students),
     ],
     3: [
         ("part3_operations", part3_operations.run),
@@ -89,12 +94,18 @@ class Command(BaseCommand):
             ctx = base.build_context(
                 stdout=self.stdout, style=self.style
             )
-        # Each part commits independently so a failure in a later part does
-        # not discard data already seeded by earlier parts. This makes the
-        # seed resumable/incremental as well as idempotent.
+        # Each sub-step commits independently so that an interruption or error
+        # in a later step does not discard data already seeded by earlier
+        # steps. This makes the seed resumable/incremental as well as
+        # idempotent. Individual steps/run() functions own their own
+        # transactions (and may commit in batches internally).
         for part_no in selected:
-            with transaction.atomic():
-                self._run_part(ctx, part_no)
+            for label, fn in PARTS[part_no]:
+                self.stdout.write("")
+                self.stdout.write(self.style.MIGRATE_HEADING(
+                    f"===== DEMO DATA PART {part_no}: {label} ====="
+                ))
+                fn(ctx)
         self._print_summary(ctx, selected)
 
     def _run_part(self, ctx, part_no):

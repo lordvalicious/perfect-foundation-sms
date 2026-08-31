@@ -85,10 +85,11 @@ def _seed_attendance(ctx):
             else:
                 status = random.choice(statuses)
 
-            enrollment = stu.enrollment_set.filter(
+            enrollment = stu.enrollments.filter(
                 academic_year=ctx.active_year
             ).first()
-
+            if enrollment is None:
+                continue
             _, c = Attendance.objects.get_or_create(
                 student=stu,
                 date=day,
@@ -125,7 +126,7 @@ def _seed_student_leave(ctx):
     )
     created = 0
     for i, stu in enumerate(students):
-        start = date(2026, 10 + (i % 6), 1 + (i % 20))
+        start = date(2026, 9 + (i % 4), 1 + (i % 20))
         end = start + timedelta(days=random.randint(1, 3))
         status = leave_statuses[i % len(leave_statuses)]
         _, c = StudentLeave.objects.get_or_create(
@@ -135,6 +136,7 @@ def _seed_student_leave(ctx):
                 "end_date": end,
                 "reason": f"Personal leave for student {i + 1}",
                 "status": status,
+                "requested_by": ctx.users.get("demo_superadmin"),
             },
         )
         if c:
@@ -161,7 +163,7 @@ def _seed_staff_leave(ctx):
     created = 0
     for i, sp in enumerate(staff_profiles):
         lt = leave_types[i % len(leave_types)]
-        start = date(2026, 9 + (i % 8), 5 + (i % 20))
+        start = date(2026, 9 + (i % 4), 5 + (i % 20))
         end = start + timedelta(days=random.randint(1, 5))
         status = statuses[i % len(statuses)]
         _, c = StaffLeave.objects.get_or_create(
@@ -188,7 +190,7 @@ def _seed_staff_leave(ctx):
 def _seed_exams(ctx):
     ctx.log("Creating exams, schedules, marks, results...")
     from apps.exams.models import Exam, ExamSubject, ExamSchedule, StudentResult
-    from apps.schools.models import Class, Subject, SubjectOffering
+    from apps.schools.models import Class, Section, Subject, SubjectOffering
     from apps.students.models import Student, Enrollment
     from apps.teachers.models import Teacher
 
@@ -229,14 +231,13 @@ def _seed_exams(ctx):
                     continue
 
                 exam, created = Exam.objects.get_or_create(
-                    institution=ctx.school,
                     name=exam_name,
                     class_obj=cls,
                     academic_year=year,
+                    campus=campus,
                     defaults={
                         "exam_type": exam_type,
                         "term": term,
-                        "campus": campus,
                         "start_date": start,
                         "end_date": end,
                         "status": "completed",
@@ -288,7 +289,7 @@ def _seed_exams(ctx):
                                 "date": sched_date,
                                 "start_time": time(9, 0),
                                 "end_time": time(11, 0),
-                                "room": f"Room {es_idx + 1}",
+                                "room": f"Room E{exam.id}-{campus_code}-{es_idx + 1}-{sec.name}",
                                 "invigilator": invigilator,
                             },
                         )
@@ -301,9 +302,10 @@ def _seed_exams(ctx):
                     Student.objects.filter(
                         institution=ctx.school,
                         primary_campus=campus,
-                        class_obj=cls,
+                        enrollments__class_obj=cls,
+                        enrollments__academic_year=year,
                         status="active",
-                    )
+                    ).distinct()
                 )
 
                 for stu in students:
@@ -694,6 +696,10 @@ def _seed_expenses(ctx):
 @transaction.atomic
 def run(ctx):
     ctx.log("Part 3: operations (attendance, exams, results, finance).")
+
+    # Standalone part: ensure the foundation/base users exist so that
+    # non-null actor FKs (e.g. StudentLeaveRequest.requested_by) resolve.
+    base.base_users(ctx)
 
     # Re-seed student list for this part
     _seed_attendance(ctx)

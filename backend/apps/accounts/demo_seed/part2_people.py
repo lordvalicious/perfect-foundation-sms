@@ -59,14 +59,11 @@ def _dob_for_index(idx: int) -> date:
 
 
 @transaction.atomic
-def run(ctx):
-    ctx.log("Part 2: people (teachers, staff, students, guardians, enrollments, class teachers).")
+def seed_teachers(ctx):
+    """Create 50 teachers (10 per campus) + TeacherAssignment. Idempotent."""
+    from apps.accounts.models import Role
+    from apps.teachers.models import Teacher as TeacherModel, TeacherAssignment
 
-    from apps.accounts.models import InstitutionMembership, Role, StaffProfile, User
-    from apps.schools.models import Class, Section
-    from apps.teachers.models import Teacher, TeacherAssignment
-
-    # ---------- 1. TEACHERS ----------
     ctx.log("Creating teachers...")
     teacher_count = 0
     teacher_registry = {}
@@ -85,11 +82,7 @@ def run(ctx):
                 base.membership(ctx, user)
             base.assign_roles(ctx, user, [Role.TEACHER])
 
-            # Teacher profile
-            from apps.teachers.models import Teacher as TeacherModel
             emp_no = f"{code}-T{n:02d}"
-            subject_codes = _subject_codes_for_class(f"Class {min(n, 10)}")
-            # Note: Teacher.subjects is M2M to Subject; we'll link later
             teacher, t_created = TeacherModel.objects.get_or_create(
                 institution=ctx.school,
                 employee_number=emp_no,
@@ -114,7 +107,6 @@ def run(ctx):
             teacher_count += 1 if t_created else 0
             teacher_registry[(code, j)] = teacher
 
-            # TeacherAssignment for this teacher (a sample class/section/subject in their campus)
             if t_created:
                 from apps.schools.models import Subject, Section as SecModel
                 campus_classes = list(
@@ -138,9 +130,15 @@ def run(ctx):
                     if ta_created:
                         ctx.count("teacher_assignments")
 
+    ctx.teacher_registry = teacher_registry
     ctx.ok(f"Teachers: {teacher_count} created (registry size {len(teacher_registry)})")
 
-    # ---------- 2. SUPPORT STAFF ----------
+
+@transaction.atomic
+def seed_support_staff(ctx):
+    """Create 50 support staff via StaffProfile. Idempotent."""
+    from apps.accounts.models import Role
+
     ctx.log("Creating support staff...")
     staff_count = 0
     for ci, code in enumerate(CAMPUS_CODES):
@@ -170,14 +168,16 @@ def run(ctx):
             staff_count += 1 if created else 0
     ctx.ok(f"Support staff: {staff_count}")
 
-    # ---------- 3. GUARDIANS + PARENT USERS (created before students,
-    # because Student.guardian is a required NOT NULL FK) ----------
-    ctx.log("Creating guardians and parent users...")
+
+@transaction.atomic
+def seed_guardians(ctx):
+    """Create 350 guardian + parent user accounts. Idempotent."""
+    from apps.accounts.models import Role
     from apps.students.models import Guardian
 
+    ctx.log("Creating guardians and parent users...")
     guardian_created = 0
     guardian_registry = {}
-    # 350 guardians; guardian g (1..350) supervises student indices g and g+350 (if <= 500)
     for g in range(1, TOTAL_GUARDIANS + 1):
         username = f"parent.{g:04d}"
         email = f"parent.{g:04d}@example.test"
@@ -206,92 +206,114 @@ def run(ctx):
             guardian_created += 1
             ctx.count("guardians")
         guardian_registry[g] = guardian
+    ctx.guardian_registry = guardian_registry
     ctx.ok(f"Guardians: {guardian_created}")
 
-    # ---------- 4. STUDENTS + ENROLLMENTS ----------
+
+def seed_students(ctx):
+    """Create 500 students (100 per campus) + Enrollments. Idempotent.
+    Rebuilds the guardian registry from the DB if not present in-memory."""
+    from apps.accounts.models import Role
+    from apps.students.models import Student, Enrollment, Guardian
+
     ctx.log("Creating students and enrollments...")
-    from apps.students.models import Student, Enrollment
+    if not getattr(ctx, "guardian_registry", None):
+        ctx.guardian_registry = {
+            g.id: g
+            for g in Guardian.objects.filter(institution=ctx.school)
+        }
+    guardian_registry = ctx.guardian_registry
 
     student_created = 0
     enrollment_created = 0
     section_list = list(ctx.sections.values())
-    for i in range(1, TOTAL_STUDENTS + 1):
-        ci = (i - 1) // STUDENTS_PER_CAMPUS
-        code = CAMPUS_CODES[ci]
-        campus = ctx.campuses[code]
-        seq = (i - 1) % STUDENTS_PER_CAMPUS + 1
+    BATCH = 100
+    for batch_start in range(1, TOTAL_STUDENTS + 1, BATCH):
+        batch_end = min(batch_start + BATCH, TOTAL_STUDENTS + 1)
+        with transaction.atomic():
+            for i in range(batch_start, batch_end):
+                ci = (i - 1) // STUDENTS_PER_CAMPUS
+                code = CAMPUS_CODES[ci]
+                campus = ctx.campuses[code]
+                seq = (i - 1) % STUDENTS_PER_CAMPUS + 1
 
-        username = f"student.{code}.{seq:02d}"
-        email = f"student.{code}.{seq:02d}@example.test"
-        first = "Student"
-        last = f"{i:03d}"
+                username = f"student.{code}.{seq:02d}"
+                email = f"student.{code}.{seq:02d}@example.test"
+                first = "Student"
+                last = f"{i:03d}"
 
-        user, u_created = base.make_user(ctx, username, email, first, last)
-        if u_created:
-            base.membership(ctx, user)
-        base.assign_roles(ctx, user, [Role.STUDENT])
+                user, u_created = base.make_user(ctx, username, email, first, last)
+                if u_created:
+                    base.membership(ctx, user)
+                base.assign_roles(ctx, user, [Role.STUDENT])
 
-        # guardian for student index i
-        guardian = guardian_registry[i if i <= TOTAL_GUARDIANS else i - TOTAL_GUARDIANS]
+                guardian = guardian_registry[i if i <= TOTAL_GUARDIANS else i - TOTAL_GUARDIANS]
 
-        adm_no = f"DEMO-{i:04d}"
-        stu, s_created = Student.objects.get_or_create(
-            institution=ctx.school,
-            admission_number=adm_no,
-            defaults={
-                "guardian": guardian,
-                "user": user,
-                "first_name": first,
-                "last_name": last,
-                "gender": "female" if i % 2 == 0 else "male",
-                "date_of_birth": _dob_for_index(i),
-                "admission_date": date(2026, 8, 10),
-                "status": "active",
-                "primary_campus": campus,
-            },
-        )
-        if s_created:
-            student_created += 1
-            ctx.count("students")
-        # Link user / guardian if not linked
-        if stu.user_id != user.id:
-            stu.user = user
-            stu.save(update_fields=["user"])
-        if stu.guardian_id != guardian.id:
-            stu.guardian = guardian
-            stu.save(update_fields=["guardian"])
+                adm_no = f"DEMO-{i:04d}"
+                stu, s_created = Student.objects.get_or_create(
+                    institution=ctx.school,
+                    admission_number=adm_no,
+                    defaults={
+                        "guardian": guardian,
+                        "user": user,
+                        "first_name": first,
+                        "last_name": last,
+                        "gender": "female" if i % 2 == 0 else "male",
+                        "date_of_birth": _dob_for_index(i),
+                        "admission_date": date(2026, 8, 10),
+                        "status": "active",
+                        "primary_campus": campus,
+                    },
+                )
+                if s_created:
+                    student_created += 1
+                    ctx.count("students")
+                if stu.user_id != user.id:
+                    stu.user = user
+                    stu.save(update_fields=["user"])
+                if stu.guardian_id != guardian.id:
+                    stu.guardian = guardian
+                    stu.save(update_fields=["guardian"])
 
-        # Assign to section (round-robin across sections of this campus)
-        campus_sections = [s for s in section_list if s.class_obj.unit.campus_id == campus.id]
-        if campus_sections:
-            section = campus_sections[(seq - 1) % len(campus_sections)]
+                campus_sections = [s for s in section_list if s.class_obj.unit.campus_id == campus.id]
+                if campus_sections:
+                    section = campus_sections[(seq - 1) % len(campus_sections)]
+                    enr, e_created = Enrollment.objects.get_or_create(
+                        student=stu,
+                        academic_year=ctx.active_year,
+                        defaults={
+                            "campus": campus,
+                            "class_obj": section.class_obj,
+                            "section": section,
+                            "roll_number": seq,
+                            "status": "active",
+                        },
+                    )
+                    if e_created:
+                        enrollment_created += 1
+                        ctx.count("enrollments")
 
-            # Enrollment
-            enr, e_created = Enrollment.objects.get_or_create(
-                student=stu,
-                academic_year=ctx.active_year,
-                defaults={
-                    "campus": campus,
-                    "class_obj": section.class_obj,
-                    "section": section,
-                    "roll_number": seq,
-                    "status": "active",
-                },
-            )
-            if e_created:
-                enrollment_created += 1
-                ctx.count("enrollments")
+        ctx.log(f"... students seeded so far: {batch_end - 1} (committed)")
 
     ctx.ok(f"Students: {student_created}, Enrollments: {enrollment_created}")
 
-    # ---------- 5. CLASS TEACHERS ----------
-    ctx.log("Creating class teacher assignments...")
+
+@transaction.atomic
+def seed_class_teachers(ctx):
+    """Assign a class teacher to every section. Idempotent."""
     from apps.schools.models import ClassTeacher
+
+    ctx.log("Creating class teacher assignments...")
+    teacher_registry = getattr(ctx, "teacher_registry", None)
+    if not teacher_registry:
+        raise RuntimeError(
+            "Part 2 class-teacher seeding needs the in-memory teacher registry. "
+            "Run seed_demo_data --part=2 (teachers step) first."
+        )
 
     ct_created = 0
     for section_key, section in ctx.sections.items():
         campus_code = section_key.split(":")[0]
-        # Assign round-robin among the 10 teachers of this campus
         teacher_idx = hash(section_key) % TEACHERS_PER_CAMPUS
         teacher = teacher_registry.get((campus_code, teacher_idx))
         if teacher:
@@ -305,15 +327,19 @@ def run(ctx):
                 ctx.count("class_teachers")
     ctx.ok(f"ClassTeachers: {ct_created}")
 
-    # ---------- 6. SPECIAL STUDENTS (HealthRecord fallback) ----------
-    ctx.log("Checking for special-student support...")
+
+@transaction.atomic
+def seed_special_students(ctx):
+    """Create HealthRecord placeholders for 20 'special' students. Idempotent."""
+    from apps.students.models import Student
     from apps.health.models import HealthRecord
+
+    ctx.log("Checking for special-student support...")
     special_created = 0
-    for i in range(1, 21):  # first 20 students
+    for i in range(1, 21):
         adm_no = f"DEMO-{i:04d}"
         try:
             stu = Student.objects.get(institution=ctx.school, admission_number=adm_no)
-            # Check if Student has special needs flag
             if not hasattr(stu, "special_needs") and not hasattr(stu, "health_notes"):
                 hr, created = HealthRecord.objects.get_or_create(
                     institution=ctx.school,
@@ -335,4 +361,14 @@ def run(ctx):
         ctx.warn("Student model lacks special_needs flag; created HealthRecord entries for 20 students.")
     ctx.ok(f"Special student records (HealthRecord): {special_created}")
 
+
+@transaction.atomic
+def run(ctx):
+    ctx.log("Part 2: people (teachers, staff, students, guardians, enrollments, class teachers).")
+    seed_teachers(ctx)
+    seed_support_staff(ctx)
+    seed_guardians(ctx)
+    seed_students(ctx)
+    seed_class_teachers(ctx)
+    seed_special_students(ctx)
     ctx.log("Part 2 done.")

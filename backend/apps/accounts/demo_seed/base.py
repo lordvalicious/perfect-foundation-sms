@@ -241,10 +241,10 @@ def make_user(ctx, username, email, first_name, last_name,
     if is_superuser:
         user.is_superuser = True
     if user.password != _cached_demo_hash():
-        # Only (re)hash when the current hash differs from the canonical demo
-        # password hash. This makes first-time seeding ~O(1) hashes and makes
-        # re-runs skip hashing entirely.
-        user.set_password(password)
+        # Bypass set_password() (which re-hashes via make_password, ~3s each)
+        # and assign the pre-computed hash directly.  This keeps the seed fast
+        # while preserving the same stored credential for every demo account.
+        user.password = _cached_demo_hash()
     user.save()
     ctx.users[username] = user
     if created:
@@ -308,7 +308,6 @@ def staff_profile(ctx, user, first_name, last_name, *, designation,
     seq = ctx._staff_seq[campus_obj.id if campus_obj else "none"] + 1
     ctx._staff_seq[campus_obj.id if campus_obj else "none"] = seq
     code = campus_code(ctx, campus_obj) if campus_obj else "HO"
-    employee_number = f"{code}-{seq:04d}"
 
     defaults = {
         "user": user,
@@ -324,15 +323,29 @@ def staff_profile(ctx, user, first_name, last_name, *, designation,
         "joining_date": joining_date or date(2019, 8, 1),
         "status": "active",
     }
-    profile, created = StaffProfile.objects.get_or_create(
+    # Idempotency is keyed on (institution, user): user_id is UNIQUE, so
+    # re-runs always reuse the existing profile. employee_number is NOT
+    # stable (the seq counter is shared with role_user/base_users), so never
+    # use it as a lookup key; only for new rows, and bump past any collision.
+    profile = StaffProfile.objects.filter(
+        institution=ctx.school, user=user
+    ).first()
+    if profile is not None:
+        return profile
+    num = seq
+    while StaffProfile.objects.filter(
+        institution=ctx.school, employee_number=f"{code}-{num:04d}"
+    ).exists():
+        num += 1
+    employee_number = f"{code}-{num:04d}"
+    profile = StaffProfile.objects.create(
         institution=ctx.school,
         employee_number=employee_number,
-        defaults=defaults,
+        **defaults,
     )
-    if created:
-        profile.membership = membership(ctx, user)
-        profile.save(update_fields=["membership"])
-        ctx.count("staff_profiles")
+    profile.membership = membership(ctx, user)
+    profile.save(update_fields=["membership"])
+    ctx.count("staff_profiles")
     return profile
 
 
@@ -500,4 +513,29 @@ def build_context(stdout=None, style=None):
         )
         ctx.counts["academic_units"] = 0 if unit.id else 1
 
+    # Load the academic structure (classes + sections) so that any part can be
+    # run standalone. part2_academics populates these from the DB already, but
+    # parts 3-5 rely on them and may be invoked without part 2 in the same run.
+    _load_academic_structure(ctx)
+
     return ctx
+
+
+def _load_academic_structure(ctx):
+    """Populate ctx.classes (``code:ClassName`` -> Class) and
+    ctx.sections (``code:ClassName:Section`` -> Section) from the DB,
+    keyed the same way part2_academics keys them, so later parts can run
+    standalone without re-running part 2."""
+    from apps.schools.models import AcademicUnit, Class as SchClass, Section as SchSection
+
+    ctx.classes = {}
+    ctx.sections = {}
+    for code, campus in ctx.campuses.items():
+        unit = AcademicUnit.objects.filter(campus=campus).first()
+        if not unit:
+            continue
+        for cls in SchClass.objects.filter(unit=unit):
+            key = f"{code}:{cls.name}"
+            ctx.classes[key] = cls
+            for section in SchSection.objects.filter(class_obj=cls):
+                ctx.sections[f"{key}:{section.name}"] = section

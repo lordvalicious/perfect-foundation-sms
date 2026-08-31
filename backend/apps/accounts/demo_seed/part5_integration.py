@@ -83,7 +83,7 @@ def _seed_lms(ctx):
             ctx.count("lms_courses")
 
             # Lessons
-            lesson_titles = [f"Chapter {j + 1}: Introduction", f"Chapter {j + 1}: Exercises", f"Chapter {j + 1}: Review"]
+            lesson_titles = ["Chapter 1: Introduction", "Chapter 2: Exercises", "Chapter 3: Review"]
             for j, ltitle in enumerate(lesson_titles):
                 Lesson.objects.get_or_create(
                     course=course,
@@ -187,7 +187,7 @@ def _seed_homework(ctx):
             section = ctx.sections.get(section_key)
             subj = subjects[i % len(subjects)]
 
-            assigned = date(2026, 10 + (i % 6), 1 + (i % 20))
+            assigned = date(2026, 9 + (i % 4), 1 + (i % 20))
             hw, created = Homework.objects.get_or_create(
                 institution=ctx.school,
                 teacher=teacher,
@@ -213,9 +213,10 @@ def _seed_homework(ctx):
             students = Student.objects.filter(
                 institution=ctx.school,
                 primary_campus=campus,
-                class_obj=cls,
+                enrollments__class_obj=cls,
+                enrollments__academic_year=ctx.active_year,
                 status="active",
-            )[:8]
+            ).distinct()[:8]
             for stu in students:
                 status = "submitted" if random.random() > 0.3 else "graded"
                 marks = random.randint(5, 10) if status == "graded" else None
@@ -273,7 +274,7 @@ def _seed_discipline(ctx):
                 "campus": campus,
                 "reported_by": ctx.users.get("demo_superadmin"),
                 "description": desc,
-                "incident_date": date(2026, 10 + (i % 6), 1 + (i % 27)),
+                "incident_date": date(2026, 9 + (i % 4), 1 + (i % 27)),
                 "severity": severity,
                 "status": statuses[i % len(statuses)],
                 "parent_notified": random.random() > 0.5,
@@ -289,7 +290,7 @@ def _seed_discipline(ctx):
                     defaults={
                         "action_type": action_types[i % len(action_types)],
                         "details": f"Action taken for {title}",
-                        "action_date": date(2026, 10 + (i % 6), 5 + (i % 20)),
+                        "action_date": date(2026, 9 + (i % 4), 5 + (i % 20)),
                         "recorded_by": ctx.users.get("demo_superadmin"),
                     },
                 )
@@ -323,8 +324,8 @@ def _seed_events(ctx):
     for campus_code in CAMPUS_CODES:
         campus = ctx.campuses[campus_code]
         for title, start_str, end_str, loc in events_data:
-            start = datetime.strptime(start_str, "%Y-%m-%d").replace(tzinfo=timezone.utc)
-            end = datetime.strptime(end_str, "%Y-%m-%d").replace(hour=16, tzinfo=timezone.utc)
+            start = datetime.strptime(start_str, "%Y-%m-%d").replace(tzinfo=timezone.UTC)
+            end = datetime.strptime(end_str, "%Y-%m-%d").replace(hour=16, tzinfo=timezone.UTC)
             ev, created = Event.objects.get_or_create(
                 school=ctx.school,
                 title=f"{title} - {campus_code}",
@@ -465,6 +466,7 @@ def _seed_messages(ctx):
                         defaults={
                             "body": f"Dear teacher, I want to discuss {stu.first_name}'s progress.",
                             "is_read": random.random() > 0.5,
+                            "sent_at": timezone.now(),
                         },
                     )
                     msg_count += 1
@@ -477,6 +479,7 @@ def _seed_messages(ctx):
                         defaults={
                             "body": f"Thank you for reaching out. {stu.first_name} is doing well.",
                             "is_read": True,
+                            "sent_at": timezone.now(),
                         },
                     )
                     msg_count += 1
@@ -603,8 +606,11 @@ def _seed_transfers(ctx):
         )
         transfer_count += 1
 
-        # StudentTransfer in accounts app
-        StudentTransfer.objects.get_or_create(
+        # StudentTransfer in accounts app.
+        # NOTE: StudentTransfer.objects is REPLACED at module level by a
+        # TransferManager whose get_queryset() yields model=None (ERP bug).
+        # Use _default_manager instead, which is the correctly-bound manager.
+        StudentTransfer._default_manager.get_or_create(
             student=stu,
             from_campus=from_campus,
             to_campus=to_campus,
@@ -626,6 +632,7 @@ def _seed_transfers(ctx):
 @transaction.atomic
 def run(ctx):
     ctx.log("Part 5: integration (LMS, homework, discipline, events, comms, helpdesk, alumni, transfers).")
+    base.base_users(ctx)
     _seed_lms(ctx)
     _seed_homework(ctx)
     _seed_discipline(ctx)

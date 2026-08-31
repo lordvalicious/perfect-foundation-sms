@@ -205,15 +205,24 @@ def _run_isolation_checks(ctx):
     from apps.schools.models import Campus
 
     checks = []
-    demo_campus_ids = set(ctx.campuses.values_list("id", flat=True))
+    demo_campus_ids = {c.id for c in ctx.campuses.values()}
 
     gvc = ctx.campuses["GVC"]
     csc = ctx.campuses["CSC"]
 
     su = ctx.users.get("demo_superadmin")
     gvc_admin = ctx.users.get("gvc.admin")
-    teacher = ctx.users.get("teacher.gvc.01")
-    student_user = ctx.users.get("student.csc.01")
+    teacher = ctx.users.get("teacher.GVC.01")
+    student_user = ctx.users.get("student.CSC.01")
+
+    # Fall back to DB lookup so Part 5 can run standalone (Part 2's teacher /
+    # student users may not have been added to ctx.users in this process).
+    if teacher is None:
+        teacher = django_apps.get_model("accounts.User").objects.filter(
+            username="teacher.GVC.01").first()
+    if student_user is None:
+        student_user = django_apps.get_model("accounts.User").objects.filter(
+            username="student.CSC.01").first()
 
     # 1. global user sees every demo campus
     ok = su is not None and is_global(su)

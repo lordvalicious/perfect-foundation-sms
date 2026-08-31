@@ -318,6 +318,7 @@ def _seed_library(ctx):
                         bc = BookCopy.objects.create(
                             book=book,
                             status="available",
+                            barcode=f"BC-{campus_code}-{book.pk:04d}-{copy_idx + 1}",
                         )
                         copy_count += 1
 
@@ -470,9 +471,10 @@ def _seed_transport(ctx):
 # ---------------------------------------------------------------------------
 
 def _seed_inventory(ctx):
-    ctx.log("Creating asset categories, suppliers, assets, maintenance...")
+    ctx.log("Creating asset categories, suppliers, assets, stock, assignments, maintenance...")
     from apps.inventory.models import (
-        AssetCategory, Supplier, Asset, AssetAssignment, MaintenanceRecord, StockLevel, StockMovement,
+        AssetCategory, Supplier, Asset, AssetAssignment, MaintenanceRecord,
+        StockLevel, StockMovement,
     )
     from apps.teachers.models import Teacher
 
@@ -486,14 +488,14 @@ def _seed_inventory(ctx):
         ("LNCH", "Laboratory"),
     ]
     categories = {}
-    for code, name in categories_data:
+    for _code, name in categories_data:
         cat, _ = getc(
             AssetCategory,
             institution=ctx.school,
             name=name,
             defaults={"description": f"Category: {name}"},
         )
-        categories[code] = cat
+        categories[name] = cat
         ctx.count("asset_categories")
 
     suppliers_data = [
@@ -511,92 +513,94 @@ def _seed_inventory(ctx):
             name=name,
             defaults={
                 "contact_person": f"Contact {name}",
-                "phone": f"0300{hash(name) % 9999999:07d}",
+                "phone": f"0300{abs(hash(name)) % 9999999:07d}",
                 "email": f"info@{name.lower().replace(' ', '')}.test",
-                "status": "active",
+                "address": f"{name} Address",
             },
         )
         suppliers[code] = sup
         ctx.count("suppliers")
 
-    # Assets (100 total, spread across campuses)
     asset_data = [
         "Desktop Computer", "Laptop", "Projector", "Printer", "Whiteboard",
         "Desk", "Chair", "Bookshelf", "Lab Microscope", "Sports Kit",
     ]
     asset_count = 0
-    teachers = list(Teacher.objects.filter(institution=ctx.school, primary_campus__isnull=False)[:50])
+    asset_names = list(categories)
     for i in range(100):
         campus_code = CAMPUS_CODES[i % 5]
         campus = ctx.campuses[campus_code]
-        cat_code = list(categories.keys())[i % len(categories)]
+        cat_name = asset_names[i % len(asset_names)]
         asset_name = f"{asset_data[i % len(asset_data)]} #{i + 1:03d}"
-        teacher = teachers[i % len(teachers)] if teachers else None
 
         asset, created = Asset.objects.get_or_create(
             institution=ctx.school,
-            asset_id=f"ASSET-{i + 1:04d}",
+            code=f"ASSET-{i + 1:04d}",
             defaults={
                 "name": asset_name,
-                "category": categories[cat_code],
+                "category": categories[cat_name],
                 "campus": campus,
-                "description": f"Demo asset: {asset_name}",
+                "supplier": suppliers["SUP-" + f"{i % 5 + 1:03d}"],
+                "quantity": 1,
+                "unit_cost": Decimal(str(random.choice([15000, 25000, 50000, 75000, 120000]))),
+                "unit": "pcs",
                 "purchase_date": date(2024 + (i % 3), (i % 12) + 1, 1),
-                "purchase_cost": Decimal(str(random.choice([15000, 25000, 50000, 75000, 120000]))),
-                "current_value": Decimal(str(random.choice([10000, 20000, 40000, 60000, 100000]))),
+                "location": f"Store-{campus_code}",
                 "status": "active" if i < 90 else "maintenance",
+                "notes": f"Demo asset: {asset_name}",
             },
         )
         if created:
             asset_count += 1
             ctx.count("assets")
 
-            if teacher and i < 40:
-                AssetAssignment.objects.get_or_create(
-                    asset=asset,
-                    defaults={
-                        "assigned_to_user": teacher.user,
-                        "assigned_date": date(2026, 9, 1),
-                        "status": "active",
-                    },
-                )
-
-    # Maintenance records
-    mr_count = 0
-    vehicles = list(
-        __import__("apps.transport.models", fromlist=["Vehicle"]).Vehicle.objects.filter(
-            institution=ctx.school
-        )[:10]
-    )
-    maint_types = ["Oil change", "Tire replacement", "Engine service", "General inspection", "Repair work"]
-    for i, v in enumerate(vehicles):
-        for j in range(2):
-            MaintenanceRecord.objects.get_or_create(
-                vehicle=v,
+        if i < 40:
+            AssetAssignment.objects.get_or_create(
+                asset=asset,
+                assignee_type="staff",
+                assignee_name=f"Demo Employee {i + 1:03d}",
                 defaults={
-                    "maintenance_type": maint_types[(i + j) % len(maint_types)],
-                    "description": f"Maintenance record {j + 1} for {v.plate_number}",
-                    "cost": Decimal(str(random.choice([5000, 10000, 25000, 40000]))),
-                    "status": "completed",
-                    "maintenance_date": date(2026, 9 + (i % 4), 5 + j * 10),
+                    "assigned_to": ctx.users.get("demo_superadmin"),
+                    "quantity": 1,
+                    "assigned_date": date(2026, 9, 1),
+                    "notes": "Demo asset assignment",
                 },
             )
-            mr_count += 1
-            ctx.count("maintenance_records")
+            ctx.count("asset_assignments")
 
-    # Stock levels
+    mr_count = 0
+    maint_types = ["Oil change", "Tire replacement", "Engine service", "General inspection", "Repair work"]
+    for i, asset in enumerate(Asset.objects.filter(institution=ctx.school)[:20]):
+        MaintenanceRecord.objects.get_or_create(
+            asset=asset,
+            date=date(2026, 9 + (i % 4), 5 + (i % 15)),
+            defaults={
+                "description": f"Demo maintenance: {maint_types[i % len(maint_types)]}",
+                "cost": Decimal(str(random.choice([5000, 10000, 25000, 40000]))),
+                "performed_by": "Demo Vendor",
+                "status": "completed",
+            },
+        )
+        mr_count += 1
+        ctx.count("maintenance_records")
+
     stock_items = ["Chalk", "Markers", "Paper Ream", "Pens", "Notebooks", "Cleaning Spray", "Bulbs", "Cables"]
-    for item_name in stock_items:
-        campus_code = CAMPUS_CODES[hash(item_name) % 5]
+    for i, item_name in enumerate(stock_items):
+        campus_code = CAMPUS_CODES[i % 5]
         campus = ctx.campuses[campus_code]
+        asset = Asset.objects.filter(
+            institution=ctx.school, campus=campus, name__icontains=item_name.split()[0]
+        ).first() or Asset.objects.filter(institution=ctx.school, campus=campus).first()
+        if not asset:
+            continue
         sl, created = StockLevel.objects.get_or_create(
             institution=ctx.school,
-            item_name=item_name,
+            asset=asset,
             campus=campus,
             defaults={
                 "quantity": random.randint(10, 200),
-                "minimum_level": 20,
-                "unit": "pcs",
+                "minimum_stock": 20,
+                "location": f"Store-{campus_code}",
             },
         )
         if created:
@@ -612,6 +616,7 @@ def _seed_inventory(ctx):
 @transaction.atomic
 def run(ctx):
     ctx.log("Part 4: assets (HR, payroll, library, transport, inventory).")
+    base.base_users(ctx)
     _seed_hr(ctx)
     _seed_payroll(ctx)
     _seed_library(ctx)
