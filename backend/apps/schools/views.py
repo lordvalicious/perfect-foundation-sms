@@ -1,5 +1,10 @@
 from django.db.models import Count, Q
 from rest_framework import generics, status, viewsets
+from rest_framework.mixins import (
+    DestroyModelMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
+)
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework import serializers
@@ -117,14 +122,38 @@ class SchoolViewSet(NoPaginationMixin, viewsets.GenericViewSet, generics.ListAPI
         return Response({"detail": "School unarchived successfully."})
 
 
-class CampusViewSet(NoPaginationMixin, viewsets.GenericViewSet, generics.ListCreateAPIView):
+class CampusViewSet(
+    NoPaginationMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
+    DestroyModelMixin,
+    viewsets.GenericViewSet,
+    generics.ListCreateAPIView,
+):
     serializer_class = CampusSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
+    def _is_platform_admin(self):
+        user = self.request.user
+        return bool(user.is_superuser or user.has_any_role(["super_admin"]))
+
     def get_queryset(self):
-        queryset = Campus.objects.filter(
-            school=self.request.institution
-        ).select_related("school").order_by("name")
+        if self._is_platform_admin():
+            queryset = Campus.objects.all()
+            school_param = self.request.query_params.get("school")
+
+            if school_param:
+                queryset = queryset.filter(school_id=school_param)
+            else:
+                # Platform admin without a school filter keeps the current
+                # institution scope so other pages behave unchanged.
+                queryset = queryset.filter(school=self.request.institution)
+        else:
+            queryset = Campus.objects.filter(
+                school=self.request.institution
+            )
+
+        queryset = queryset.select_related("school").order_by("name")
 
         search = self.request.query_params.get("search")
 
@@ -141,15 +170,57 @@ class CampusViewSet(NoPaginationMixin, viewsets.GenericViewSet, generics.ListCre
 
         return populate_campus_counts(queryset)
 
-    def perform_create(self, serializer):
-        serializer.save(school=self.request.institution)
+    def _resolve_school(self):
+        """Pick the owning school: platform admins may choose any school,
+        everyone else is locked to their active institution."""
+        requested = self.request.data.get("school")
 
-    @action(detail=True, methods=["delete"], permission_classes=[HasActiveInstitution, IsSuperAdmin])
-    def delete(self, request, pk=None):
+        if self._is_platform_admin() and requested:
+            school = School.objects.filter(pk=requested).first()
+
+            if school is None:
+                raise serializers.ValidationError(
+                    {"school": "School not found."}
+                )
+
+            return school
+
+        return self.request.institution
+
+    def perform_create(self, serializer):
+        serializer.save(school=self._resolve_school())
+
+    def update(self, request, *args, **kwargs):
+        # Non-platform users must never move a campus across schools.
+        if not self._is_platform_admin():
+            data = request.data
+
+            if isinstance(data, dict):
+                data.pop("school", None)
+
+        return super().update(request, *args, **kwargs)
+
+    def retrieve(self, request, pk=None):
+        campus = self.get_object()
+        row = populate_campus_counts(
+            Campus.objects.filter(pk=campus.pk)
+        )[0]
+        return Response(self.get_serializer(row).data)
+
+    def destroy(self, request, pk=None):
         """Delete campus - Super Admin only."""
+        if not self._is_platform_admin():
+            return Response(
+                {"detail": "Permission denied."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         campus = self.get_object()
         campus.delete()
-        return Response({"detail": "Campus deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        return Response(
+            {"detail": "Campus deleted successfully."},
+            status=status.HTTP_200_OK,
+        )
 
 
 class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):

@@ -26,7 +26,16 @@ urlpatterns = [
     path("<int:pk>/archive/", SchoolViewSet.as_view({"post": "archive"}), name="school-archive"),
     path("<int:pk>/unarchive/", SchoolViewSet.as_view({"post": "unarchive"}), name="school-unarchive"),
     path("campuses/", CampusViewSet.as_view({"get": "list", "post": "create"}), name="campus-list"),
-    path("campuses/<int:pk>/", CampusViewSet.as_view({"delete": "delete"}), name="campus-delete"),
+    path(
+        "campuses/<int:pk>/",
+        CampusViewSet.as_view({
+            "get": "retrieve",
+            "patch": "partial_update",
+            "put": "update",
+            "delete": "destroy",
+        }),
+        name="campus-detail",
+    ),
     path("units/", AcademicUnitListView.as_view(), name="academic-unit-list"),
     path("classes/", ClassListView.as_view(), name="class-list"),
     path("sections/", SectionListView.as_view(), name="section-list"),

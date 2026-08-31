@@ -2010,6 +2010,36 @@ select {
 
 .campus-count strong { color: var(--primary); font-size: 13px; }
 
+.campus-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.campus-view-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.campus-view-row:last-child { border-bottom: 0; }
+
+.campus-view-row span {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.campus-view-row strong {
+  color: var(--text);
+  font-size: 13.5px;
+  text-align: right;
+}
+
 .campus-student-lists { display: flex; flex-direction: column; gap: 18px; }
 
 .campus-cards {

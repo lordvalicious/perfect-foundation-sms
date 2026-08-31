@@ -50,11 +50,21 @@ class CampusSerializer(serializers.ModelSerializer):
     student_count = serializers.IntegerField(
         read_only=True,
     )
+    school_name = serializers.CharField(
+        source="school.name",
+        read_only=True,
+    )
+    school = serializers.PrimaryKeyRelatedField(
+        queryset=School.objects.all(),
+        required=False,
+    )
 
     class Meta:
         model = Campus
         fields = [
             "id",
+            "school",
+            "school_name",
             "name",
             "address",
             "city",
