@@ -105,8 +105,7 @@ def run(ctx):
                     "department": "Academics",
                     "designation": "Teacher",
                     "joining_date": date(2015 + (n % 10), 8, 1),
-                    "employment_status": "active",
-                    "contact": f"0311{n:07d}",
+                    "status": "active",
                 },
             )
             if t_created:
@@ -115,21 +114,29 @@ def run(ctx):
             teacher_count += 1 if t_created else 0
             teacher_registry[(code, j)] = teacher
 
-            # Link 3-4 subjects M2M
-            from apps.schools.models import Subject
-            subject_objs = Subject.objects.filter(
-                institution=ctx.school, code__in=subject_codes[:4]
-            )
-            teacher.subjects.set(subject_objs)
-
-            # TeacherAssignment for campus scope
-            ta, ta_created = TeacherAssignment.objects.get_or_create(
-                teacher=teacher,
-                campus=campus,
-                defaults={"status": "active"},
-            )
-            if ta_created:
-                ctx.count("teacher_assignments")
+            # TeacherAssignment for this teacher (a sample class/section/subject in their campus)
+            if t_created:
+                from apps.schools.models import Subject, Section as SecModel
+                campus_classes = list(
+                    SecModel.objects.filter(
+                        class_obj__unit__campus=campus
+                    ).select_related("class_obj").order_by("id")
+                )
+                if campus_classes:
+                    sec = campus_classes[j % len(campus_classes)]
+                    subj = Subject.objects.filter(
+                        institution=ctx.school
+                    ).order_by("id")[j % 10]
+                    ta, ta_created = TeacherAssignment.objects.get_or_create(
+                        teacher=teacher,
+                        class_obj=sec.class_obj,
+                        section=sec,
+                        subject=subj,
+                        academic_year=ctx.active_year,
+                        defaults={"campus": campus, "role": "subject_teacher", "status": "active"},
+                    )
+                    if ta_created:
+                        ctx.count("teacher_assignments")
 
     ctx.ok(f"Teachers: {teacher_count} created (registry size {len(teacher_registry)})")
 
@@ -163,88 +170,14 @@ def run(ctx):
             staff_count += 1 if created else 0
     ctx.ok(f"Support staff: {staff_count}")
 
-    # ---------- 3. STUDENTS + ENROLLMENTS ----------
-    ctx.log("Creating students and enrollments...")
-    from apps.students.models import Student, Enrollment
-
-    student_created = 0
-    enrollment_created = 0
-    section_list = list(ctx.sections.values())
-    # Map student index to section round-robin
-    for i in range(1, TOTAL_STUDENTS + 1):
-        ci = (i - 1) // STUDENTS_PER_CAMPUS
-        code = CAMPUS_CODES[ci]
-        campus = ctx.campuses[code]
-        seq = (i - 1) % STUDENTS_PER_CAMPUS + 1
-
-        username = f"student.{code}.{seq:02d}"
-        email = f"student.{code}.{seq:02d}@example.test"
-        first = "Student"
-        last = f"{i:03d}"
-
-        user, u_created = base.make_user(ctx, username, email, first, last)
-        if u_created:
-            base.membership(ctx, user)
-        base.assign_roles(ctx, user, [Role.STUDENT])
-
-        adm_no = f"DEMO-{i:04d}"
-        stu, s_created = Student.objects.get_or_create(
-            institution=ctx.school,
-            admission_number=adm_no,
-            defaults={
-                "user": user,
-                "first_name": first,
-                "last_name": last,
-                "gender": "female" if i % 2 == 0 else "male",
-                "date_of_birth": _dob_for_index(i),
-                "admission_date": date(2026, 8, 10),
-                "enrollment_status": "active",
-                "primary_campus": campus,
-                "academic_year": ctx.active_year,
-            },
-        )
-        if s_created:
-            student_created += 1
-            ctx.count("students")
-        # Link user if not linked
-        if stu.user_id != user.id:
-            stu.user = user
-            stu.save(update_fields=["user"])
-
-        # Assign to section (round-robin across sections of this campus)
-        campus_sections = [s for s in section_list if s.class_obj.unit.campus_id == campus.id]
-        if campus_sections:
-            section = campus_sections[(seq - 1) % len(campus_sections)]
-            stu.class_obj = section.class_obj
-            stu.section = section
-            stu.save(update_fields=["class_obj", "section"])
-
-            # Enrollment
-            enr, e_created = Enrollment.objects.get_or_create(
-                student=stu,
-                academic_year=ctx.active_year,
-                defaults={
-                    "campus": campus,
-                    "class_obj": section.class_obj,
-                    "section": section,
-                    "roll_number": seq,
-                    "status": "active",
-                },
-            )
-            if e_created:
-                enrollment_created += 1
-                ctx.count("enrollments")
-
-    ctx.ok(f"Students: {student_created}, Enrollments: {enrollment_created}")
-
-    # ---------- 4. GUARDIANS + PARENT USERS ----------
+    # ---------- 3. GUARDIANS + PARENT USERS (created before students,
+    # because Student.guardian is a required NOT NULL FK) ----------
     ctx.log("Creating guardians and parent users...")
     from apps.students.models import Guardian
 
     guardian_created = 0
-    # deterministic mapping: 500 students -> 350 guardians (some guardians have 2-3 children)
-    # guardian g covers students [g, g+350) with wraparound, but to keep it simple:
-    # guardian i (1..350) gets students i, i+350 if <=500, and maybe i+700
+    guardian_registry = {}
+    # 350 guardians; guardian g (1..350) supervises student indices g and g+350 (if <= 500)
     for g in range(1, TOTAL_GUARDIANS + 1):
         username = f"parent.{g:04d}"
         email = f"parent.{g:04d}@example.test"
@@ -266,33 +199,90 @@ def run(ctx):
             defaults={
                 "name": name,
                 "relationship": relationship,
-                "contact": contact,
+                "phone": contact,
             },
         )
         if g_created:
             guardian_created += 1
             ctx.count("guardians")
-
-        # Link children: students with index congruent to g mod 350 (so each guardian ~1-2 children)
-        child_indices = []
-        for offset in (0, 350, 700):
-            idx = g + offset
-            if 1 <= idx <= TOTAL_STUDENTS:
-                child_indices.append(idx)
-        for idx in child_indices:
-            ci = (idx - 1) // STUDENTS_PER_CAMPUS
-            code = CAMPUS_CODES[ci]
-            seq = (idx - 1) % STUDENTS_PER_CAMPUS + 1
-            adm_no = f"DEMO-{idx:04d}"
-            try:
-                stu = Student.objects.get(institution=ctx.school, admission_number=adm_no)
-                if stu.guardian_id != guardian.id:
-                    stu.guardian = guardian
-                    stu.save(update_fields=["guardian"])
-            except Student.DoesNotExist:
-                pass
-
+        guardian_registry[g] = guardian
     ctx.ok(f"Guardians: {guardian_created}")
+
+    # ---------- 4. STUDENTS + ENROLLMENTS ----------
+    ctx.log("Creating students and enrollments...")
+    from apps.students.models import Student, Enrollment
+
+    student_created = 0
+    enrollment_created = 0
+    section_list = list(ctx.sections.values())
+    for i in range(1, TOTAL_STUDENTS + 1):
+        ci = (i - 1) // STUDENTS_PER_CAMPUS
+        code = CAMPUS_CODES[ci]
+        campus = ctx.campuses[code]
+        seq = (i - 1) % STUDENTS_PER_CAMPUS + 1
+
+        username = f"student.{code}.{seq:02d}"
+        email = f"student.{code}.{seq:02d}@example.test"
+        first = "Student"
+        last = f"{i:03d}"
+
+        user, u_created = base.make_user(ctx, username, email, first, last)
+        if u_created:
+            base.membership(ctx, user)
+        base.assign_roles(ctx, user, [Role.STUDENT])
+
+        # guardian for student index i
+        guardian = guardian_registry[i if i <= TOTAL_GUARDIANS else i - TOTAL_GUARDIANS]
+
+        adm_no = f"DEMO-{i:04d}"
+        stu, s_created = Student.objects.get_or_create(
+            institution=ctx.school,
+            admission_number=adm_no,
+            defaults={
+                "guardian": guardian,
+                "user": user,
+                "first_name": first,
+                "last_name": last,
+                "gender": "female" if i % 2 == 0 else "male",
+                "date_of_birth": _dob_for_index(i),
+                "admission_date": date(2026, 8, 10),
+                "status": "active",
+                "primary_campus": campus,
+            },
+        )
+        if s_created:
+            student_created += 1
+            ctx.count("students")
+        # Link user / guardian if not linked
+        if stu.user_id != user.id:
+            stu.user = user
+            stu.save(update_fields=["user"])
+        if stu.guardian_id != guardian.id:
+            stu.guardian = guardian
+            stu.save(update_fields=["guardian"])
+
+        # Assign to section (round-robin across sections of this campus)
+        campus_sections = [s for s in section_list if s.class_obj.unit.campus_id == campus.id]
+        if campus_sections:
+            section = campus_sections[(seq - 1) % len(campus_sections)]
+
+            # Enrollment
+            enr, e_created = Enrollment.objects.get_or_create(
+                student=stu,
+                academic_year=ctx.active_year,
+                defaults={
+                    "campus": campus,
+                    "class_obj": section.class_obj,
+                    "section": section,
+                    "roll_number": seq,
+                    "status": "active",
+                },
+            )
+            if e_created:
+                enrollment_created += 1
+                ctx.count("enrollments")
+
+    ctx.ok(f"Students: {student_created}, Enrollments: {enrollment_created}")
 
     # ---------- 5. CLASS TEACHERS ----------
     ctx.log("Creating class teacher assignments...")
@@ -329,10 +319,11 @@ def run(ctx):
                     institution=ctx.school,
                     student=stu,
                     defaults={
-                        "condition": "Special attention required",
-                        "description": "Seeded as special-student placeholder (Student model lacks dedicated flag).",
+                        "campus": stu.primary_campus,
+                        "record_type": "general_checkup",
+                        "record_date": date(2026, 9, 15),
+                        "notes": "Special attention required (seeded placeholder; Student model lacks dedicated flag).",
                         "recorded_by": ctx.users.get("demo_superadmin"),
-                        "status": "active",
                     },
                 )
                 if created:
