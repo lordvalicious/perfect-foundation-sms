@@ -89,9 +89,13 @@ class Command(BaseCommand):
             ctx = base.build_context(
                 stdout=self.stdout, style=self.style
             )
-            for part_no in selected:
+        # Each part commits independently so a failure in a later part does
+        # not discard data already seeded by earlier parts. This makes the
+        # seed resumable/incremental as well as idempotent.
+        for part_no in selected:
+            with transaction.atomic():
                 self._run_part(ctx, part_no)
-            self._print_summary(ctx, selected)
+        self._print_summary(ctx, selected)
 
     def _run_part(self, ctx, part_no):
         self.stdout.write("")

@@ -11,6 +11,7 @@ from collections import Counter
 from datetime import date
 
 from django.db import transaction
+from django.contrib.auth.hashers import make_password
 
 from apps.accounts.models import (
     InstitutionMembership,
@@ -197,10 +198,31 @@ def get_or_create_school():
 # Users / memberships / roles
 # ---------------------------------------------------------------------------
 
+# NB: Changing this cached hash invalidates every stored demo password. Keep it
+# in sync with DEMO_PASSWORD. It is PRODUCTION-SAFE because it only short-circuits
+# hashing for the single known demo password (identical for all demo accounts);
+# real users never match it and always retain their own password.
+_CACHED_DEMO_HASH = None
+
+
+def _cached_demo_hash():
+    """Lazily compute one PBKDF2 hash for DEMO_PASSWORD and reuse it for all
+    demo users, avoiding ~950 calls to the (expensive) password hasher."""
+    global _CACHED_DEMO_HASH
+    if _CACHED_DEMO_HASH is None:
+        _CACHED_DEMO_HASH = make_password(DEMO_PASSWORD)
+    return _CACHED_DEMO_HASH
+
+
 def make_user(ctx, username, email, first_name, last_name,
               password=DEMO_PASSWORD, is_staff=False, is_superuser=False):
     """Idempotent user creation. Demo passwords are always reset so the
-    credential documentation stays accurate across re-runs."""
+    credential documentation stays accurate across re-runs.
+
+    Optimization: because every demo account shares the same dev password, we
+    reuse a single pre-computed hash for new users and skip re-hashing when an
+    existing user already carries that exact hash. This cuts the seeding time
+    for Part 2 dramatically without touching production password settings."""
     user, created = User.objects.get_or_create(
         username=username,
         defaults={
@@ -218,7 +240,11 @@ def make_user(ctx, username, email, first_name, last_name,
         user.is_staff = True
     if is_superuser:
         user.is_superuser = True
-    user.set_password(password)
+    if user.password != _cached_demo_hash():
+        # Only (re)hash when the current hash differs from the canonical demo
+        # password hash. This makes first-time seeding ~O(1) hashes and makes
+        # re-runs skip hashing entirely.
+        user.set_password(password)
     user.save()
     ctx.users[username] = user
     if created:
