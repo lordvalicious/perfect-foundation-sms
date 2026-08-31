@@ -28,6 +28,8 @@ import {
   Trophy,
   Table2,
   Siren,
+  Search,
+  X,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
@@ -205,6 +207,7 @@ export default function ReportsPage() {
   const [exams, setExams] = useState([]);
   const [students, setStudents] = useState([]);
   const [studentId, setStudentId] = useState("");
+  const [studentQuery, setStudentQuery] = useState("");
   const [threshold, setThreshold] = useState("75");
   const [downloading, setDownloading] = useState(false);
   const [gradebook, setGradebook] = useState(null);
@@ -247,6 +250,34 @@ export default function ReportsPage() {
 
   const needsExam = EXAM_REPORTS.includes(active);
   const needsStudent = STUDENT_REPORTS.includes(active);
+
+  const studentLabel = (s) =>
+    `${s.full_name || s.first_name || ""} — ${s.admission_number || s.roll_number || "No roll"}`;
+
+  const selectedStudent = students.find((s) => String(s.id) === String(studentId)) || null;
+
+  const studentMatches = useMemo(() => {
+    const q = studentQuery.trim().toLowerCase();
+
+    if (!q) return [];
+
+    return students
+      .filter((s) => {
+        const label = studentLabel(s).toLowerCase();
+        const ids = [String(s.id), s.admission_number || "", s.roll_number || ""]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+
+        return label.includes(q) || ids.split(/\s+/).some((token) => token.startsWith(q));
+      })
+      .slice(0, 20);
+  }, [studentQuery, students]);
+
+  const handleSelectStudent = (s) => {
+    setStudentId(String(s.id));
+    setStudentQuery("");
+  };
 
   const buildParams = useCallback(
     (key) => {
@@ -597,18 +628,54 @@ export default function ReportsPage() {
               )}
 
               {needsStudent && (
-                <select
-                  value={studentId}
-                  onChange={(event) => setStudentId(event.target.value)}
-                >
-                  <option value="">Select a student</option>
+                <div style={{ position: "relative", flex: 1, minWidth: 280 }}>
+                  <div className="filter-search">
+                    <input
+                      type="text"
+                      placeholder="Search a student report by ID / admission number..."
+                      value={studentQuery}
+                      onChange={(event) => setStudentQuery(event.target.value)}
+                    />
+                  </div>
 
-                  {students.map((student) => (
-                    <option key={student.id} value={String(student.id)}>
-                      {student.full_name} ({student.admission_number})
-                    </option>
-                  ))}
-                </select>
+                  {selectedStudent && (
+                    <span className="recipient-chip">
+                      {studentLabel(selectedStudent)}
+                      <button
+                        type="button"
+                        onClick={() => setStudentId("")}
+                        aria-label="Clear student"
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  )}
+
+                  {studentQuery.trim() && (
+                    <div className="search-dropdown" style={{ width: "100%" }}>
+                      {studentMatches.length === 0 && (
+                        <div className="search-loading">
+                          No students match “{studentQuery}”.
+                        </div>
+                      )}
+
+                      {studentMatches.map((student) => (
+                        <button
+                          key={student.id}
+                          type="button"
+                          className="search-result"
+                          onClick={() => handleSelectStudent(student)}
+                        >
+                          <span className="search-result-type">STU</span>
+                          <span>
+                            <strong>{student.full_name || student.first_name || "Student"}</strong>
+                            <small>{student.admission_number || student.roll_number || "No roll"}</small>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
 
               {active === "chronic-absentee" && (

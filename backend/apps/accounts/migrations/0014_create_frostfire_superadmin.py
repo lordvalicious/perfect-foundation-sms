@@ -1,70 +1,93 @@
-# Generated migration to create FrostFire superadmin
+# Data migration: seed the platform superuser from environment variables.
+# Configure DJANGO_SUPERUSER_EMAIL and DJANGO_SUPERUSER_PASSWORD (plus optional
+# DJANGO_SUPERUSER_USERNAME / FIRST_NAME / LAST_NAME). No credentials are
+# hardcoded here.
+import os
+
 from django.contrib.auth.hashers import make_password
 from django.db import migrations
 
-def create_frostfire_superadmin(apps, schema_editor):
-    User = apps.get_model('accounts', 'User')
-    RoleAssignment = apps.get_model('accounts', 'RoleAssignment')
-    InstitutionMembership = apps.get_model('accounts', 'InstitutionMembership')
-    School = apps.get_model('schools', 'School')
 
-    # Create FrostFire superadmin
+def _superuser_config():
+    email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "").strip()
+    password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "").strip()
+    if not email or not password:
+        return None
+    return {
+        "username": os.environ.get("DJANGO_SUPERUSER_USERNAME", "").strip() or "admin",
+        "email": email,
+        "password": password,
+        "first_name": os.environ.get("DJANGO_SUPERUSER_FIRST_NAME", "Platform"),
+        "last_name": os.environ.get("DJANGO_SUPERUSER_LAST_NAME", "Administrator"),
+    }
+
+
+def create_superuser(apps, schema_editor):
+    config = _superuser_config()
+    if config is None:
+        print("DJANGO_SUPERUSER_EMAIL/PASSWORD not set - skipping superuser creation.")
+        return
+    User = apps.get_model("accounts", "User")
+    RoleAssignment = apps.get_model("accounts", "RoleAssignment")
+    InstitutionMembership = apps.get_model("accounts", "InstitutionMembership")
+    School = apps.get_model("schools", "School")
+
     user, created = User.objects.get_or_create(
-        username='FrostFire',
+        username=config["username"],
         defaults={
-            'email': 'lordvalicious@gmail.com',
-            'first_name': 'Frost',
-            'last_name': 'Fire',
-            'is_staff': True,
-            'is_superuser': True,
-            'is_active': True,
-            'password': make_password('ra2a1s345'),
-        }
+            "email": config["email"],
+            "first_name": config["first_name"],
+            "last_name": config["last_name"],
+            "is_staff": True,
+            "is_superuser": True,
+            "is_active": True,
+            "password": make_password(config["password"]),
+        },
     )
     if not created:
-        user.email = 'lordvalicious@gmail.com'
-        user.first_name = 'Frost'
-        user.last_name = 'Fire'
+        user.email = config["email"]
+        user.first_name = config["first_name"]
+        user.last_name = config["last_name"]
         user.is_staff = True
         user.is_superuser = True
         user.is_active = True
-        user.password = make_password('ra2a1s345')
+        user.password = make_password(config["password"])
         user.save()
 
-    # Get or create school
     school = School.objects.first()
     if school is None:
         school = School.objects.create(
-            name='Perfect Foundation',
-            code='PF',
-            address='Default Address',
-            city='Default City',
-            status='active'
+            name="Perfect Foundation",
+            code="PF",
+            address="Default Address",
+            city="Default City",
+            status="active",
         )
 
-    # Create institution membership
     membership, _ = InstitutionMembership.objects.get_or_create(
         user=user,
         institution=school,
-        defaults={'status': 'active'}
+        defaults={"status": "active"},
     )
 
-    # Assign SUPER_ADMIN role
     RoleAssignment.objects.get_or_create(
         membership=membership,
-        role='super_admin',
+        role="super_admin",
     )
 
+
 def reverse_func(apps, schema_editor):
-    User = apps.get_model('accounts', 'User')
-    User.objects.filter(username='FrostFire').delete()
+    username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "").strip() or "admin"
+    User = apps.get_model("accounts", "User")
+    User.objects.filter(username=username).delete()
+
 
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('accounts', '0013_merge_20260829_1001'),
+        ("accounts", "0013_merge_20260829_1001"),
     ]
 
     operations = [
-        migrations.RunPython(create_frostfire_superadmin, reverse_func),
+        migrations.RunPython(create_superuser, reverse_func),
     ]

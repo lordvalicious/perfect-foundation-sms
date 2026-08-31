@@ -32,12 +32,19 @@ from apps.schools.models import School
 
 def create_user():
     print("[INFO] Connecting to database...")
-    
+
+    username = os.environ.get("DJANGO_SUPERUSER_USERNAME", "FrostFire")
+    email = os.environ.get("DJANGO_SUPERUSER_EMAIL", "lordvalicious@gmail.com")
+    password = os.environ.get("DJANGO_SUPERUSER_PASSWORD", "").strip()
+    if not password:
+        print("[ERROR] DJANGO_SUPERUSER_PASSWORD must be set.")
+        sys.exit(1)
+
     # Create your account
     user, created = User.objects.get_or_create(
-        username="FrostFire",
+        username=username,
         defaults={
-            "email": "lordvalicious@gmail.com",
+            "email": email,
             "first_name": "Frost",
             "last_name": "Fire",
             "is_staff": True,
@@ -47,17 +54,17 @@ def create_user():
     )
 
     if created:
-        user.set_password("ra2a1s345")
+        user.set_password(password)
         user.save()
-        print("[OK] Created user: FrostFire")
+        print(f"[OK] Created user: {username}")
     else:
         # Update password if user exists
-        user.set_password("ra2a1s345")
+        user.set_password(password)
         user.is_staff = True
         user.is_superuser = True
         user.is_active = True
         user.save()
-        print("[OK] Updated existing user: FrostFire")
+        print(f"[OK] Updated existing user: {username}")
 
     # Assign SUPER_ADMIN role
     role, _ = Role.objects.get_or_create(name="SUPER_ADMIN")
@@ -76,14 +83,14 @@ def create_user():
 
     # Create institution membership
     membership, _ = InstitutionMembership.objects.get_or_create(
-        user=User.objects.get(username="FrostFire"),
-        school=School.objects.first(),
+        user=user,
+        school=school,
         defaults={"status": "active"}
     )
 
     # Assign SUPER_ADMIN role
     ra, _ = RoleAssignment.objects.get_or_create(
-        membership=InstitutionMembership.objects.get(user__username="FrostFire", school=School.objects.first()),
+        membership=InstitutionMembership.objects.get(user__username=username, school=school),
         role=Role.objects.get(name="SUPER_ADMIN")
     )
 
@@ -92,9 +99,9 @@ def create_user():
     print("=" * 50)
     print("ACCOUNT CREATED SUCCESSFULLY!")
     print("=" * 50)
-    print("   Username: FrostFire")
-    print("   Password: ra2a1s345")
-    print("   Email:    lordvalicious@gmail.com")
+    print(f"   Username: {username}")
+    print("   Password: (from DJANGO_SUPERUSER_PASSWORD)")
+    print(f"   Email:    {email}")
     print("   Role:     SUPER_ADMIN")
     print("=" * 50)
 

@@ -1,5 +1,5 @@
 {
-  "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput",
+  "buildCommand": "python manage.py migrate --noinput && python manage.py ensure_superuser && python manage.py collectstatic --noinput",
   "crons": [
     {
       "path": "/api/finance/cron/late-fees/",
