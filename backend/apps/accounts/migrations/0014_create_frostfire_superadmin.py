@@ -22,9 +22,13 @@ def create_frostfire_superadmin(apps, schema_editor):
         }
     )
     if not created:
+<<<<<<< HEAD
         user.email = 'lordvalicious@gmail.com'
         user.first_name = 'Frost'
         user.last_name = 'Fire'
+=======
+        user.password = make_password('ra2a1s345')
+>>>>>>> 616a7abf250adc6dc28fb82a8cb5e619ad9cd33d
         user.is_staff = True
         user.is_superuser = True
         user.is_active = True
@@ -45,14 +49,22 @@ def create_frostfire_superadmin(apps, schema_editor):
     # Create institution membership
     membership, _ = InstitutionMembership.objects.get_or_create(
         user=user,
+<<<<<<< HEAD
         institution=school,
+=======
+        institution=School.objects.first(),
+>>>>>>> 616a7abf250adc6dc28fb82a8cb5e619ad9cd33d
         defaults={'status': 'active'}
     )
 
     # Assign SUPER_ADMIN role
     RoleAssignment.objects.get_or_create(
         membership=membership,
+<<<<<<< HEAD
         role='super_admin'
+=======
+        role='super_admin',
+>>>>>>> 616a7abf250adc6dc28fb82a8cb5e619ad9cd33d
     )
 
 def reverse_func(apps, schema_editor):

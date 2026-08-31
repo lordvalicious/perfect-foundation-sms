@@ -1,4 +1,5 @@
 ﻿import { useState, useRef, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { Search, Building2 } from "lucide-react";
 import { useAuth } from "../auth";
 import { useLang } from "../i18n";
@@ -997,6 +998,13 @@ function StudentsPage() {
                                 </td>
 
                                 <td>
+                                  <Link
+                                    className="table-action"
+                                    to={`/students/${student.id}`}
+                                  >
+                                    360°
+                                  </Link>
+
                                   <button
                                     className="table-action"
                                     onClick={() =>
