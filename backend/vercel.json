@@ -1,27 +1,5 @@
 {
   "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/admin/(.*)",
-      "destination": "/admin/$1"
-    },
-    {
-      "source": "/media/(.*)",
-      "destination": "/media/$1"
-    },
-    {
-      "source": "/static/(.*)",
-      "destination": "/static/$1"
-    },
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
-  ],
   "crons": [
     {
       "path": "/api/finance/cron/late-fees/",
@@ -41,7 +19,7 @@
     },
     {
       "path": "/api/communication/cron/process-notifications/",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }

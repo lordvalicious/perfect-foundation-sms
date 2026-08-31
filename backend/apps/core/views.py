@@ -1,13 +1,21 @@
 from django.core.management.base import BaseCommand
 from django.core.management import call_command
-from django.http import JsonResponse
+from django.http import HttpResponse, JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
 from django.conf import settings
+from pathlib import Path
 import os
 
 
 MIGRATION_SECRET = os.environ.get("MIGRATION_SECRET", "")
+
+
+def home_view(request):
+    index_path = Path(settings.BASE_DIR) / "index.html"
+    if index_path.exists():
+        return HttpResponse(index_path.read_text(encoding="utf-8"), content_type="text/html; charset=utf-8")
+    return JsonResponse({"name": "Perfect Foundation SMS API", "status": "ok"})
 
 
 @csrf_exempt

@@ -2,7 +2,7 @@ from django.conf import settings  # type: ignore[reportMissingModuleSource]
 from django.contrib import admin  # type: ignore[reportMissingModuleSource]
 from django.http import JsonResponse
 from django.urls import include, path, re_path  # type: ignore[reportMissingModuleSource]
-from apps.core.views import run_migrations_view
+from apps.core.views import home_view, run_migrations_view
 
 
 def health_check(request):
@@ -10,6 +10,7 @@ def health_check(request):
 
 
 urlpatterns = [
+    path("", home_view, name="home"),
     path("admin/", admin.site.urls),
 
     path("api/health/", health_check, name="health-check"),

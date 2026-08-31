@@ -200,12 +200,12 @@ export default function DisciplinePage() {
               className: "table-action",
               title: "Edit incident",
               onClick: () => openEdit(incident),
-            }, createElement("Edit", { size: 14 })),
+            }, createElement(Edit, { size: 14 })),
             createElement("button", {
               className: "table-action danger",
               title: "Delete incident",
               onClick: () => handleDelete(incident),
-            }, createElement("Trash2", { size: 14 }))
+            }, createElement(Trash2, { size: 14 }))
           )
         )
       );

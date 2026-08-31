@@ -5,6 +5,7 @@ All environments import from this module.
 """
 
 import os
+import tempfile
 from pathlib import Path
 
 import dj_database_url
@@ -80,6 +81,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+"whitenoise.middleware.WhiteNoiseMiddleware",
     # "ratelimit.middleware.RatelimitMiddleware",  # Temporarily disabled for migrations
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -236,14 +238,16 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Cache (for django-ratelimit)
+CACHE_DIR = os.environ.get("DJANGO_CACHE_DIR", tempfile.gettempdir())
+
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-        "LOCATION": os.path.join(BASE_DIR, "cache"),
+        "LOCATION": os.path.join(CACHE_DIR, "django_cache"),
     },
     "ratelimit": {
         "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-        "LOCATION": os.path.join(BASE_DIR, "ratelimit_cache"),
+        "LOCATION": os.path.join(CACHE_DIR, "django_ratelimit_cache"),
     },
 }
 

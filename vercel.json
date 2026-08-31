@@ -41,7 +41,7 @@
     },
     {
       "path": "/api/communication/cron/process-notifications/",
-      "schedule": "*/30 * * * *"
+      "schedule": "0 9 * * *"
     }
   ]
 }

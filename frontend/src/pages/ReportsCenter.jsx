@@ -19,7 +19,6 @@ import {
   X,
   ChevronDown,
   ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, StatCard, Button, TabButton, Badge } from "./ui";
 import { apiFetch } from "../api";

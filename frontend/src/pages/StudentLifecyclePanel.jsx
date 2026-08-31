@@ -10,7 +10,7 @@ import { StateArea, EmptyState, StatusBadge } from "./ui";
    services.
    ========================================================================== */
 
-function useEndpointParams() {
+function endpointParams() {
   return { credentials: "include" };
 }
 
@@ -58,7 +58,7 @@ export default function StudentLifecyclePanel({
 
   const loadHistory = useCallback(() => {
     const params = new URLSearchParams({ student: String(studentId) });
-    return fetch(`/api/students/progression/?${params.toString()}`, useEndpointParams())
+    return fetch(`/api/students/progression/?${params.toString()}`, endpointParams())
       .then((r) => (r.ok ? r.json() : []))
       .then((data) => setHistory(Array.isArray(data) ? data : []))
       .catch(() => setHistory([]));
@@ -66,7 +66,7 @@ export default function StudentLifecyclePanel({
 
   const loadTransfers = useCallback(() => {
     const p = new URLSearchParams({ student: String(studentId) });
-    const opts = useEndpointParams();
+    const opts = endpointParams();
     return Promise.all([
       fetch(`/api/students/campus-transfers/?${p.toString()}`, opts).then((r) =>
         r.ok ? r.json() : { results: [] }
@@ -86,7 +86,7 @@ export default function StudentLifecyclePanel({
   }, [studentId]);
 
   const loadReference = useCallback(() => {
-    const opts = useEndpointParams();
+    const opts = endpointParams();
     const toList = (r) => (r.ok ? r.json() : { results: [] });
     return Promise.all([
       fetch("/api/schools/academic-years/", opts).then(toList),
