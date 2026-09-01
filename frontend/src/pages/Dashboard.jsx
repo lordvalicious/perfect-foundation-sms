@@ -340,7 +340,7 @@ function Dashboard() {
             </div>
 
             {/* ---- Quick‑actions bar ---- */}
-            <div style={{ marginTop: 1.5rem }}>
+            <div style={{ marginTop: "1.5rem" }}>
               <button className="action-btn" onClick={() => window.location.href="/students/"}>
                 <Users size={15} /> Students
               </button>
@@ -362,7 +362,7 @@ function Dashboard() {
             {(enrollmentByCampus.length > 0 ||
               attendanceRows.length > 0 ||
               collectionTrend.length > 0) && (
-              <div className="dashboard-grid" style={{ marginTop: 1rem }}>
+              <div className="dashboard-grid" style={{ marginTop: "1rem" }}>
                 {/* Fee Collection Trend (unchanged) */}
                 {collectionTrend.length > 0 && (
                   <div className="panel">

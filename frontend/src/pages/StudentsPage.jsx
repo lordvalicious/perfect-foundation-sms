@@ -7,7 +7,7 @@ import { StatusBadge } from "./ui";
 import ProfileModal from "./ProfileModal";
 
 /* Basic theming & component styles */
-<style>
+<style>{`
   :root {
     --primary: #2563eb;
     --secondary: #64748b;
@@ -91,7 +91,7 @@ import ProfileModal from "./ProfileModal";
   .btn-delete {
     color: var(--danger);
   }
-</style>
+`}</style>
 
 const STUDENTS_API_URL = "/api/students/";
 
@@ -1054,45 +1054,6 @@ function StudentsPage() {
         </form>
       </div>
 
-      {/* Student cards grid (first 5 per campus) */}
-      {data.students.length > 0 && (
-        <div className="student-cards-grid">
-          {data.students.slice(0, 5).map((student) => (
-            <div
-              key={student.id}
-              className="student-card"
-              onClick={() => console.log("student clicked", student.id)}
-            >
-              {student.photo_url ? (
-                <img
-                  className="student-card-photo"
-                  src={student.photo_url}
-                  alt={student.full_name}
-                />
-              ) : (
-                <div className="student-card-placeholder">
-                  {(student.full_name || "S").charAt(0).toUpperCase()}
-                </div>
-              )}
-              <div className="student-card-info">
-                <strong>{student.full_name || student.admission_number}</strong>
-                <span className="student-card-status">
-                  <StatusBadge status={student.status === "active" ? "active" : "inactive"} label={student.status} />
-                </span>
-              </div>
-              <div className="student-card-actions">
-                {canManagement && (
-                  <>
-                    <button className="btn-edit">Edit</button>
-                    <button className="btn-delete">Delete</button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
       {/* Student lists by campus */}
       {campusOptions.length === 0 ? (
         <div className="state-card">
@@ -1135,6 +1096,45 @@ function StudentsPage() {
                     </p>
                   </div>
                 </div>
+
+                {/* Student cards grid (first 5 per campus) */}
+                {data.students.length > 0 && (
+                  <div className="student-cards-grid">
+                    {data.students.slice(0, 5).map((student) => (
+                      <div
+                        key={student.id}
+                        className="student-card"
+                        onClick={() => console.log("student clicked", student.id)}
+                      >
+                        {student.photo_url ? (
+                          <img
+                            className="student-card-photo"
+                            src={student.photo_url}
+                            alt={student.full_name}
+                          />
+                        ) : (
+                          <div className="student-card-placeholder">
+                            {(student.full_name || "S").charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div className="student-card-info">
+                          <strong>{student.full_name || student.admission_number}</strong>
+                          <span className="student-card-status">
+                            <StatusBadge status={student.status === "active" ? "active" : "inactive"} label={student.status} />
+                          </span>
+                        </div>
+                        <div className="student-card-actions">
+                          {canManage && (
+                            <>
+                              <button className="btn-edit">Edit</button>
+                              <button className="btn-delete">Delete</button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
                 {data.loading && (
                   <div className="state-card">
