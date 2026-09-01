@@ -1,5 +1,5 @@
 {
-  "buildCommand": "python manage.py migrate --noinput && python manage.py ensure_superuser && python manage.py collectstatic --noinput",
+  "buildCommand": "",
   "crons": [
     {
       "path": "/api/finance/cron/late-fees/",
@@ -21,6 +21,18 @@
       "path": "/api/communication/cron/process-notifications/",
       "schedule": "0 9 * * *"
     }
+  ],
+  "functions": {
+    "api/index.py": {
+      "runtime": "python3.12",
+      "framework": "asgi",
+      "maxDuration": 60
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/api/index"
+    }
   ]
 }
-
