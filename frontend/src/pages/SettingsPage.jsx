@@ -18,7 +18,7 @@ import {
 } from "./ui";
 import { formatDate } from "./format";
 
-const SCHOOLS_API_URL = "/api/schools/schools/";
+const SCHOOLS_API_URL = "/api/schools/";
 const CAMPUSES_API_URL = "/api/schools/campuses/";
 const UNITS_API_URL = "/api/schools/units/";
 const CLASSES_API_URL = "/api/schools/classes/";
