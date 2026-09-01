@@ -27,6 +27,13 @@ function authHeaders(extra = {}) {
   };
 }
 
+function jsonHeaders(extra = {}) {
+  return authHeaders({
+    "Content-Type": "application/json",
+    ...extra,
+  });
+}
+
 function StudentsPage() {
   const { t } = useLang();
   const { hasRole } = useAuth();
@@ -80,6 +87,10 @@ function StudentsPage() {
     address: "",
     status: "active",
     admission_date: "",
+    campus: "",
+    class_obj: "",
+    section: "",
+    academic_year: "",
     guardian_name: "",
     guardian_relationship: "",
     guardian_phone: "",
@@ -90,6 +101,9 @@ function StudentsPage() {
 
   const [form, setForm] = useState(emptyForm);
   const [photoFile, setPhotoFile] = useState(null);
+
+  const [classOptions, setClassOptions] = useState([]);
+  const [yearOptions, setYearOptions] = useState([]);
 
   const [myProfile, setMyProfile] = useState(null);
   const [myProfileLoading, setMyProfileLoading] = useState(
@@ -270,6 +284,28 @@ function StudentsPage() {
         )
       )
       .catch(() => {});
+
+    fetch("/api/schools/classes/", {
+      credentials: "include",
+    })
+      .then((response) =>
+        response.ok ? response.json() : []
+      )
+      .then((data) =>
+        setClassOptions(Array.isArray(data) ? data : [])
+      )
+      .catch(() => {});
+
+    fetch("/api/schools/academic-years/", {
+      credentials: "include",
+    })
+      .then((response) =>
+        response.ok ? response.json() : []
+      )
+      .then((data) =>
+        setYearOptions(Array.isArray(data) ? data : [])
+      )
+      .catch(() => {});
   }, [isStudentSelf]);
 
   const viewCampusStudents = (campusId) => {
@@ -331,6 +367,8 @@ function StudentsPage() {
     setEditingStudent(student);
     setPhotoFile(null);
 
+    const current = student.current_enrollment || {};
+
     setForm({
       admission_number: student.admission_number || "",
       first_name: student.first_name || "",
@@ -342,6 +380,20 @@ function StudentsPage() {
       address: student.address || "",
       status: student.status || "active",
       admission_date: student.admission_date || "",
+      campus: current.campus_id
+        ? String(current.campus_id)
+        : student.primary_campus
+        ? String(student.primary_campus)
+        : "",
+      class_obj: current.class_id
+        ? String(current.class_id)
+        : "",
+      section: current.section_id
+        ? String(current.section_id)
+        : "",
+      academic_year: current.academic_year_id
+        ? String(current.academic_year_id)
+        : "",
       guardian_name:
         student.guardian_details?.name || "",
       guardian_relationship:
@@ -383,8 +435,33 @@ function StudentsPage() {
 
       const body = new FormData();
 
-      for (const [key, value] of Object.entries(form)) {
-        body.append(key, value === "" ? "" : value);
+      const studentFields = [
+        "admission_number",
+        "first_name",
+        "middle_name",
+        "last_name",
+        "gender",
+        "date_of_birth",
+        "phone",
+        "address",
+        "status",
+        "admission_date",
+        "guardian_name",
+        "guardian_relationship",
+        "guardian_phone",
+        "guardian_alternate_phone",
+        "guardian_email",
+        "guardian_address",
+      ];
+
+      for (const key of studentFields) {
+        if (!(key in form)) continue;
+        const value = form[key];
+        body.append(key, value === "" || value == null ? "" : value);
+      }
+
+      if (form.campus) {
+        body.append("primary_campus", String(form.campus));
       }
 
       if (photoFile) {
@@ -433,6 +510,58 @@ function StudentsPage() {
         }
 
         throw new Error(message);
+      }
+
+      // A student only appears in the list when they have an active
+      // Enrollment, so on create we also enrol them into the chosen
+      // campus/class/section/year. On edit we keep the enrollment in
+      // sync with any changes to campus/class/section/year.
+      if (data.id && form.campus && form.academic_year) {
+        const enrolBody = {
+          student: data.id,
+          campus: Number(form.campus),
+          class_obj: Number(form.class_obj),
+          section: Number(form.section),
+          academic_year: Number(form.academic_year),
+          status: "active",
+        };
+
+        const existingEnrollment =
+          editingStudent?.current_enrollment;
+
+        const enrolUrl = existingEnrollment
+          ? `/api/students/enrollments/${existingEnrollment.enrollment_id}/`
+          : "/api/students/enrollments/";
+
+        const enrolRes = await fetch(enrolUrl, {
+          method: existingEnrollment ? "PATCH" : "POST",
+          credentials: "include",
+          headers: jsonHeaders(),
+          body: JSON.stringify(enrolBody),
+        });
+
+        if (!enrolRes.ok) {
+          const enrolText = await enrolRes.text();
+          let enrolData = {};
+
+          try {
+            enrolData = enrolText ? JSON.parse(enrolText) : {};
+          } catch {
+            enrolData = {};
+          }
+
+          throw new Error(
+            (isEditing
+              ? "Student saved but updating enrollment failed: "
+              : "Student was created but enrolling failed: ") +
+              (enrolData.detail ||
+                Object.entries(enrolData)
+                  .map(([f, v]) => `${f}: ${v}`)
+                  .join(" | ") ||
+                enrolText ||
+                `HTTP ${enrolRes.status}`)
+          );
+        }
       }
 
       closeForm();
@@ -1239,6 +1368,122 @@ function StudentsPage() {
                       />
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Campus & Enrollment</h4>
+                <span className="field-hint">
+                  Choose the campus and grade so the student shows up
+                  in the right list. Required for new students.
+                </span>
+
+                <div className="form-grid">
+                  <label>
+                    Campus
+                    <select
+                      name="campus"
+                      value={form.campus}
+                      onChange={handleChange}
+                      required={!editingStudent}
+                    >
+                      <option value="">
+                        Select campus
+                      </option>
+
+                      {campusOptions.map((item) => (
+                        <option
+                          key={item.id}
+                          value={item.id}
+                        >
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Academic Year
+                    <select
+                      name="academic_year"
+                      value={form.academic_year}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">
+                        Select year
+                      </option>
+
+                      {yearOptions.map((item) => (
+                        <option
+                          key={item.id}
+                          value={item.id}
+                        >
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Class
+                    <select
+                      name="class_obj"
+                      value={form.class_obj}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">
+                        Select class
+                      </option>
+
+                      {classOptions
+                        .filter(
+                          (item) =>
+                            !form.campus ||
+                            String(item.campus) ===
+                              String(form.campus)
+                        )
+                        .map((item) => (
+                          <option
+                            key={item.id}
+                            value={item.id}
+                          >
+                            {item.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Section
+                    <select
+                      name="section"
+                      value={form.section}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">
+                        Select section
+                      </option>
+
+                      {sectionOptions
+                        .filter(
+                          (item) =>
+                            !form.class_obj ||
+                            String(item.class_obj) ===
+                              String(form.class_obj)
+                        )
+                        .map((item) => (
+                          <option
+                            key={item.id}
+                            value={item.id}
+                          >
+                            {item.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
                 </div>
               </div>
 

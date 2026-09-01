@@ -1,11 +1,37 @@
-import { useState } from "react";
-import { BookMarked, Search, BookCopy, RotateCcw } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { BookMarked, Search, BookCopy, RotateCcw, Plus, Pencil, Trash2, X } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatDate, formatCurrency } from "./format";
 import { apiFetch, jsonHeaders } from "../api";
 
 const BOOKS_URL = "/api/library/books/";
 const ISSUES_URL = "/api/library/issues/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+
+const BOOK_CATEGORY_CHOICES = [
+  { value: "fiction", label: "Fiction" },
+  { value: "non_fiction", label: "Non-Fiction" },
+  { value: "textbook", label: "Textbook" },
+  { value: "reference", label: "Reference" },
+  { value: "science", label: "Science" },
+  { value: "math", label: "Mathematics" },
+  { value: "literature", label: "Literature" },
+  { value: "history", label: "History" },
+  { value: "geography", label: "Geography" },
+  { value: "other", label: "Other" },
+];
+
+const EMPTY_BOOK_FORM = {
+  title: "",
+  campus: "",
+  author: "",
+  isbn: "",
+  publisher: "",
+  publication_year: "",
+  category: "other",
+  description: "",
+  total_copies: 1,
+};
 
 export default function LibraryPage() {
   const [tab, setTab] = useState("books");
@@ -17,6 +43,23 @@ export default function LibraryPage() {
   const [category, setCategory] = useState("");
   const [message, setMessage] = useState("");
   const [returning, setReturning] = useState(null);
+
+  const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState(EMPTY_BOOK_FORM);
+  const [campuses, setCampuses] = useState([]);
+
+  const loadCampuses = useCallback(() => {
+    fetch(CAMPUSES_URL, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCampuses(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadCampuses();
+  }, [loadCampuses]);
 
   const loadBooks = () => {
     setLoading(true);
@@ -92,12 +135,104 @@ export default function LibraryPage() {
     }
   };
 
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const closeForm = () => {
+    setShowForm(false);
+    setEditing(null);
+    setForm(EMPTY_BOOK_FORM);
+  };
+
+  const openAddBook = () => {
+    setEditing(null);
+    setForm(EMPTY_BOOK_FORM);
+    setShowForm(true);
+  };
+
+  const openEditBook = (book) => {
+    setEditing(book);
+    setForm({
+      title: book.title || "",
+      campus: book.campus ?? "",
+      author: book.author || "",
+      isbn: book.isbn || "",
+      publisher: book.publisher || "",
+      publication_year: book.publication_year ?? "",
+      category: book.category || "other",
+      description: book.description || "",
+      total_copies: book.total_copies ?? 1,
+    });
+    setShowForm(true);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setSaving(true);
+
+    const payload = {
+      title: form.title,
+      campus: form.campus || null,
+      author: form.author,
+      isbn: form.isbn,
+      publisher: form.publisher,
+      publication_year: form.publication_year ? Number(form.publication_year) : null,
+      category: form.category,
+      description: form.description,
+      total_copies: Number(form.total_copies) || 1,
+    };
+
+    try {
+      const isEditing = Boolean(editing);
+      const url = isEditing ? `${BOOKS_URL}${editing.id}/` : BOOKS_URL;
+
+      await apiFetch(url, {
+        method: isEditing ? "PATCH" : "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify(payload),
+      }, `Unable to ${isEditing ? "update" : "create"} book.`);
+
+      closeForm();
+      setMessage(isEditing ? "Book updated successfully." : "Book created successfully.");
+      loadBooks();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteBook = async (book) => {
+    if (!window.confirm(`Delete book "${book.title}"? This cannot be undone.`)) return;
+
+    setError("");
+
+    try {
+      await apiFetch(`${BOOKS_URL}${book.id}/`, {
+        method: "DELETE",
+        headers: jsonHeaders(),
+      }, "Unable to delete book.");
+
+      setMessage("Book deleted successfully.");
+      loadBooks();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   return (
     <section className="content">
       <PageHeader
         crumb="Home / Library"
         title="Library"
         subtitle="Manage the school library catalog and book issues."
+        action={
+          <button type="button" className="primary-button" onClick={openAddBook}>
+            <Plus size={15} /> Add Book
+          </button>
+        }
       />
 
       {message && (
@@ -147,16 +282,9 @@ export default function LibraryPage() {
               onChange={(event) => setCategory(event.target.value)}
             >
               <option value="">All categories</option>
-              <option value="fiction">Fiction</option>
-              <option value="non_fiction">Non-Fiction</option>
-              <option value="textbook">Textbook</option>
-              <option value="reference">Reference</option>
-              <option value="science">Science</option>
-              <option value="math">Mathematics</option>
-              <option value="literature">Literature</option>
-              <option value="history">History</option>
-              <option value="geography">Geography</option>
-              <option value="other">Other</option>
+              {BOOK_CATEGORY_CHOICES.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
             </select>
 
             <button type="button" className="primary-button" onClick={loadBooks}>
@@ -183,6 +311,7 @@ export default function LibraryPage() {
                       <th>COPIES</th>
                       <th>AVAILABLE</th>
                       <th>ISSUED</th>
+                      <th>ACTIONS</th>
                     </tr>
                   </thead>
 
@@ -193,11 +322,11 @@ export default function LibraryPage() {
                           <strong>{book.title}</strong>
                         </td>
 
-                        <td>{book.author || "—"}</td>
+                        <td>{book.author || "\u2014"}</td>
 
-                        <td>{book.isbn || "—"}</td>
+                        <td>{book.isbn || "\u2014"}</td>
 
-                        <td>{book.category_display || "—"}</td>
+                        <td>{book.category_display || "\u2014"}</td>
 
                         <td>{book.total_copies ?? 0}</td>
 
@@ -208,6 +337,25 @@ export default function LibraryPage() {
                         </td>
 
                         <td>{book.issued_copies ?? 0}</td>
+
+                        <td>
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() => openEditBook(book)}
+                          >
+                            <Pencil size={13} />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action danger"
+                            onClick={() => handleDeleteBook(book)}
+                          >
+                            <Trash2 size={13} />
+                            Delete
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -257,9 +405,9 @@ export default function LibraryPage() {
                           <strong>{issue.book_title}</strong>
                         </td>
 
-                        <td>{issue.barcode || "—"}</td>
+                        <td>{issue.barcode || "\u2014"}</td>
 
-                        <td>{issue.borrower || "—"}</td>
+                        <td>{issue.borrower || "\u2014"}</td>
 
                         <td>{formatDate(issue.issue_date)}</td>
 
@@ -271,7 +419,7 @@ export default function LibraryPage() {
 
                         <td>
                           <span className={`status-badge ${issue.status === "returned" ? "inactive" : "warn"}`}>
-                            {issue.status ? issue.status.charAt(0).toUpperCase() + issue.status.slice(1) : "—"}
+                            {issue.status ? issue.status.charAt(0).toUpperCase() + issue.status.slice(1) : "\u2014"}
                           </span>
                         </td>
 
@@ -287,7 +435,7 @@ export default function LibraryPage() {
                               {returning === issue.id ? "Returning..." : "Return"}
                             </button>
                           ) : (
-                            <span className="muted">—</span>
+                            <span className="muted">{"\u2014"}</span>
                           )}
                         </td>
                       </tr>
@@ -297,6 +445,112 @@ export default function LibraryPage() {
               </div>
             )}
           </StateArea>
+        </div>
+      )}
+
+      {showForm && (
+        <div
+          className="modal-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeForm();
+          }}
+        >
+          <div className="teacher-modal">
+            <div className="modal-header">
+              <div>
+                <h3>{editing ? "Edit Book" : "Add Book"}</h3>
+                <p>{editing ? "Update the book details." : "Add a new book to the catalog."}</p>
+              </div>
+              <button className="modal-close" onClick={closeForm} disabled={saving}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="form-section">
+                <h4>Book Details</h4>
+                <div className="form-grid">
+                  <label className="form-span">
+                    Title
+                    <input name="title" value={form.title} onChange={handleChange} required />
+                  </label>
+
+                  <label>
+                    Campus
+                    <select name="campus" value={form.campus} onChange={handleChange}>
+                      <option value="">No campus</option>
+                      {campuses.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Author
+                    <input name="author" value={form.author} onChange={handleChange} />
+                  </label>
+
+                  <label>
+                    ISBN
+                    <input name="isbn" value={form.isbn} onChange={handleChange} />
+                  </label>
+
+                  <label>
+                    Publisher
+                    <input name="publisher" value={form.publisher} onChange={handleChange} />
+                  </label>
+
+                  <label>
+                    Publication Year
+                    <input
+                      type="number"
+                      name="publication_year"
+                      value={form.publication_year}
+                      onChange={handleChange}
+                      min="1000"
+                      max="2099"
+                    />
+                  </label>
+
+                  <label>
+                    Category
+                    <select name="category" value={form.category} onChange={handleChange}>
+                      {BOOK_CATEGORY_CHOICES.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Total Copies
+                    <input
+                      type="number"
+                      name="total_copies"
+                      value={form.total_copies}
+                      onChange={handleChange}
+                      min="1"
+                      required
+                    />
+                  </label>
+
+                  <label className="form-span">
+                    Description
+                    <textarea name="description" value={form.description} onChange={handleChange} rows="3" />
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="secondary-button" onClick={closeForm} disabled={saving}>
+                  Cancel
+                </button>
+                <button type="submit" className="primary-button" disabled={saving}>
+                  <Plus size={17} />
+                  {saving ? "Saving..." : editing ? "Save Changes" : "Create"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </section>

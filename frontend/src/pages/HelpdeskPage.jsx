@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
-import { LifeBuoy, Plus, X, Send, CheckCircle2, RotateCcw } from "lucide-react";
+import { LifeBuoy, Pencil, Plus, X, Send, CheckCircle2, RotateCcw } from "lucide-react";
 import { useAuth } from "../auth";
 import { PageHeader, PanelHeader, StateArea, EmptyState, StatusBadge } from "./ui";
-import { apiFetch, authHeaders } from "../api";
+import { apiFetch, jsonHeaders, authHeaders } from "../api";
 
 const API_URL = "/api/helpdesk/tickets/";
 
@@ -62,6 +62,7 @@ export default function HelpdeskPage() {
   const [query, setQuery] = useState("");
 
   const [showForm, setShowForm] = useState(false);
+  const [editingTicket, setEditingTicket] = useState(null);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState("");
@@ -125,6 +126,19 @@ export default function HelpdeskPage() {
     setForm((previous) => ({ ...previous, [name]: value }));
   };
 
+  const openEditTicket = (ticket) => {
+    setEditingTicket(ticket);
+    setFormError("");
+    setForm({
+      campus: ticket.campus ? String(ticket.campus) : "",
+      category: ticket.category ? String(ticket.category) : "",
+      subject: ticket.subject || "",
+      description: ticket.description || "",
+      priority: ticket.priority || "medium",
+    });
+    setShowForm(true);
+  };
+
   const createTicket = (event) => {
     event.preventDefault();
     setSaving(true);
@@ -138,13 +152,14 @@ export default function HelpdeskPage() {
     if (form.category) payload.category = Number(form.category);
     if (form.campus) payload.campus = Number(form.campus);
 
-    apiFetch(API_URL, {
-      method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
+    apiFetch(editingTicket ? `${API_URL}${editingTicket.id}/` : API_URL, {
+      method: editingTicket ? "PATCH" : "POST",
+      headers: jsonHeaders(),
       body: JSON.stringify(payload),
     })
       .then(() => {
         setShowForm(false);
+        setEditingTicket(null);
         setForm(EMPTY_FORM);
         loadTickets();
       })
@@ -235,7 +250,7 @@ export default function HelpdeskPage() {
         subtitle="Support tickets, complaints and their resolution desk."
         action={
           canManage && (
-            <button className="primary-button" onClick={() => setShowForm(true)}>
+            <button className="primary-button" onClick={() => { setEditingTicket(null); setShowForm(true); }}>
               <Plus size={15} />
               New Ticket
             </button>
@@ -303,6 +318,7 @@ export default function HelpdeskPage() {
                     <th>Status</th>
                     <th>Assignee</th>
                     <th>Updated</th>
+                    {canManage && <th>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -324,6 +340,13 @@ export default function HelpdeskPage() {
                       </td>
                       <td>{ticket.assignee_name || "Unassigned"}</td>
                       <td>{new Date(ticket.updated_at).toLocaleDateString()}</td>
+                      {canManage && (
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <button type="button" className="table-action" onClick={() => openEditTicket(ticket)}>
+                            <Pencil size={13} /> Edit
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -334,14 +357,14 @@ export default function HelpdeskPage() {
       </div>
 
       {showForm && (
-        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+        <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) { setShowForm(false); setEditingTicket(null); } }}>
           <div className="teacher-modal">
             <div className="modal-header">
               <div>
-                <h3>New Ticket</h3>
-                <p>Raise a support ticket for the helpdesk.</p>
+                <h3>{editingTicket ? "Edit Ticket" : "New Ticket"}</h3>
+                <p>{editingTicket ? "Update the details of this ticket." : "Raise a support ticket for the helpdesk."}</p>
               </div>
-              <button className="modal-close" onClick={() => setShowForm(false)} disabled={saving}>
+              <button className="modal-close" onClick={() => { setShowForm(false); setEditingTicket(null); }} disabled={saving}>
                 <X size={18} />
               </button>
             </div>
@@ -392,11 +415,11 @@ export default function HelpdeskPage() {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="secondary-button" onClick={() => setShowForm(false)} disabled={saving}>
+                <button type="button" className="secondary-button" onClick={() => { setShowForm(false); setEditingTicket(null); }} disabled={saving}>
                   Cancel
                 </button>
                 <button type="submit" className="primary-button" disabled={saving}>
-                  {saving ? "Creating..." : "Create Ticket"}
+                  {saving ? "Saving..." : editingTicket ? "Save Changes" : "Create Ticket"}
                 </button>
               </div>
             </form>

@@ -5,7 +5,30 @@ import { useApiList } from "./useApiList";
 import { PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatDate } from "./format";
 
-const API_URL = "/api/discipline/";
+const API_URL = "/api/discipline/incidents/";
+
+const SEVERITIES = [
+  { value: "minor", label: "Minor" },
+  { value: "moderate", label: "Moderate" },
+  { value: "major", label: "Major" },
+];
+
+const STATUSES = [
+  { value: "open", label: "Open" },
+  { value: "action_taken", label: "Action Taken" },
+  { value: "resolved", label: "Resolved" },
+];
+
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  location: "",
+  incident_date: "",
+  status: "open",
+  severity: "minor",
+  student: "",
+  campus: "",
+};
 
 export default function DisciplinePage() {
   const [incidents, setIncidents] = useState([]);
@@ -13,25 +36,16 @@ export default function DisciplinePage() {
   const [error, setError] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    status: "minor",
-    category: "",
-    severity: "minor",
-  });
-  const [actionError, setActionError] = useState("");
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
+  const [students, setStudents] = useState([]);
+  const [campuses, setCampuses] = useState([]);
 
   const {
-    rows,
     count,
-    loading: listLoading,
-    error: listError,
     page,
-    next,
-    previous,
     refresh,
-  } = useApiList(API_URL, { page_size: 50 });
+  } = useApiList(API_URL);
 
   const applyFilters = (pageNumber = 1) => {
     refresh(buildParams(pageNumber));
@@ -40,45 +54,60 @@ export default function DisciplinePage() {
   const buildParams = (pageNumber = 1) => {
     const params = new URLSearchParams();
     params.append("page", pageNumber);
+    params.append("page_size", 50);
     return params;
+  };
+
+  const loadStudents = () => {
+    fetch("/api/students/?page_size=1000", {
+      credentials: "include",
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((json) => {
+        const list = Array.isArray(json)
+          ? json
+          : Array.isArray(json.results)
+            ? json.results
+            : [];
+        setStudents(list);
+      })
+      .catch(() => {});
+  };
+
+  const loadCampuses = () => {
+    fetch("/api/schools/campuses/", {
+      credentials: "include",
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => setCampuses(Array.isArray(data) ? data : []))
+      .catch(() => {});
   };
 
   const openCreate = () => {
     setEditing(null);
-    setForm({
-      title: "",
-      description: "",
-      status: "minor",
-      category: "",
-      severity: "minor",
-    });
-    setActionError("");
+    setForm(EMPTY_FORM);
     setShowForm(true);
   };
 
   const openEdit = (incident) => {
     setEditing(incident);
     setForm({
-      title: incident.title,
+      title: incident.title || "",
       description: incident.description || "",
-      status: incident.status || "minor",
-      category: incident.category || "",
+      location: incident.location || "",
+      incident_date: toDateInput(incident.incident_date),
+      status: incident.status || "open",
       severity: incident.severity || "minor",
+      student: incident.student ? String(incident.student) : "",
+      campus: incident.campus ? String(incident.campus) : "",
     });
-    setActionError("");
     setShowForm(true);
   };
 
   const closeForm = () => {
     setShowForm(false);
     setEditing(null);
-    setForm({
-      title: "",
-      description: "",
-      status: "minor",
-      category: "",
-      severity: "minor",
-    });
+    setForm(EMPTY_FORM);
   };
 
   const severityClass = (sev) => {
@@ -88,15 +117,20 @@ export default function DisciplinePage() {
     return "success";
   };
 
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setForm((previous) => ({ ...previous, [name]: value }));
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setLoading(true);
+    setSaving(true);
     setError("");
 
     try {
       if (editing) {
         await apiFetch(
-          `/api/discipline/incidents/${editing.id}/`,
+          `${API_URL}${editing.id}/`,
           {
             method: "PATCH",
             headers: { "Content-Type": "application/json" },
@@ -106,7 +140,7 @@ export default function DisciplinePage() {
         );
       } else {
         await apiFetch(
-          "/api/discipline/",
+          API_URL,
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -121,7 +155,7 @@ export default function DisciplinePage() {
     } catch (err) {
       setError(err.message || String(err));
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -132,7 +166,7 @@ export default function DisciplinePage() {
 
     try {
       await apiFetch(
-        `/api/discipline/incidents/${incident.id}/`,
+        `${API_URL}${incident.id}/`,
         { method: "DELETE" },
         "Failed to delete the incident."
       );
@@ -146,7 +180,8 @@ export default function DisciplinePage() {
     setLoading(true);
     setError("");
 
-    const toListOrEmpty = (response) => response.ok ? response.json() : [];
+    const toListOrEmpty = (response) =>
+      response.ok ? response.json() : [];
 
     fetch(API_URL, { credentials: "include" })
       .then(toListOrEmpty)
@@ -160,16 +195,22 @@ export default function DisciplinePage() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    loadStudents();
+    loadCampuses();
   }, []);
 
-  // Build table rows using createElement to avoidrolldown JSX parsing issues
+  // Build table rows using createElement to avoid rolldown JSX parsing issues
   const buildTableRows = () => {
     const rows = [];
     for (let i = 0; i < incidents.length; i++) {
       const incident = incidents[i];
       const sev = (incident.severity || "").toLowerCase();
-      const sevClass = sev === "major" ? "row-danger" : sev === "moderate" ? "row-warning" : "";
+      const sevClass =
+        sev === "major"
+          ? "row-danger"
+          : sev === "moderate"
+            ? "row-warning"
+            : "";
       const severityStyle = {
         padding: "2px 6px",
         borderRadius: "10px",
@@ -187,25 +228,48 @@ export default function DisciplinePage() {
         createElement(
           "tr",
           { key: incident.id, className: sevClass },
-          createElement("td", null,
+          createElement(
+            "td",
+            null,
             createElement("strong", null, incident.title || "—")
           ),
-          createElement("td", null,
-            createElement("span", { style: severityStyle }, incident.severity || "—")
+          createElement(
+            "td",
+            null,
+            incident.student_name || incident.admission_number || "—"
           ),
-          createElement("td", null, incident.category || "—"),
+          createElement(
+            "td",
+            null,
+            createElement(
+              "span",
+              { style: severityStyle },
+              incident.severity || "—"
+            )
+          ),
+          createElement("td", null, incident.category || incident.status || "—"),
           createElement("td", null, formatDate(incident.created_at)),
-          createElement("td", { style: { whiteSpace: "nowrap" } },
-            createElement("button", {
-              className: "table-action",
-              title: "Edit incident",
-              onClick: () => openEdit(incident),
-            }, createElement(Edit, { size: 14 })),
-            createElement("button", {
-              className: "table-action danger",
-              title: "Delete incident",
-              onClick: () => handleDelete(incident),
-            }, createElement(Trash2, { size: 14 }))
+          createElement(
+            "td",
+            { style: { whiteSpace: "nowrap" } },
+            createElement(
+              "button",
+              {
+                className: "table-action",
+                title: "Edit incident",
+                onClick: () => openEdit(incident),
+              },
+              createElement(Edit, { size: 14 })
+            ),
+            createElement(
+              "button",
+              {
+                className: "table-action danger",
+                title: "Delete incident",
+                onClick: () => handleDelete(incident),
+              },
+              createElement(Trash2, { size: 14 })
+            )
           )
         )
       );
@@ -223,7 +287,21 @@ export default function DisciplinePage() {
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="panel">
-        <PanelHeader title="Incident List" subtitle="incidents" count={count} />
+        <PanelHeader
+          title="Incident List"
+          subtitle="incidents"
+          count={count}
+          action={
+            <button
+              type="button"
+              className="primary-button"
+              onClick={openCreate}
+            >
+              <Plus size={15} />
+              Add Incident
+            </button>
+          }
+        />
 
         <StateArea loading={loading} error={error} onRetry={load}>
           {incidents.length === 0 ? (
@@ -238,8 +316,8 @@ export default function DisciplinePage() {
                 <thead>
                   <tr>
                     <th>TITLE</th>
+                    <th>STUDENT</th>
                     <th>SEVERITY</th>
-                    <th>CATEGORY</th>
                     <th>STATUS</th>
                     <th>CREATED</th>
                     <th style={{ width: 140 }}>Actions</th>
@@ -251,6 +329,205 @@ export default function DisciplinePage() {
           )}
         </StateArea>
       </div>
+
+      {showForm && (
+        <div
+          className="modal-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) {
+              closeForm();
+            }
+          }}
+        >
+          <div className="teacher-modal">
+            <div className="modal-header">
+              <div>
+                <h3>
+                  {editing ? "Edit Incident" : "Add Incident"}
+                </h3>
+                <p>
+                  {editing
+                    ? "Update the discipline incident."
+                    : "Record a new discipline incident."}
+                </p>
+              </div>
+
+              <button
+                className="modal-close"
+                onClick={closeForm}
+                disabled={saving}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit}>
+              <div className="form-section">
+                <h4>Incident Details</h4>
+
+                <div className="form-grid">
+                  <label>
+                    Student
+                    <select
+                      name="student"
+                      value={form.student}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">
+                        Select student
+                      </option>
+
+                      {students.map((student) => (
+                        <option
+                          key={student.id}
+                          value={student.id}
+                        >
+                          {student.full_name ||
+                            student.admission_number}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Campus
+                    <select
+                      name="campus"
+                      value={form.campus}
+                      onChange={handleChange}
+                      required
+                    >
+                      <option value="">
+                        Select campus
+                      </option>
+
+                      {campuses.map((campus) => (
+                        <option
+                          key={campus.id}
+                          value={campus.id}
+                        >
+                          {campus.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label className="form-span">
+                    Title
+                    <input
+                      name="title"
+                      value={form.title}
+                      onChange={handleChange}
+                      placeholder="e.g. Classroom disruption"
+                      required
+                    />
+                  </label>
+
+                  <label className="form-span">
+                    Description
+                    <textarea
+                      name="description"
+                      value={form.description}
+                      onChange={handleChange}
+                      placeholder="What happened?"
+                      rows="3"
+                    />
+                  </label>
+
+                  <label>
+                    Location
+                    <input
+                      name="location"
+                      value={form.location}
+                      onChange={handleChange}
+                      placeholder="e.g. Science Lab"
+                    />
+                  </label>
+
+                  <label>
+                    Incident Date
+                    <input
+                      type="date"
+                      name="incident_date"
+                      value={form.incident_date}
+                      onChange={handleChange}
+                      required
+                    />
+                  </label>
+
+                  <label>
+                    Severity
+                    <select
+                      name="severity"
+                      value={form.severity}
+                      onChange={handleChange}
+                    >
+                      {SEVERITIES.map((item) => (
+                        <option
+                          key={item.value}
+                          value={item.value}
+                        >
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <label>
+                    Status
+                    <select
+                      name="status"
+                      value={form.status}
+                      onChange={handleChange}
+                    >
+                      {STATUSES.map((item) => (
+                        <option
+                          key={item.value}
+                          value={item.value}
+                        >
+                          {item.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={closeForm}
+                  disabled={saving}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={saving}
+                >
+                  <Plus size={17} />
+                  {saving
+                    ? editing
+                      ? "Saving..."
+                      : "Creating..."
+                    : editing
+                      ? "Save Changes"
+                      : "Create Incident"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </section>
   );
+}
+
+function toDateInput(value) {
+  if (!value) return "";
+  return String(value).slice(0, 10);
 }

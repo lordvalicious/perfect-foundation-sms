@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Megaphone, Plus, Send, X } from "lucide-react";
+import { Megaphone, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatDate } from "./format";
 import { apiFetch, jsonHeaders } from "../api";
@@ -28,6 +28,8 @@ export default function AnnouncementsPage() {
     audience_roles: [],
   });
 
+  const [editing, setEditing] = useState(null);
+
   const load = () => {
     setLoading(true);
     setError("");
@@ -45,6 +47,7 @@ export default function AnnouncementsPage() {
   };
 
   const openCreate = () => {
+    setEditing(null);
     setCreating(true);
     setMessage("");
     setForm({
@@ -53,6 +56,19 @@ export default function AnnouncementsPage() {
       category: "announcement",
       status: "draft",
       audience_roles: [],
+    });
+  };
+
+  const openEdit = (announcement) => {
+    setEditing(announcement);
+    setCreating(true);
+    setMessage("");
+    setForm({
+      title: announcement.title || "",
+      message: announcement.message || "",
+      category: announcement.category || "announcement",
+      status: announcement.status || "draft",
+      audience_roles: announcement.audience_roles || [],
     });
   };
 
@@ -74,22 +90,59 @@ export default function AnnouncementsPage() {
     setMessage("");
 
     try {
+      const isEditing = Boolean(editing);
+
       await apiFetch(
-        ANNOUNCEMENTS_URL,
+        isEditing
+          ? `${ANNOUNCEMENTS_URL}${editing.id}/`
+          : ANNOUNCEMENTS_URL,
         {
-          method: "POST",
+          method: isEditing ? "PATCH" : "POST",
           headers: jsonHeaders(),
           body: JSON.stringify(form),
         },
-        "Could not create the announcement."
+        isEditing
+          ? "Could not update the announcement."
+          : "Could not create the announcement."
       );
 
       setCreating(false);
+      setEditing(null);
       setMessage(
         form.status === "published"
           ? "Announcement published and sent to recipients."
           : "Announcement saved as draft."
       );
+      setRows(null);
+      load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async (announcement) => {
+    if (
+      !window.confirm(
+        `Delete announcement "${announcement.title}"? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      await apiFetch(
+        `${ANNOUNCEMENTS_URL}${announcement.id}/`,
+        { method: "DELETE" },
+        "Could not delete the announcement."
+      );
+
+      setMessage("Announcement deleted.");
       setRows(null);
       load();
     } catch (err) {
@@ -128,7 +181,10 @@ export default function AnnouncementsPage() {
 
       {creating && (
         <div className="panel">
-          <PanelHeader title="New Announcement" subtitle="fill in the details below" />
+          <PanelHeader
+            title={editing ? "Edit Announcement" : "New Announcement"}
+            subtitle={editing ? "update the details below" : "fill in the details below"}
+          />
 
           <form onSubmit={handleCreate}>
             <div className="form-section">
@@ -214,7 +270,10 @@ export default function AnnouncementsPage() {
               <button
                 type="button"
                 className="secondary-button"
-                onClick={() => setCreating(false)}
+                onClick={() => {
+                  setCreating(false);
+                  setEditing(null);
+                }}
               >
                 <X size={15} />
                 Cancel
@@ -222,7 +281,13 @@ export default function AnnouncementsPage() {
 
               <button type="submit" className="primary-button" disabled={saving}>
                 <Send size={15} />
-                {saving ? "Saving..." : form.status === "published" ? "Publish" : "Save Draft"}
+                {saving
+                  ? "Saving..."
+                  : editing
+                    ? "Save Changes"
+                    : form.status === "published"
+                      ? "Publish"
+                      : "Save Draft"}
               </button>
             </div>
           </form>
@@ -253,6 +318,7 @@ export default function AnnouncementsPage() {
                     <th>AUDIENCE</th>
                     <th>STATUS</th>
                     <th>PUBLISHED AT</th>
+                    <th style={{ width: 130 }}>Actions</th>
                   </tr>
                 </thead>
 
@@ -282,6 +348,26 @@ export default function AnnouncementsPage() {
                       </td>
 
                       <td>{formatDate(announcement.published_at)}</td>
+
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          className="table-action"
+                          onClick={() => openEdit(announcement)}
+                        >
+                          <Pencil size={13} />
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          className="table-action danger"
+                          onClick={() => handleDelete(announcement)}
+                        >
+                          <Trash2 size={13} />
+                          Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

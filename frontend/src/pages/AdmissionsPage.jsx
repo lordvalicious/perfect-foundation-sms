@@ -150,6 +150,7 @@ export default function AdmissionsPage() {
   const [appForm, setAppForm] = useState(EMPTY_APP_FORM);
   const [showAppForm, setShowAppForm] = useState(false);
   const [savingApp, setSavingApp] = useState(false);
+  const [editingApp, setEditingApp] = useState(null);
 
   const [inqForm, setInqForm] = useState(EMPTY_INQUIRY_FORM);
   const [showInqForm, setShowInqForm] = useState(false);
@@ -317,7 +318,28 @@ export default function AdmissionsPage() {
 
   const openAppCreate = () => {
     clearBanners();
+    setEditingApp(null);
     setAppForm(EMPTY_APP_FORM);
+    setShowAppForm(true);
+  };
+
+  const openAppEdit = (application) => {
+    clearBanners();
+    setEditingApp(application);
+    setAppForm({
+      first_name: application.first_name || "",
+      middle_name: application.middle_name || "",
+      last_name: application.last_name || "",
+      date_of_birth: application.date_of_birth || "",
+      gender: application.gender || "male",
+      phone: application.phone || "",
+      address: application.address || "",
+      campus: application.campus ? String(application.campus) : "",
+      academic_year: application.academic_year ? String(application.academic_year) : "",
+      class_obj: application.class_obj ? String(application.class_obj) : "",
+      section: application.section ? String(application.section) : "",
+      guardian: application.guardian ? String(application.guardian) : "",
+    });
     setShowAppForm(true);
   };
 
@@ -327,8 +349,12 @@ export default function AdmissionsPage() {
     setError("");
     setNotice("");
 
+    const isEditing = Boolean(editingApp);
+
     const body = {
-      application_number: generateApplicationNumber(),
+      application_number: isEditing
+        ? editingApp.application_number
+        : generateApplicationNumber(),
       first_name: appForm.first_name,
       middle_name: appForm.middle_name,
       last_name: appForm.last_name,
@@ -341,18 +367,28 @@ export default function AdmissionsPage() {
       class_obj: Number(appForm.class_obj),
       section: appForm.section ? Number(appForm.section) : null,
       guardian: appForm.guardian ? Number(appForm.guardian) : null,
-      status: "submitted",
+      status: isEditing ? editingApp.status : "submitted",
     };
 
     try {
-      await apiFetch(ADMISSIONS_URL, {
-        method: "POST",
-        headers: jsonHeaders(),
-        body: JSON.stringify(body),
-      });
+      await apiFetch(
+        isEditing
+          ? `${ADMISSIONS_URL}${editingApp.id}/`
+          : ADMISSIONS_URL,
+        {
+          method: isEditing ? "PATCH" : "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify(body),
+        }
+      );
       setShowAppForm(false);
       setAppForm(EMPTY_APP_FORM);
-      setNoticeOrError("Admission application created successfully.");
+      setEditingApp(null);
+      setNoticeOrError(
+        isEditing
+          ? "Admission application updated successfully."
+          : "Admission application created successfully."
+      );
       loadApplications();
     } catch (requestError) {
       setError(requestError.message);
@@ -567,6 +603,13 @@ export default function AdmissionsPage() {
     const busy = busyId === application.id;
     const actions = [];
 
+    if (application.status === "draft" || application.status === "submitted" || application.status === "under_review") {
+      actions.push(
+        <button key="edit" className="secondary-button" disabled={busy} onClick={() => openAppEdit(application)}>
+          Edit
+        </button>,
+      );
+    }
     if (application.status === "draft") {
       actions.push(
         <button key="submit" className="secondary-button" disabled={busy} onClick={() => reviewApplication(application, "submit")}>
@@ -843,7 +886,7 @@ export default function AdmissionsPage() {
       )}
 
       {showAppForm && (
-        <Modal title="New Admission Application" subtitle="Fill in the applicant details below." onClose={() => setShowAppForm(false)}>
+        <Modal title={editingApp ? "Edit Admission Application" : "New Admission Application"} subtitle={editingApp ? "Update the applicant details below." : "Fill in the applicant details below."} onClose={() => { setShowAppForm(false); setEditingApp(null); }}>
           <form onSubmit={handleCreateApplication}>
             <div className="form-section">
               <h4>Applicant Information</h4>
@@ -922,12 +965,12 @@ export default function AdmissionsPage() {
             </div>
 
             <div className="modal-footer">
-              <button type="button" className="secondary-button" onClick={() => setShowAppForm(false)} disabled={savingApp}>
-                <X size={15} /> Cancel
-              </button>
-              <button type="submit" className="primary-button" disabled={savingApp}>
-                <Check size={15} /> {savingApp ? "Submitting..." : "Submit Application"}
-              </button>
+<button type="button" className="secondary-button" onClick={() => { setShowAppForm(false); setEditingApp(null); }} disabled={savingApp}>
+                  <X size={15} /> Cancel
+                </button>
+                <button type="submit" className="primary-button" disabled={savingApp}>
+                  <Check size={15} /> {savingApp ? "Submitting..." : editingApp ? "Save Changes" : "Submit Application"}
+                </button>
             </div>
           </form>
         </Modal>

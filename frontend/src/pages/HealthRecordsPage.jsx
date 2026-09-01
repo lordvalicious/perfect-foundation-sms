@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { HeartPulse, Plus } from "lucide-react";
+import { HeartPulse, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
 
@@ -24,6 +24,7 @@ export default function HealthRecordsPage() {
   const [studentFilter, setStudentFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
 
+  const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -64,17 +65,56 @@ export default function HealthRecordsPage() {
     load();
   }, [load]);
 
+  const openEdit = (row) => {
+    setEditing(row);
+    setShowForm(true);
+    setForm({
+      student: row.student ?? "",
+      campus: row.campus ?? "",
+      record_type: row.record_type ?? "checkup",
+      record_date: row.record_date ?? new Date().toISOString().slice(0, 10),
+      notes: row.notes ?? "",
+      height_cm: row.height_cm ?? "",
+      weight_kg: row.weight_kg ?? "",
+      temperature_c: row.temperature_c ?? "",
+      treated_by: row.treated_by ?? "",
+    });
+  };
+
+  const handleDelete = async (row) => {
+    if (!window.confirm(`Delete this health record? This cannot be undone.`)) return;
+
+    setSaving(true);
+    setFormError("");
+
+    try {
+      await apiFetch(
+        `${BASE}${row.id}/`,
+        { method: "DELETE" },
+        "Could not delete the health record."
+      );
+      load();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const submitRecord = (event) => {
     event.preventDefault();
     setSaving(true);
     setFormError("");
 
-    apiFetch(BASE, {
-      method: "POST",
+    const isEditing = Boolean(editing);
+
+    apiFetch(isEditing ? `${BASE}${editing.id}/` : BASE, {
+      method: isEditing ? "PATCH" : "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(form),
     })
       .then(() => {
+        setEditing(null);
         setShowForm(false);
         load();
       })
@@ -92,7 +132,10 @@ export default function HealthRecordsPage() {
           <button
             type="button"
             className="primary-button"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => {
+              setEditing(null);
+              setShowForm((v) => !v);
+            }}
           >
             <Plus size={15} />
             New Record
@@ -102,7 +145,7 @@ export default function HealthRecordsPage() {
 
       {showForm && (
         <div className="panel">
-          <PanelHeader title="Add health record" subtitle="Campus follows the student's active enrollment" />
+          <PanelHeader title={editing ? "Edit health record" : "Add health record"} subtitle="Campus follows the student's active enrollment" />
           <form onSubmit={submitRecord} className="filter-row">
             <select
               required
@@ -174,8 +217,15 @@ export default function HealthRecordsPage() {
               onChange={(e) => setForm({ ...form, notes: e.target.value })}
             />
 
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => { setEditing(null); setShowForm(false); }}
+            >
+              Cancel
+            </button>
             <button className="primary-button" disabled={saving}>
-              {saving ? "Saving..." : "Save"}
+              {saving ? "Saving..." : editing ? "Save Changes" : "Save"}
             </button>
           </form>
           {formError && <div className="state-card error">{formError}</div>}
@@ -231,6 +281,7 @@ export default function HealthRecordsPage() {
                     <th>BMI</th>
                     <th>Temp</th>
                     <th>Treated By</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -249,6 +300,22 @@ export default function HealthRecordsPage() {
                       <td>{row.bmi ?? "—"}</td>
                       <td>{row.temperature_c ? `${row.temperature_c}°` : "—"}</td>
                       <td>{row.treated_by || "—"}</td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          className="table-action"
+                          onClick={() => openEdit(row)}
+                        >
+                          <Pencil size={13} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action danger"
+                          onClick={() => handleDelete(row)}
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>

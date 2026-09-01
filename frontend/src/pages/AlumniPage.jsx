@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { GraduationCap, Plus } from "lucide-react";
+import { GraduationCap, Pencil, Plus, Trash2 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
 
@@ -15,6 +15,7 @@ export default function AlumniPage() {
   const [batchYear, setBatchYear] = useState("");
   const [campusFilter, setCampusFilter] = useState("");
 
+  const [editing, setEditing] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
@@ -56,17 +57,56 @@ export default function AlumniPage() {
     load();
   }, [load]);
 
+  const openEdit = (row) => {
+    setEditing(row);
+    setShowForm(true);
+    setForm({
+      full_name: row.full_name ?? "",
+      batch_year: row.batch_year ?? new Date().getFullYear(),
+      campus: row.campus ?? "",
+      email: row.email ?? "",
+      phone: row.phone ?? "",
+      occupation: row.occupation ?? "",
+      organization: row.organization ?? "",
+      city: row.city ?? "",
+      notes: row.notes ?? "",
+    });
+  };
+
+  const handleDelete = async (row) => {
+    if (!window.confirm(`Delete alumni record for "${row.full_name}"? This cannot be undone.`)) return;
+
+    setSaving(true);
+    setFormError("");
+
+    try {
+      await apiFetch(
+        `${BASE}${row.id}/`,
+        { method: "DELETE" },
+        "Could not delete the alumni record."
+      );
+      load();
+    } catch (err) {
+      setFormError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const submit = (event) => {
     event.preventDefault();
     setSaving(true);
     setFormError("");
 
-    apiFetch(BASE, {
-      method: "POST",
+    const isEditing = Boolean(editing);
+
+    apiFetch(isEditing ? `${BASE}${editing.id}/` : BASE, {
+      method: isEditing ? "PATCH" : "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(form),
     })
       .then(() => {
+        setEditing(null);
         setShowForm(false);
         load();
       })
@@ -84,7 +124,10 @@ export default function AlumniPage() {
           <button
             type="button"
             className="primary-button"
-            onClick={() => setShowForm((v) => !v)}
+            onClick={() => {
+              setEditing(null);
+              setShowForm((v) => !v);
+            }}
           >
             <Plus size={15} />
             Add Alumni
@@ -94,7 +137,7 @@ export default function AlumniPage() {
 
       {showForm && (
         <div className="panel">
-          <PanelHeader title="Add alumni record" />
+          <PanelHeader title={editing ? "Edit alumni record" : "Add alumni record"} />
           <form onSubmit={submit} className="filter-row">
             <input
               required
@@ -146,8 +189,15 @@ export default function AlumniPage() {
               onChange={(e) => setForm({ ...form, city: e.target.value })}
             />
 
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => { setEditing(null); setShowForm(false); }}
+            >
+              Cancel
+            </button>
             <button className="primary-button" disabled={saving}>
-              {saving ? "Saving..." : "Save"}
+              {saving ? "Saving..." : editing ? "Save Changes" : "Save"}
             </button>
           </form>
           {formError && <div className="state-card error">{formError}</div>}
@@ -202,6 +252,7 @@ export default function AlumniPage() {
                     <th>Organization</th>
                     <th>City</th>
                     <th>Contact</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -217,6 +268,22 @@ export default function AlumniPage() {
                         {row.email && <small style={{ display: "block" }}>{row.email}</small>}
                         {row.phone && <small>{row.phone}</small>}
                         {!row.email && !row.phone && "—"}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <button
+                          type="button"
+                          className="table-action"
+                          onClick={() => openEdit(row)}
+                        >
+                          <Pencil size={13} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action danger"
+                          onClick={() => handleDelete(row)}
+                        >
+                          <Trash2 size={13} /> Delete
+                        </button>
                       </td>
                     </tr>
                   ))}

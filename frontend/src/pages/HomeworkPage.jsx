@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
-import { BookOpenCheck, ClipboardList, Plus, Send } from "lucide-react";
+import { BookOpenCheck, ClipboardList, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
-import { apiFetch, authHeaders } from "../api";
+import { apiFetch, authHeaders, jsonHeaders } from "../api";
 
 const BASE = "/api/homework/";
 
@@ -20,6 +20,7 @@ export default function HomeworkPage({ isStudent }) {
     max_marks: 10,
   });
   const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState(null);
 
   const [selected, setSelected] = useState(null);
   const [submissions, setSubmissions] = useState([]);
@@ -41,22 +42,48 @@ export default function HomeworkPage({ isStudent }) {
     load();
   }, [load]);
 
+  const openEdit = (homework) => {
+    setEditing(homework);
+    setShowForm(true);
+    setForm({
+      title: homework.title || "",
+      description: homework.description || "",
+      assigned_date: homework.assigned_date || "",
+      due_date: homework.due_date || "",
+      max_marks: homework.max_marks ?? 10,
+    });
+  };
+
   const createHomework = async (event) => {
     event.preventDefault();
     setSaving(true);
 
-    apiFetch(BASE, {
-      method: "POST",
-      headers: authHeaders({ "Content-Type": "application/json" }),
+    apiFetch(editing ? `${BASE}${editing.id}/` : BASE, {
+      method: editing ? "PATCH" : "POST",
+      headers: jsonHeaders(),
       body: JSON.stringify(form),
     })
       .then(() => {
         setShowForm(false);
-        setForm({ ...form, title: "", description: "" });
+        setEditing(null);
+        setForm({ title: "", description: "" });
         load();
       })
       .catch((err) => setError(err.message))
       .finally(() => setSaving(false));
+  };
+
+  const handleDelete = (homework) => {
+    if (!window.confirm(`Delete homework "${homework.title}"? This cannot be undone.`)) {
+      return;
+    }
+
+    apiFetch(`${BASE}${homework.id}/`, { method: "DELETE" }, "Could not delete the homework.")
+      .then(() => {
+        setEditing(null);
+        load();
+      })
+      .catch((err) => setError(err.message));
   };
 
   const openHomework = (homework) => {
@@ -127,7 +154,10 @@ export default function HomeworkPage({ isStudent }) {
             <button
               type="button"
               className="primary-button"
-              onClick={() => setShowForm((v) => !v)}
+              onClick={() => {
+                setEditing(null);
+                setShowForm((v) => !v);
+              }}
             >
               <Plus size={15} />
               New Homework
@@ -138,7 +168,7 @@ export default function HomeworkPage({ isStudent }) {
 
       {showForm && (
         <div className="panel">
-          <PanelHeader title="Assign homework" subtitle="Visible to the class immediately" />
+          <PanelHeader title={editing ? "Edit homework" : "Assign homework"} subtitle="Visible to the class immediately" />
           <form onSubmit={createHomework} className="filter-row">
             <input
               required
@@ -172,7 +202,7 @@ export default function HomeworkPage({ isStudent }) {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
             <button className="primary-button" disabled={saving}>
-              {saving ? "Saving..." : "Assign"}
+              {saving ? "Saving..." : editing ? "Save Changes" : "Assign"}
             </button>
           </form>
         </div>
@@ -201,6 +231,7 @@ export default function HomeworkPage({ isStudent }) {
                     <th>Max Marks</th>
                     <th>Submissions</th>
                     <th></th>
+                    {!isStudent && <th>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -230,6 +261,16 @@ export default function HomeworkPage({ isStudent }) {
                           )}
                         </button>
                       </td>
+                      {!isStudent && (
+                        <td style={{ whiteSpace: "nowrap" }}>
+                          <button type="button" className="table-action" onClick={() => openEdit(row)}>
+                            <Pencil size={13} /> Edit
+                          </button>
+                          <button type="button" className="table-action danger" onClick={() => handleDelete(row)}>
+                            <Trash2 size={13} /> Delete
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, MapPin, Plus, Users, X } from "lucide-react";
+import { CalendarDays, MapPin, Pencil, Plus, Trash2, Users, X } from "lucide-react";
 import { useAuth } from "../auth";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 
@@ -47,6 +47,19 @@ function formatDateTime(value) {
   });
 }
 
+function toLocalDateTime(value) {
+  if (!value) return "";
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return "";
+
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60000);
+
+  return local.toISOString().slice(0, 16);
+}
+
 export default function EventsPage() {
   const { hasRole } = useAuth();
 
@@ -57,6 +70,7 @@ export default function EventsPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [editingEvent, setEditingEvent] = useState(null);
 
   const canManage = hasRole([
     "super_admin",
@@ -101,6 +115,34 @@ export default function EventsPage() {
     }));
   };
 
+  const openAddEvent = () => {
+    setEditingEvent(null);
+    setForm(EMPTY_FORM);
+    setShowForm(true);
+  };
+
+  const openEditEvent = (event) => {
+    const audience = Array.isArray(event.audiences)
+      ? event.audiences[0]
+      : null;
+
+    setEditingEvent(event);
+    setForm({
+      title: event.title || "",
+      description: event.description || "",
+      location: event.location || "",
+      start_datetime: event.start_datetime
+        ? toLocalDateTime(event.start_datetime)
+        : "",
+      end_datetime: event.end_datetime
+        ? toLocalDateTime(event.end_datetime)
+        : "",
+      status: event.status || "published",
+      audience_type: audience?.audience_type || "everyone",
+    });
+    setShowForm(true);
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -108,8 +150,14 @@ export default function EventsPage() {
     setError("");
 
     try {
-      const response = await fetch("/api/events/", {
-        method: "POST",
+      const isEditing = Boolean(editingEvent);
+
+      const url = isEditing
+        ? `/api/events/${editingEvent.id}/`
+        : "/api/events/";
+
+      const response = await fetch(url, {
+        method: isEditing ? "PUT" : "POST",
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
@@ -143,16 +191,45 @@ export default function EventsPage() {
           })
           .join(" | ");
 
-        throw new Error(message || "Unable to create event.");
+        throw new Error(message || `Unable to ${isEditing ? "update" : "create"} event.`);
       }
 
       setShowForm(false);
       setForm(EMPTY_FORM);
+      setEditingEvent(null);
       await loadEvents();
     } catch (err) {
       setError(err.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleDeleteEvent = async (event) => {
+    const confirmed = window.confirm(
+      `Delete event "${event.title}"? This cannot be undone.`
+    );
+
+    if (!confirmed) return;
+
+    setError("");
+
+    try {
+      const response = await fetch(`/api/events/${event.id}/`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "X-CSRFToken": getCookie("csrftoken") || "",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`Unable to delete event (HTTP ${response.status}).`);
+      }
+
+      await loadEvents();
+    } catch (err) {
+      setError(err.message);
     }
   };
 
@@ -200,7 +277,7 @@ export default function EventsPage() {
             canManage && (
               <button
                 className="primary-button"
-                onClick={() => setShowForm(true)}
+                onClick={openAddEvent}
               >
                 + Add Event
               </button>
@@ -263,6 +340,30 @@ export default function EventsPage() {
                   </div>
 
                   <div className="event-card-actions">
+                    {canManage && (
+                      <>
+                        <button
+                          className="table-action"
+                          onClick={() =>
+                            openEditEvent(event)
+                          }
+                        >
+                          <Pencil size={13} />
+                          Edit
+                        </button>
+
+                        <button
+                          className="table-action danger"
+                          onClick={() =>
+                            handleDeleteEvent(event)
+                          }
+                        >
+                          <Trash2 size={13} />
+                          Delete
+                        </button>
+                      </>
+                    )}
+
                     {event.my_rsvp === "yes" ? (
                       <button
                         className="secondary-button"
@@ -302,13 +403,24 @@ export default function EventsPage() {
           <div className="teacher-modal event-modal">
             <div className="modal-header">
               <div>
-                <h3>Add Event</h3>
-                <p>Create a new school event.</p>
+                <h3>
+                  {editingEvent
+                    ? "Edit Event"
+                    : "Add Event"}
+                </h3>
+                <p>
+                  {editingEvent
+                    ? "Update the school event."
+                    : "Create a new school event."}
+                </p>
               </div>
 
               <button
                 className="modal-close"
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setEditingEvent(null);
+                }}
                 disabled={saving}
               >
                 <X size={18} />
@@ -416,7 +528,10 @@ export default function EventsPage() {
                 <button
                   type="button"
                   className="secondary-button"
-                  onClick={() => setShowForm(false)}
+                  onClick={() => {
+                    setShowForm(false);
+                    setEditingEvent(null);
+                  }}
                   disabled={saving}
                 >
                   Cancel
@@ -428,7 +543,13 @@ export default function EventsPage() {
                   disabled={saving}
                 >
                   <Plus size={17} />
-                  {saving ? "Creating..." : "Create Event"}
+                  {saving
+                    ? editingEvent
+                      ? "Saving..."
+                      : "Creating..."
+                    : editingEvent
+                    ? "Save Changes"
+                    : "Create Event"}
                 </button>
               </div>
             </form>
