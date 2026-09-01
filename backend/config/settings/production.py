@@ -98,6 +98,18 @@ STORAGES = {
     },
 }
 
+# Use Vercel Blob storage when the connection token is present (production,
+# preview and development environments on Vercel). Otherwise keep the local
+# FileSystemStorage for local development.
+if os.environ.get("BLOB_READ_WRITE_TOKEN"):
+    STORAGES["default"] = {
+        "BACKEND": "config.blob_storage.VercelBlobStorage",
+    }
+else:
+    STORAGES["default"] = {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+    }
+
 MEDIA_URL = "media/"
 MEDIA_ROOT = os.environ.get(
     "DJANGO_MEDIA_ROOT",

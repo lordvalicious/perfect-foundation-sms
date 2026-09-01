@@ -15,3 +15,4 @@ twilio==9.4.5
 stripe==11.3.0
 pyotp==2.10.0
 pycryptodome==3.23.0
+vercel_blob==0.4.2
