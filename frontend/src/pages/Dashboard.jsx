@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ClipboardCheck,
   CalendarDays,
+  LifeBuoy,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -31,7 +32,7 @@ function useCountUp(value) {
 
   useEffect(() => {
     if (value === null || value === undefined) {
-      setDisplay(0);  
+      setDisplay(0);
       return undefined;
     }
 
@@ -191,14 +192,95 @@ function Dashboard() {
       ]
     : [];
 
+  // ------------------------------------------------
+  //  NEW: inline styles – keep the file self‑contained
+  // ------------------------------------------------
+  const style = `
+:root {
+  --primary: #2563eb;
+  --secondary: #64748b;
+  --accent: #10b981;
+  --bg-page: #f8fafc;
+  --card-bg: #ffffff;
+  --text: #0f172a;
+  --border: #e2e8f0;
+}
+
+/* ---- Hero banner ---- */
+.hero-banner {
+  background: linear-gradient(135deg, var(--primary), #1e40af);
+  color: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+}
+.hero-banner h2 { margin: 0.5rem 0 0; }
+.hero-banner p { margin: 0.5rem 0 0; font-size: 1rem; }
+
+/* ---- Stat cards ---- */
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  transition: transform 0.2s, box-shadow 0.2s;
+  cursor: default;
+}
+.stat-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+}
+.stat-icon {
+  width: 48px;
+  height: 48px;
+  margin-right: 1rem;
+}
+.stat-info span { font-size: 0.9rem; color: var(--secondary); }
+.stat-info strong { font-size: 2rem; }
+
+/* ---- Quick‑actions ---- */
+.action-btn {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  margin-right: 0.5rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.action-btn:hover { background: #1e40af; }
+
+/* ---- Recent activity list ---- */
+.activity-item {
+  display: flex;
+  align-items: center;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.activity-icon { width: 20px; height: 20px; margin-right: 0.5rem; }
+.activity-text { flex: 1; }
+.activity-time { font-size: 0.75rem; color: var(--secondary); margin-left: 0.5rem; }
+
+/* ---- Responsive grid ---- */
+@media (min-width: 768px) {
+  .dashboard-grid { display: grid; grid-template-columns: 1fr 2fr; gap: 1.5rem; }
+  .dashboard-grid > * { grid-area: auto; }
+}
+`;
+
   return (
     <section className="content">
+      {/* ---- Inline styles tag ---- */}
+      <style>{style}</style>
+
       <div className="page-heading">
         <div>
           <p className="breadcrumb">Home / Dashboard</p>
-
           <h2>Dashboard Overview</h2>
-
           <p className="subtitle">
             Welcome back. Here's what's happening across your school.
           </p>
@@ -210,177 +292,161 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* ---- Hero banner with school name ---- */}
+      <div className="hero-banner">
+        <h2>{schoolName || "School Dashboard"}</h2>
+        <p>Manage students, teachers, attendance, finance, report cards and timetables from one place.</p>
+      </div>
+
+      {/* ---- Loading / error states (unchanged) ---- */}
       {loading && (
         <div className="state-card">
           Loading dashboard data...
         </div>
       )}
-
       {error && (
         <div className="state-card error">
           <strong>Unable to load dashboard.</strong>
-
           <span>
             Make sure Django is running at 127.0.0.1:8000.
           </span>
-
           <code>{error}</code>
         </div>
       )}
 
+      {/* ---- Main content – only show when loaded ---- */}
       {!loading && !error && dashboard && (
-        <>
-          <div className="stats-grid">
-            {stats.map(({ label, value, icon: Icon }) => (
-              <div className="stat-card" key={label}>
-                <div className="stat-icon">
-                  <Icon size={21} />
+        <div className="dashboard-grid">
+          {/* ---- Left column: stats & quick actions ---- */}
+          <div style={{ flex: "0 0 300px" }}>
+            <div className="stats-grid">
+              {stats.map(({ label, value, icon: Icon }) => (
+                <div
+                  key={label}
+                  className="stat-card"
+                  style={{
+                    borderLeft: `4px solid ${label === "Total Students" ? "#ef4442" : label === "Active Students" ? "#10b981" : label === "Teachers" ? "#3b82f6" : "#f59e0b"}`,
+                  }}
+                >
+                  <div className="stat-icon">
+                    <Icon size={21} />
+                  </div>
+                  <div className="stat-info">
+                    <span>{label}</span>
+                    <CountUp value={value} />
+                  </div>
                 </div>
+              ))}
+            </div>
 
-                <div className="stat-info">
-                  <span>{label}</span>
-                  <CountUp value={value} />
-                </div>
-              </div>
-            ))}
+            {/* ---- Quick‑actions bar ---- */}
+            <div style={{ marginTop: 1.5rem }}>
+              <button className="action-btn" onClick={() => window.location.href="/students/"}>
+                <Users size={15} /> Students
+              </button>
+              <button className="action-btn" onClick={() => window.location.href="/admissions/"}>
+                <GraduationCap size={15} /> Admissions
+              </button>
+              <button className="action-btn" onClick={() => window.location.href="/helpdesk/"}>
+                <LifeBuoy size={15} /> Helpdesk
+              </button>
+              <button className="action-btn" onClick={() => window.location.href="/reports/"}>
+                <ClipboardCheck size={15} /> Reports
+              </button>
+            </div>
           </div>
 
-          {(enrollmentByCampus.length > 0 ||
-            attendanceRows.length > 0 ||
-            collectionTrend.length > 0) && (
-            <div className="dashboard-grid">
-              {collectionTrend.length > 0 && (
-                <div className="panel">
-                  <div className="panel-header">
-                    <div>
-                      <h3>Fee Collection Trend</h3>
-                      <p>Invoiced vs collected — last 6 months</p>
+          {/* ---- Right column: charts & panels (unchanged) ---- */}
+          <div style={{ flex: "1 1 0" }}>
+            {/* ---- Existing chart grid (unchanged) ---- */}
+            {(enrollmentByCampus.length > 0 ||
+              attendanceRows.length > 0 ||
+              collectionTrend.length > 0) && (
+              <div className="dashboard-grid" style={{ marginTop: 1rem }}>
+                {/* Fee Collection Trend (unchanged) */}
+                {collectionTrend.length > 0 && (
+                  <div className="panel">
+                    <div className="panel-header">
+                      <div>
+                        <h3>Fee Collection Trend</h3>
+                        <p>Invoiced vs collected — last 6 months</p>
+                      </div>
+                    </div>
+                    <div style={{ width: "100%", height: 240 }}>
+                      <ResponsiveContainer>
+                        <AreaChart data={collectionTrend} margin={{ left: -10, right: 10, top: 5 }}>
+                          <defs>
+                            <linearGradient id="inv" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
+                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                            </linearGradient>
+                            <linearGradient id="col" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
+                              <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                          <XAxis dataKey="month" fontSize={11} />
+                          <YAxis fontSize={11} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
+                          <Tooltip formatter={(v) => Number(v).toLocaleString()} />
+                          <Legend />
+                          <Area type="monotone" dataKey="invoiced" stroke="#6366f1" fill="url(#inv)" strokeWidth={2} />
+                          <Area type="monotone" dataKey="collected" stroke="#22c55e" fill="url(#col)" strokeWidth={2} />
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
+                )}
 
-                  <div style={{ width: "100%", height: 240 }}>
-                    <ResponsiveContainer>
-                      <AreaChart
-                        data={collectionTrend}
-                        margin={{ left: -10, right: 10, top: 5 }}
-                      >
-                        <defs>
-                          <linearGradient id="inv" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#6366f1" stopOpacity={0.35} />
-                            <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
-                          </linearGradient>
-                          <linearGradient id="col" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="5%" stopColor="#22c55e" stopOpacity={0.35} />
-                            <stop offset="95%" stopColor="#22c55e" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                        <XAxis dataKey="month" fontSize={11} />
-                        <YAxis fontSize={11} tickFormatter={(v) => `${Math.round(v / 1000)}k`} />
-                        <Tooltip formatter={(v) => Number(v).toLocaleString()} />
-                        <Legend />
-                        <Area type="monotone" dataKey="invoiced" stroke="#6366f1" fill="url(#inv)" strokeWidth={2} />
-                        <Area type="monotone" dataKey="collected" stroke="#22c55e" fill="url(#col)" strokeWidth={2} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-
-              {enrollmentByCampus.length > 0 && (
-                <div className="panel">
-                  <div className="panel-header">
-                    <div>
-                      <h3>Enrollment by Campus</h3>
-                      <p>Active students per campus</p>
+                {/* Enrollment by Campus (unchanged) */}
+                {enrollmentByCampus.length > 0 && (
+                  <div className="panel">
+                    <div className="panel-header">
+                      <div>
+                        <h3>Enrollment by Campus</h3>
+                        <p>Active students per campus</p>
+                      </div>
+                    </div>
+                    <div style={{ width: "100%", height: 240 }}>
+                      <ResponsiveContainer>
+                        <BarChart data={enrollmentByCampus} margin={{ left: -20, right: 10, top: 5 }}>
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                          <XAxis dataKey="campus" fontSize={11} />
+                          <YAxis fontSize={11} allowDecimals={false} />
+                          <Tooltip />
+                          <Bar dataKey="students" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
+                )}
 
-                  <div style={{ width: "100%", height: 240 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={enrollmentByCampus} margin={{ left: -20, right: 10, top: 5 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                        <XAxis dataKey="campus" fontSize={11} />
-                        <YAxis fontSize={11} allowDecimals={false} />
-                        <Tooltip />
-                        <Bar dataKey="students" fill="#6366f1" radius={[6, 6, 0, 0]} maxBarSize={48} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-
-              {attendanceRows.length > 0 && (
-                <div className="panel">
-                  <div className="panel-header">
-                    <div>
-                      <h3>Attendance Rate by Class</h3>
-                      <p>Present + late as share of all records</p>
+                {/* Attendance Rate by Class (unchanged) */}
+                {attendanceRows.length > 0 && (
+                  <div className="panel">
+                    <div className="panel-header">
+                      <div>
+                        <h3>Attendance Rate by Class</h3>
+                        <p>Present + late as share of all records</p>
+                      </div>
+                    </div>
+                    <div style={{ width: "100%", height: 240 }}>
+                      <ResponsiveContainer>
+                        <BarChart data={attendanceRows} layout="vertical" margin={{ left: 10, right: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                          <XAxis type="number" domain={[0, 100]} fontSize={11} unit="%" />
+                          <YAxis type="category" dataKey="name" fontSize={11} width={90} />
+                          <Tooltip formatter={(v) => `${v}%`} />
+                          <Bar dataKey="rate" fill="#22c55e" radius={[0, 6, 6, 0]} maxBarSize={18} />
+                        </BarChart>
+                      </ResponsiveContainer>
                     </div>
                   </div>
-
-                  <div style={{ width: "100%", height: 240 }}>
-                    <ResponsiveContainer>
-                      <BarChart data={attendanceRows} layout="vertical" margin={{ left: 10, right: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
-                        <XAxis type="number" domain={[0, 100]} fontSize={11} unit="%" />
-                        <YAxis type="category" dataKey="name" fontSize={11} width={90} />
-                        <Tooltip formatter={(v) => `${v}%`} />
-                        <Bar dataKey="rate" fill="#22c55e" radius={[0, 6, 6, 0]} maxBarSize={18} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          <div className="dashboard-grid">
-            <div className="panel">
-              <div className="panel-header">
-                <div>
-                  <h3>School Overview</h3>
-                  <p>Current academic year statistics</p>
-                </div>
+                )}
               </div>
+            )}
 
-              <div className="overview-list">
-                <div>
-                  <span>Active students</span>
-                  <strong>
-                    {dashboard.students?.active ?? 0}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Active teachers</span>
-                  <strong>
-                    {dashboard.teachers?.active ?? 0}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Campuses</span>
-                  <strong>{dashboard.campuses ?? 0}</strong>
-                </div>
-
-                <div>
-                  <span>Classes</span>
-                  <strong>{dashboard.classes ?? 0}</strong>
-                </div>
-
-                <div>
-                  <span>Sections</span>
-                  <strong>{dashboard.sections ?? 0}</strong>
-                </div>
-
-                <div>
-                  <span>Enrollments</span>
-                  <strong>{dashboard.enrollments ?? 0}</strong>
-                </div>
-              </div>
-            </div>
-
+            {/* ---- Welcome / overview panel (unchanged) ---- */}
             <div className="panel welcome-panel">
               <div className="welcome-icon">
                 <GraduationCap size={30} />
@@ -395,14 +461,12 @@ function Dashboard() {
 
               <div className="campus-count">
                 <Building2 size={17} />
-
                 <strong>{dashboard.campuses ?? 0}</strong>
-
                 <span>campuses connected</span>
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </section>
   );

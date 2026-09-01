@@ -3,7 +3,95 @@ import { Link } from "react-router-dom";
 import { Search, Building2 } from "lucide-react";
 import { useAuth } from "../auth";
 import { useLang } from "../i18n";
+import { StatusBadge } from "./ui";
 import ProfileModal from "./ProfileModal";
+
+/* Basic theming & component styles */
+<style>
+  :root {
+    --primary: #2563eb;
+    --secondary: #64748b;
+    --success: #10b981;
+    --warn: #f59e0b;
+    --danger: #ef4444;
+    --bg: #f8fafc;
+    --card-bg: #ffffff;
+    --text: #0f172a;
+    --border: #e2e8f0;
+  }
+  .drop-zone {
+    border: 2px dashed var(--border);
+    padding: 2rem;
+    text-align: center;
+    color: var(--text);
+    margin: 1rem 0;
+    cursor: pointer;
+  }
+  .drop-zone p {
+    margin: 0;
+  }
+  .student-card {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: var(--card-bg);
+    transition: box-shadow 0.2s;
+  }
+  .student-card:hover {
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+  .student-card-photo {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    object-fit: cover;
+    margin-bottom: 0.5rem;
+  }
+  .student-card-placeholder {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    background: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text);
+    margin-bottom: 0.5rem;
+    font-size: 1.2rem;
+  }
+  .student-card-info {
+    flex: 1;
+    text-align: left;
+    padding-left: 0.5rem;
+  }
+  .student-card-info strong {
+    display: block;
+    margin-bottom: 0.2rem;
+  }
+  .student-card-status {
+    font-size: 0.75rem;
+    margin-top: 0.2rem;
+  }
+  .student-card-actions {
+    margin-top: 0.5rem;
+    display: flex;
+    gap: 0.4rem;
+  }
+  .btn-edit, .btn-delete {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 0.75rem;
+    color: var(--primary);
+  }
+  .btn-delete {
+    color: var(--danger);
+  }
+</style>
 
 const STUDENTS_API_URL = "/api/students/";
 
@@ -833,6 +921,20 @@ function StudentsPage() {
         )}
       </div>
 
+      {/* Drag & drop upload zone */}
+      <div
+        className="drop-zone"
+        onDragOver={(e) => e.preventDefault()}
+        onDrop={(e) => {
+          const file = e.dataTransfer.files[0];
+          if (file && file.type.startsWith("image/")) {
+            setPhotoFile(file);
+          }
+        }}
+      >
+        <p>Drag & drop an image here to upload</p>
+      </div>
+
       {/* Campus overview */}
       {campusOptions.length > 0 && (
         <div className="campus-cards">
@@ -951,6 +1053,45 @@ function StudentsPage() {
           </div>
         </form>
       </div>
+
+      {/* Student cards grid (first 5 per campus) */}
+      {data.students.length > 0 && (
+        <div className="student-cards-grid">
+          {data.students.slice(0, 5).map((student) => (
+            <div
+              key={student.id}
+              className="student-card"
+              onClick={() => console.log("student clicked", student.id)}
+            >
+              {student.photo_url ? (
+                <img
+                  className="student-card-photo"
+                  src={student.photo_url}
+                  alt={student.full_name}
+                />
+              ) : (
+                <div className="student-card-placeholder">
+                  {(student.full_name || "S").charAt(0).toUpperCase()}
+                </div>
+              )}
+              <div className="student-card-info">
+                <strong>{student.full_name || student.admission_number}</strong>
+                <span className="student-card-status">
+                  <StatusBadge status={student.status === "active" ? "active" : "inactive"} label={student.status} />
+                </span>
+              </div>
+              <div className="student-card-actions">
+                {canManagement && (
+                  <>
+                    <button className="btn-edit">Edit</button>
+                    <button className="btn-delete">Delete</button>
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Student lists by campus */}
       {campusOptions.length === 0 ? (
