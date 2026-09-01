@@ -1880,6 +1880,30 @@ select {
   border-top: 1px solid var(--border);
 }
 
+/* Forms rendered directly inside modal shells must scroll instead of being clipped */
+.modal > form:not(:has(> .modal-body)),
+.teacher-modal > form:not(:has(> .modal-body)) {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.modal > form > .modal-footer,
+.teacher-modal > form > .modal-footer {
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+}
+
+/* Modals whose content is a direct .form-section (no form / no .modal-body wrapper) */
+.modal > .form-section:only-child,
+.teacher-modal > .form-section:only-child {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 /* ==========================================================================
    HELPDESK — ticket desk + thread
    ========================================================================== */
@@ -1910,6 +1934,12 @@ select {
 
 .ticket-thread h4 {
   margin: 0 0 10px;
+}
+
+.ticket-thread {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .ticket-message {
