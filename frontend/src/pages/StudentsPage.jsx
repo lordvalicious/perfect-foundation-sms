@@ -1,9 +1,9 @@
 ﻿import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Search, Building2 } from "lucide-react";
+import { Search, Building2, Users, ClipboardCheck } from "lucide-react";
 import { useAuth } from "../auth";
 import { useLang } from "../i18n";
-import { StatusBadge } from "./ui";
+import { StatusBadge, PageHeader } from "./ui";
 import ProfileModal from "./ProfileModal";
 
 /* Basic theming & component styles */
@@ -717,16 +717,32 @@ function StudentsPage() {
   if (isStudentSelf) {
     return (
       <section className="content">
-        <div className="page-header">
-          <div>
-            <div className="breadcrumb">Home / My Profile</div>
-            <h2>My Profile</h2>
-
-          <p className="subtitle">
-            Your student information at your school.
-          </p>
-          </div>
-        </div>
+        <PageHeader
+          hero
+          crumb="Home / My Profile"
+          title="My Profile"
+          subtitle="Your student information at your school."
+          stats={[
+            {
+              label: "Enrollments",
+              value: (myProfile && myProfile.enrollments
+                ? myProfile.enrollments.length
+                : 0),
+              icon: <ClipboardCheck size={18} />,
+              sub: "academic years",
+            },
+            {
+              label: "Active",
+              value: (myProfile && myProfile.enrollments
+                ? myProfile.enrollments.filter(
+                    (e) => e.status === "active"
+                  ).length
+                : 0),
+              icon: <Users size={18} />,
+              sub: "active enrollments",
+            },
+          ]}
+        />
 
         {myProfileLoading && (
           <div className="state-card">
@@ -898,28 +914,46 @@ function StudentsPage() {
      ADMIN / TEACHER LIST VIEW
   -------------------------- */
 
+  const totalStudentsAcrossCampuses = Object.values(campusData).reduce(
+    (sum, data) => sum + (data && data.count ? data.count : 0),
+    0
+  );
+
   return (
     <section className="page">
-      <div className="page-header">
-        <div>
-          <div className="breadcrumb">{t("Home / Students")}</div>
-
-          <h2>{t("Students")}</h2>
-
-          <p className="subtitle">
-            {t("Manage students enrolled at your school.")}
-          </p>
-        </div>
-
-        {canManage && (
-          <button
-            className="primary-button"
-            onClick={openAddStudent}
-          >
-            {t("+ Add Student")}
-          </button>
-        )}
-      </div>
+      <PageHeader
+        hero
+        crumb={t("Home / Students")}
+        title={t("Students")}
+        subtitle={t("Manage students enrolled at your school.")}
+        action={
+          canManage ? (
+            <button className="primary-button" onClick={openAddStudent}>
+              {t("+ Add Student")}
+            </button>
+          ) : undefined
+        }
+        stats={[
+          {
+            label: t("Students"),
+            value: totalStudentsAcrossCampuses,
+            icon: <Users size={18} />,
+            sub: t("across all campuses"),
+          },
+          {
+            label: t("Campuses"),
+            value: campusOptions.length,
+            icon: <Building2 size={18} />,
+            sub: t("currently visible"),
+          },
+          {
+            label: t("Sections"),
+            value: sectionOptions.length,
+            icon: <ClipboardCheck size={18} />,
+            sub: t("academic groups"),
+          },
+        ]}
+      />
 
       {/* Drag & drop upload zone */}
       <div

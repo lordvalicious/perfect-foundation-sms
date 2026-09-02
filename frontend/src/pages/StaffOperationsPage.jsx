@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Plus,
   XCircle,
+  Users,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
@@ -156,6 +157,27 @@ export default function StaffOperationsPage({ canReview }) {
         crumb="Home / Staff Operations"
         title="Staff Leave & Attendance"
         subtitle="Track leave requests and daily staff attendance."
+        hero
+        stats={[
+          {
+            label: "Staff",
+            value: staffList.length,
+            icon: <Users size={18} />,
+            sub: "on the roster",
+          },
+          {
+            label: "Leave requests",
+            value: leaves.length,
+            icon: <CalendarClock size={18} />,
+            sub: "total requests",
+          },
+          {
+            label: "Attendance entries",
+            value: attendance.length,
+            icon: <ClipboardCheck size={18} />,
+            sub: attDate ? `for ${attDate}` : "no day selected",
+          },
+        ]}
         action={
           tab === "leave" ? (
             <button

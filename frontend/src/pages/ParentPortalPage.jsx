@@ -226,6 +226,33 @@ export default function ParentPortalPage() {
         crumb="Home / Parent Portal"
         title="Parent Portal"
         subtitle="Attendance, results and fee statements for your children."
+        hero
+        stats={[
+          {
+            label: "Children",
+            value: children.length,
+            icon: <Users size={18} />,
+            sub: "linked to you",
+          },
+          {
+            label: "Invoices",
+            value: invoices.length,
+            icon: <Receipt size={18} />,
+            sub: "fee statements",
+          },
+          {
+            label: "Payments",
+            value: payments.length,
+            icon: <Wallet size={18} />,
+            sub: "recorded payments",
+          },
+          {
+            label: "Report cards",
+            value: reportCards.length,
+            icon: <BookOpen size={18} />,
+            sub: "published results",
+          },
+        ]}
       />
 
       <StateArea

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { HeartPulse, Pencil, Plus, Trash2 } from "lucide-react";
+import { HeartPulse, Pencil, Plus, Trash2, Users, ClipboardList } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
 
@@ -128,6 +128,27 @@ export default function HealthRecordsPage() {
         crumb="Home / Health Records"
         title="Health Records"
         subtitle="Clinic visits, allergies, vaccinations and screenings."
+        hero
+        stats={[
+          {
+            label: "Health records",
+            value: rows.length,
+            icon: <HeartPulse size={18} />,
+            sub: "total records",
+          },
+          {
+            label: "Students",
+            value: students.length,
+            icon: <Users size={18} />,
+            sub: "with clinic profiles",
+          },
+          {
+            label: "Record types",
+            value: TYPES.length,
+            icon: <ClipboardList size={18} />,
+            sub: "categories tracked",
+          },
+        ]}
         action={
           <button
             type="button"

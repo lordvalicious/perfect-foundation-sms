@@ -60,6 +60,7 @@ import {
   IdCard,
 } from "lucide-react";
 import "./App.css";
+import "./dark-dash.css";
 import { AuthProvider, useAuth } from "./auth";
 import { LanguageProvider, useLang } from "./i18n";
 import LanguageToggle from "./components/LanguageToggle";

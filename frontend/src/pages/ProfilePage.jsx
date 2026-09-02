@@ -296,15 +296,15 @@ export default function ProfilePage() {
 
   return (
     <section className="content">
-      <div className="page-header">
-        <Link to={backPath} className="back-link">
+      <div className="deco-hero">
+        <Link to={backPath} className="deco-back">
           <ArrowLeft size={16} />
           Back
         </Link>
 
         <h2>Profile</h2>
 
-        <p className="subtitle">
+        <p>
           {profile?.kind === "teacher"
             ? "Teacher profile"
             : profile?.kind === "student"

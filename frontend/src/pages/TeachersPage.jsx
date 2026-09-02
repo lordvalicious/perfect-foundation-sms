@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from "react";
-import { Search, GraduationCap } from "lucide-react";
+import { Search, GraduationCap, UserCheck, Building2 } from "lucide-react";
+import { PageHeader } from "./ui";
 import ProfileModal from "./ProfileModal";
 
 const TEACHERS_API_URL = "/api/teachers/";
@@ -435,24 +436,43 @@ function TeachersPage() {
     return value.charAt(0).toUpperCase() + value.slice(1);
   };
 
+  const activeTeachers = teachers.filter(
+    (teacher) => getStatus(teacher) === "active"
+  ).length;
+  const teacherCampuses = new Set(
+    teachers.map((teacher) => getCampusName(teacher))
+  ).size;
+
   return (
     <section className="content">
       {/* PAGE HEADER */}
 
-      <div className="page-header">
-        <div>
-          <div className="breadcrumb">
-            Home / Teachers
-          </div>
-
-          <h2>Teachers</h2>
-
-          <p className="subtitle">
-            Manage teachers and teaching staff at Perfect
-            Foundation School.
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        hero
+        crumb="Home / Teachers"
+        title="Teachers"
+        subtitle="Manage teachers and teaching staff at Perfect Foundation School."
+        stats={[
+          {
+            label: "Teachers",
+            value: teachers.length,
+            icon: <GraduationCap size={18} />,
+            sub: "on the teaching staff",
+          },
+          {
+            label: "Active",
+            value: activeTeachers,
+            icon: <UserCheck size={18} />,
+            sub: "currently active",
+          },
+          {
+            label: "Campuses",
+            value: teacherCampuses,
+            icon: <Building2 size={18} />,
+            sub: "campuses served",
+          },
+        ]}
+      />
 
       {/* SUCCESS (ACCOUNT CREATED) */}
 

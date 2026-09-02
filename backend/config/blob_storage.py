@@ -9,6 +9,7 @@ resolve it without an extra API call. Access is public but unguessable
 
 import os
 
+import requests
 import vercel_blob
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured

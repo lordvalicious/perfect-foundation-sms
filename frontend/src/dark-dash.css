@@ -1,0 +1,157 @@
+/* ==========================================================================
+   PAGE DEKO — dashboard-style hero headers + stat strips + section cards
+   Uses the app design-system CSS variables so it adapts to light & dark.
+   ========================================================================== */
+
+/* ---- Page hero (like dashboard hero) ---- */
+.deco-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius);
+  padding: 1.8rem 2rem;
+  margin-bottom: 1.6rem;
+  color: var(--text-on-primary);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--primary) 88%, #000 12%),
+    var(--primary-strong)
+  );
+  box-shadow: var(--shadow-md);
+}
+.deco-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--text-on-primary) 22%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+  opacity: 0.35;
+  -webkit-mask-image: radial-gradient(ellipse at 25% 40%, #000 0%, transparent 72%);
+  mask-image: radial-gradient(ellipse at 25% 40%, #000 0%, transparent 72%);
+  pointer-events: none;
+}
+.deco-hero-tag {
+  margin: 0;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--text-on-primary) 75%, transparent);
+}
+.deco-hero h2 {
+  position: relative;
+  margin: 0.35rem 0 0;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-on-primary);
+}
+.deco-hero p {
+  position: relative;
+  margin: 0.6rem 0 0;
+  max-width: 60ch;
+  font-size: 0.95rem;
+  color: color-mix(in srgb, var(--text-on-primary) 82%, transparent);
+}
+.deco-hero-actions {
+  position: relative;
+  margin-top: 1.3rem;
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.deco-hero .primary-button {
+  background: var(--text-on-primary);
+  color: var(--primary-strong);
+}
+.deco-hero .primary-button:hover {
+  background: color-mix(in srgb, var(--text-on-primary) 88%, transparent);
+  box-shadow: none;
+}
+.deco-hero .secondary-button {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text-on-primary);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.deco-hero .secondary-button:hover {
+  background: rgba(255, 255, 255, 0.26);
+  color: var(--text-on-primary);
+}
+.deco-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: color-mix(in srgb, var(--text-on-primary) 80%, transparent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.deco-back:hover {
+  color: var(--text-on-primary);
+  text-decoration: underline;
+}
+
+/* ---- Stat strip ---- */
+.deco-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.9rem;
+  margin-bottom: 1.5rem;
+}
+.deco-stat {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.9rem 1rem;
+  box-shadow: var(--shadow-xs);
+  transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease);
+}
+.deco-stat:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-md);
+}
+.deco-stat-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.deco-stat-chip {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--violet));
+}
+.deco-stat-value {
+  font-size: 1.7rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 0.7rem;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.deco-stat-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-2);
+  margin-top: 0.3rem;
+}
+.deco-stat-sub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.12rem;
+}
+
+/* ---- Section wrapper (dark-friendly panel group) ---- */
+.deco-section {
+  background: transparent;
+}
+
+@media (min-width: 720px) {
+  .deco-hero h2 { font-size: 1.9rem; }
+}

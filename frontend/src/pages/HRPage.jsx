@@ -67,7 +67,38 @@ export default function HRPage() {
 
   return (
     <section className="content">
-      <PageHeader crumb="Home / HR" title="Human Resources" subtitle="Manage employee records, contracts, workload, reviews, and employment history." />
+      <PageHeader
+        crumb="Home / HR"
+        title="Human Resources"
+        subtitle="Manage employee records, contracts, workload, reviews, and employment history."
+        hero
+        stats={[
+          {
+            label: "Employees",
+            value: employees.length,
+            icon: <Users size={18} />,
+            sub: "on the directory",
+          },
+          {
+            label: "Contracts",
+            value: contracts.length,
+            icon: <FileText size={18} />,
+            sub: "in the selected record",
+          },
+          {
+            label: "Workload",
+            value: `${workload.reduce((total, item) => total + Number(item.hours_per_week || 0), 0)}h`,
+            icon: <BriefcaseBusiness size={18} />,
+            sub: "weekly hours",
+          },
+          {
+            label: "Reviews",
+            value: reviews.length,
+            icon: <Star size={18} />,
+            sub: "performance entries",
+          },
+        ]}
+      />
       <div className="panel students-filters">
         <form onSubmit={(event) => { event.preventDefault(); loadEmployees(); }}>
           <div className="filter-row">

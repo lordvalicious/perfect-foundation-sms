@@ -1,4 +1,33 @@
-export function PageHeader({ crumb, title, subtitle, action }) {
+export function PageHeader({ crumb, title, subtitle, action, hero, stats }) {
+  if (hero) {
+    return (
+      <div className="deco-hero">
+        <p className="deco-hero-tag">{crumb}</p>
+        <h2>{title}</h2>
+        {subtitle && <p>{subtitle}</p>}
+        {action && <div className="deco-hero-actions">{action}</div>}
+        {Array.isArray(stats) && stats.length > 0 && (
+          <div className="deco-strip" style={{ marginTop: "1.4rem" }}>
+            {stats.map((stat) => (
+              <div key={stat.label} className="deco-stat">
+                <div className="deco-stat-top">
+                  <div className="deco-stat-chip">{stat.icon}</div>
+                </div>
+                <div className="deco-stat-value">
+                  {typeof stat.value === "number"
+                    ? stat.value.toLocaleString()
+                    : stat.value}
+                </div>
+                <div className="deco-stat-label">{stat.label}</div>
+                {stat.sub && <div className="deco-stat-sub">{stat.sub}</div>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="page-header">
       <div>

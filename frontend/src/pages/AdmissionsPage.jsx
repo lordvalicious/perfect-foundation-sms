@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, FilePlus2, Inbox, Search, Trash2, UserPlus, X } from "lucide-react";
+import { Check, FilePlus2, Inbox, Search, Trash2, UserPlus, X, Building2, BookOpen } from "lucide-react";
 import { apiFetch, jsonHeaders } from "../api";
 import { PageHeader, PanelHeader, StateArea, StatusBadge } from "./ui";
 
@@ -684,6 +684,33 @@ export default function AdmissionsPage() {
         title="Admissions"
         subtitle="Track inquiries, review applicants, and convert accepted applications into enrolled students."
         action={headerAction()}
+        hero
+        stats={[
+          {
+            label: "Applications",
+            value: applications.length,
+            icon: <FilePlus2 size={18} />,
+            sub: "total applications",
+          },
+          {
+            label: "Inquiries",
+            value: inquiries.length,
+            icon: <Inbox size={18} />,
+            sub: "total inquiries",
+          },
+          {
+            label: "Campuses",
+            value: campuses.length,
+            icon: <Building2 size={18} />,
+            sub: "receiving applications",
+          },
+          {
+            label: "Academic years",
+            value: academicYears.length,
+            icon: <BookOpen size={18} />,
+            sub: "open for placement",
+          },
+        ]}
       />
 
       {notice && (
