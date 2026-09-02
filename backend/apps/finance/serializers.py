@@ -3,6 +3,8 @@ from decimal import Decimal
 from django.db import transaction
 from rest_framework import serializers
 
+from apps.accounts.access import get_institution
+
 from .models import (
     FeeCategory,
     FeeStructure,
@@ -72,7 +74,9 @@ class InvoiceCreateSerializer(serializers.ModelSerializer):
 
         items = validated_data.pop("items")
 
-        validated_data["invoice_number"] = next_invoice_number()
+        institution = get_institution(self.context.get("request"))
+        validated_data["institution"] = institution
+        validated_data["invoice_number"] = next_invoice_number(institution)
         validated_data["status"] = "issued"
 
         try:
@@ -136,7 +140,9 @@ class PaymentCreateSerializer(serializers.ModelSerializer):
                 {"amount": "Payment cannot be greater than the current invoice balance."}
             )
         validated_data["invoice"] = locked_invoice
-        validated_data["receipt_number"] = next_receipt_number()
+        institution = get_institution(self.context.get("request"))
+        validated_data["institution"] = institution
+        validated_data["receipt_number"] = next_receipt_number(institution)
 
         try:
             return Payment.objects.create(**validated_data)

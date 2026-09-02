@@ -39,19 +39,22 @@ class AuthBaseTestCase(TestCase):
             role=Role.TEACHER,
         )
 
-    def login(self, username="teacher", password="TestPass123!"):
+    def login(self, username="teacher", password="TestPass123!", client_ip=None):
         self.client.post(
             "/api/auth/csrf/",
             {},
             format="json",
         )
+        kwargs = {"format": "json"}
+        if client_ip:
+            kwargs["HTTP_X_FORWARDED_FOR"] = client_ip
         return self.client.post(
             "/api/auth/login/",
             {
                 "username": username,
                 "password": password,
             },
-            format="json",
+            **kwargs,
         )
 
 
@@ -296,26 +299,32 @@ class AuditTests(AuthBaseTestCase):
 
 
 class AccountLockoutTests(AuthBaseTestCase):
-    def test_failed_login_increments_counter(self):
-        for i in range(3):
-            response = self.login(password="wrong-password")
+    def _attempt_failed_logins(self, count):
+        for i in range(count):
+            # Distinct client IPs so the 15-second failed-login de-duplication
+            # window (record_failed_login) does not collapse the attempts.
+            response = self.login(
+                password="wrong-password",
+                client_ip=f"10.0.0.{i + 1}",
+            )
             self.assertEqual(response.status_code, 400)
+
+    def test_failed_login_increments_counter(self):
+        self._attempt_failed_logins(3)
 
         self.user.refresh_from_db()
         self.assertEqual(self.user.failed_login_attempts, 3)
         self.assertIsNone(self.user.locked_until)
 
     def test_account_locked_after_max_attempts(self):
-        for i in range(5):
-            self.login(password="wrong-password")
+        self._attempt_failed_logins(5)
 
         self.user.refresh_from_db()
         self.assertEqual(self.user.failed_login_attempts, 5)
         self.assertIsNotNone(self.user.locked_until)
 
     def test_locked_account_cannot_login(self):
-        for i in range(5):
-            self.login(password="wrong-password")
+        self._attempt_failed_logins(5)
 
         # Now try with correct password
         response = self.login()
@@ -449,6 +458,9 @@ class PasswordResetTests(AuthBaseTestCase):
         from django.contrib.sessions.models import Session
 
         self.login()
+        # Login updates `last_login`; refresh so the reset token matches the
+        # user state the confirm view will validate against.
+        self.user.refresh_from_db()
         session_key = self.client.session.session_key
 
         from django.contrib.auth.tokens import default_token_generator
@@ -666,8 +678,11 @@ class LockoutStatusTests(AuthBaseTestCase):
         self.assertEqual(data["failed_attempts"], 0)
 
     def test_lockout_status_when_locked(self):
+        # Establish a valid session first (the status endpoint is authenticated),
+        # then lock the account with distinct-IP attempts to defeat de-dup.
+        self.login()
         for i in range(5):
-            self.login(password="wrong-password")
+            self.login(password="wrong-password", client_ip=f"10.0.1.{i + 1}")
 
         response = self.client.get("/api/auth/lockout/status/")
         self.assertEqual(response.status_code, 200)

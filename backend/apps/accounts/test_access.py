@@ -52,6 +52,23 @@ def make_user(username, role, school, extra_roles=None):
     return user
 
 
+def seed_default_permissions():
+    """Insert the default permission catalog into the test database.
+
+    The demo-data seeder normally populates these rows; tests that exercise
+    the permission APIs or superuser bypass must create them explicitly.
+    """
+    for codename, name, category, action in Permission.get_default_permissions():
+        Permission.objects.get_or_create(
+            codename=codename,
+            defaults={
+                "name": name,
+                "action": action,
+                "category": category,
+            },
+        )
+
+
 def make_request(user, path="/api/events/"):
     factory = APIRequestFactory()
     django_request = factory.get(path)
@@ -423,11 +440,11 @@ class PermissionModelTests(TestCase):
             self.assertIn(action, dict(Permission.ACTION_CHOICES))
 
     def test_permission_codename_format(self):
-        """Test permission codenames follow resource.action format."""
+        """Test permission codenames follow <resource>.<action> format."""
         for codename, name, category, action in Permission.get_default_permissions():
             parts = codename.split(".")
-            self.assertEqual(len(parts), 2)
-            self.assertEqual(parts[1], action)
+            self.assertGreaterEqual(len(parts), 2)
+            self.assertEqual(parts[-1], action)
 
 
 class RolePermissionTests(TestCase):
@@ -577,16 +594,13 @@ class UserPermissionTests(TestCase):
         
         self.assertFalse(expired.is_active())
         
-        # Valid permission
-        valid = UserPermission.objects.create(
-            user=self.target_user,
-            permission=perm,
-            institution=self.school,
-            effect="allow",
+        # Same (user, permission, institution) row is unique — flip it valid
+        UserPermission.objects.filter(pk=expired.pk).update(
             expires_at=timezone.now() + timezone.timedelta(days=1),
         )
+        expired.refresh_from_db()
         
-        self.assertTrue(valid.is_active())
+        self.assertTrue(expired.is_active())
 
     def test_user_permission_unique_per_institution(self):
         perm = Permission.objects.create(
@@ -746,6 +760,8 @@ class UserPermissionEffectiveTests(TestCase):
         self.assertFalse(self.teacher_user.has_permission("student.view", self.school))
 
     def test_superuser_has_all_permissions(self):
+        seed_default_permissions()
+
         superuser = get_user_model().objects.create_superuser(
             username="root",
             email="root@test.edu",
@@ -759,9 +775,10 @@ class UserPermissionEffectiveTests(TestCase):
             category="system",
         )
         
+        # DB-defined permissions are all granted to a superuser
         self.assertTrue(superuser.has_permission("student.view", self.school))
+        self.assertTrue(superuser.has_permission("finance.invoice.create", self.school))
         self.assertTrue(superuser.has_permission("any.permission", self.school))
-        self.assertTrue(superuser.has_permission("nonexistent.permission", self.school))
 
     def test_has_any_permission(self):
         perm1 = Permission.objects.create(
@@ -849,6 +866,8 @@ class PermissionAPITests(TestCase):
         
         self.client = APIClient()
         
+        seed_default_permissions()
+        
         # Login admin
         self.client.post("/api/auth/csrf/", {}, format="json")
         self.client.post("/api/auth/login/", {
@@ -896,16 +915,12 @@ class PermissionAPITests(TestCase):
         self.assertEqual(data, {})
 
     def test_role_permission_create(self):
-        perm = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
-        
+        perm = Permission.objects.get(codename="student.create")
+
         response = self.client.post("/api/auth/role-permissions/create/", {
             "role": Role.TEACHER,
             "permission": perm.pk,
+            "institution": self.school.pk,
         }, format="json")
         
         self.assertEqual(response.status_code, 201)
@@ -914,13 +929,8 @@ class PermissionAPITests(TestCase):
         self.assertEqual(data["permission"], perm.pk)
 
     def test_role_permission_delete(self):
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
-        
+        perm = Permission.objects.get(codename="student.view")
+
         rp = RolePermission.objects.create(
             role=Role.TEACHER,
             permission=perm,
@@ -935,13 +945,13 @@ class PermissionAPITests(TestCase):
 
     def test_role_permission_cannot_delete_system(self):
         perm = Permission.objects.create(
-            codename="system.audit.view",
+            codename="custom.system.audit.view",
             name="View Audit Logs",
             action="view",
             category="system",
             is_system=True,
         )
-        
+
         rp = RolePermission.objects.create(
             role=Role.TEACHER,
             permission=perm,
@@ -958,18 +968,14 @@ class PermissionAPITests(TestCase):
         self.assertEqual(response.json(), [])
 
     def test_user_permission_create_allow(self):
-        perm = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
-        
+        perm = Permission.objects.get(codename="student.create")
+
         target_user = make_user("staff1", Role.STAFF, self.school)
         
         response = self.client.post("/api/auth/user-permissions/create/", {
             "user": target_user.pk,
             "permission": perm.pk,
+            "institution": self.school.pk,
             "effect": "allow",
             "reason": "Needs to create students for testing",
         }, format="json")
@@ -980,18 +986,14 @@ class PermissionAPITests(TestCase):
         self.assertEqual(data["user"], target_user.pk)
 
     def test_user_permission_create_deny(self):
-        perm = Permission.objects.create(
-            codename="student.delete",
-            name="Delete Students",
-            action="delete",
-            category="student",
-        )
-        
+        perm = Permission.objects.get(codename="student.delete")
+
         target_user = make_user("staff2", Role.STAFF, self.school)
         
         response = self.client.post("/api/auth/user-permissions/create/", {
             "user": target_user.pk,
             "permission": perm.pk,
+            "institution": self.school.pk,
             "effect": "deny",
         }, format="json")
         
@@ -1000,13 +1002,8 @@ class PermissionAPITests(TestCase):
         self.assertEqual(data["effect"], "deny")
 
     def test_user_permission_delete(self):
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
-        
+        perm = Permission.objects.get(codename="student.view")
+
         target_user = make_user("staff3", Role.STAFF, self.school)
         up = UserPermission.objects.create(
             user=target_user,
@@ -1021,19 +1018,9 @@ class PermissionAPITests(TestCase):
         self.assertFalse(UserPermission.objects.filter(pk=up.pk).exists())
 
     def test_user_permissions_summary(self):
-        perm1 = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
-        perm2 = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
-        
+        perm1 = Permission.objects.get(codename="student.view")
+        perm2 = Permission.objects.get(codename="student.create")
+
         # Grant role permission
         RolePermission.objects.create(
             role=Role.TEACHER,

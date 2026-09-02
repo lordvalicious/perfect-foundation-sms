@@ -125,7 +125,7 @@ class TenantIsolationTests(TwoSchoolSetup):
 
     def test_school_list_scoped(self):
         """Each admin only sees their own school."""
-        response = self.client_a.get("/api/schools/schools/")
+        response = self.client_a.get("/api/schools/")
         schools = response.json()
         names = [s["name"] for s in (schools if isinstance(schools, list) else schools.get("results", []))]
         self.assertIn("Isolation School A", names)

@@ -235,7 +235,7 @@ class ExecutiveDashboardTests(TestCase):
             status="present",
         )
         invoice = Invoice.objects.create(
-            invoice_number=next_invoice_number(),
+            invoice_number=next_invoice_number(self.school),
             institution=self.school,
             student=self.student,
             enrollment=self.enrollment,

@@ -968,6 +968,14 @@ class Permission(models.Model):
         ("process", "Process"),
         ("assign", "Assign"),
         ("unassign", "Unassign"),
+        ("refund", "Refund"),
+        ("return", "Return"),
+        ("overdue", "Overdue"),
+        ("adjust", "Adjust"),
+        ("grade", "Grade"),
+        ("send", "Send"),
+        ("backup", "Backup"),
+        ("maintenance", "Maintenance"),
     ]
     
     # Resource categories for organization
@@ -1094,7 +1102,7 @@ class Permission(models.Model):
             ("finance.payment.edit", "Edit Payments", "finance", "edit"),
             ("finance.payment.delete", "Delete Payments", "finance", "delete"),
             ("finance.payment.approve", "Approve Payments", "finance", "approve"),
-            ("finance.payment.refund", "Refund Payments", "finance", "reject"),
+            ("finance.payment.refund", "Refund Payments", "finance", "refund"),
             ("finance.concession.view", "View Concessions", "finance", "view"),
             ("finance.concession.create", "Create Concessions", "finance", "create"),
             ("finance.concession.approve", "Approve Concessions", "finance", "approve"),
@@ -1148,8 +1156,8 @@ class Permission(models.Model):
             ("library.book.delete", "Delete Books", "library", "delete"),
             ("library.issue.view", "View Book Issues", "library", "view"),
             ("library.issue.create", "Issue Books", "library", "create"),
-            ("library.issue.return", "Return Books", "library", "update"),
-            ("library.issue.overdue", "Manage Overdue", "library", "manage"),
+            ("library.issue.return", "Return Books", "library", "return"),
+            ("library.issue.overdue", "Manage Overdue", "library", "overdue"),
             ("library.export", "Export Library Data", "library", "export"),
             
             # Transport permissions
@@ -1169,7 +1177,7 @@ class Permission(models.Model):
             ("inventory.item.edit", "Edit Inventory Items", "inventory", "edit"),
             ("inventory.item.delete", "Delete Inventory Items", "inventory", "delete"),
             ("inventory.stock.view", "View Stock", "inventory", "view"),
-            ("inventory.stock.adjust", "Adjust Stock", "inventory", "edit"),
+            ("inventory.stock.adjust", "Adjust Stock", "inventory", "adjust"),
             ("inventory.order.view", "View Purchase Orders", "inventory", "view"),
             ("inventory.order.create", "Create Purchase Orders", "inventory", "create"),
             ("inventory.order.approve", "Approve Purchase Orders", "inventory", "approve"),
@@ -1198,7 +1206,7 @@ class Permission(models.Model):
             ("lms.enrollment.manage", "Manage Enrollments", "lms", "manage"),
             ("lms.assignment.view", "View Assignments", "lms", "view"),
             ("lms.assignment.create", "Create Assignments", "lms", "create"),
-            ("lms.assignment.grade", "Grade Assignments", "lms", "approve"),
+            ("lms.assignment.grade", "Grade Assignments", "lms", "grade"),
             ("lms.export", "Export LMS Data", "lms", "export"),
             
             # Communication permissions
@@ -1207,9 +1215,9 @@ class Permission(models.Model):
             ("communication.announcement.edit", "Edit Announcements", "communication", "edit"),
             ("communication.announcement.delete", "Delete Announcements", "communication", "delete"),
             ("communication.message.view", "View Messages", "communication", "view"),
-            ("communication.message.send", "Send Messages", "communication", "create"),
+            ("communication.message.send", "Send Messages", "communication", "send"),
             ("communication.sms.view", "View SMS", "communication", "view"),
-            ("communication.sms.send", "Send SMS", "communication", "create"),
+            ("communication.sms.send", "Send SMS", "communication", "send"),
             ("communication.template.view", "View Templates", "communication", "view"),
             ("communication.template.create", "Create Templates", "communication", "create"),
             ("communication.template.edit", "Edit Templates", "communication", "edit"),
@@ -1248,8 +1256,8 @@ class Permission(models.Model):
             
             # System permissions
             ("system.audit.view", "View Audit Logs", "system", "view"),
-            ("system.backup", "Manage Backups", "system", "manage"),
-            ("system.maintenance", "System Maintenance", "system", "manage"),
+            ("system.backup", "Manage Backups", "system", "backup"),
+            ("system.maintenance", "System Maintenance", "system", "maintenance"),
         ]
 
 

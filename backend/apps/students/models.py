@@ -849,6 +849,15 @@ class Student(SoftDeleteMixin):
             if part
         )
 
+    @property
+    def age(self):
+        if not self.date_of_birth:
+            return None
+        today = timezone.now().date()
+        return today.year - self.date_of_birth.year - (
+            (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
+        )
+
 
 class Enrollment(models.Model):
     

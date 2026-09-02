@@ -32,10 +32,29 @@ class AcademicStructureModelTests(TestCase):
 			start_date=date(2026, 8, 1),
 			end_date=date(2027, 7, 31),
 		)
-		self.subject = Subject.objects.create(name="English", code="ENG-SCHOOL")
+		self.subject = Subject.objects.create(
+			institution=self.school,
+			name="English",
+			code="ENG-SCHOOL",
+		)
 
 	def test_section_names_are_unique_within_a_class(self):
 		duplicate = Section(class_obj=self.class_obj, name="A")
+
+		with self.assertRaises(ValidationError):
+			duplicate.full_clean()
+
+	def test_subject_offering_is_unique_for_class_and_year(self):
+		SubjectOffering.objects.create(
+			subject=self.subject,
+			class_obj=self.class_obj,
+			academic_year=self.year,
+		)
+		duplicate = SubjectOffering(
+			subject=self.subject,
+			class_obj=self.class_obj,
+			academic_year=self.year,
+		)
 
 		with self.assertRaises(ValidationError):
 			duplicate.full_clean()
@@ -89,18 +108,3 @@ class TenantBrandingApiTests(TestCase):
 			"/api/schools/tenant-config/?school_code=missing"
 		)
 		self.assertEqual(missing.status_code, 404)
-
-	def test_subject_offering_is_unique_for_class_and_year(self):
-		SubjectOffering.objects.create(
-			subject=self.subject,
-			class_obj=self.class_obj,
-			academic_year=self.year,
-		)
-		duplicate = SubjectOffering(
-			subject=self.subject,
-			class_obj=self.class_obj,
-			academic_year=self.year,
-		)
-
-		with self.assertRaises(ValidationError):
-			duplicate.full_clean()

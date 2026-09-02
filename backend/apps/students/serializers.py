@@ -959,7 +959,7 @@ class Student360Serializer(serializers.ModelSerializer):
     
     # Parents/Guardians
     guardian_details = GuardianSerializer(source="guardian", read_only=True)
-    guardian_links = StudentGuardianSerializer(source="guardian_links", many=True, read_only=True)
+    guardian_links = StudentGuardianSerializer(many=True, read_only=True)
     
     # Current enrollment
     current_enrollment = serializers.SerializerMethodField()
@@ -1319,16 +1319,17 @@ class Student360Serializer(serializers.ModelSerializer):
     def get_fee_balance(self, obj):
         """Get total fee balance for the student."""
         from apps.finance.models import Invoice
-        from django.db.models import Sum
-        
-        balance = Invoice.objects.filter(
+        from decimal import Decimal
+
+        invoices = Invoice.objects.filter(
             student=obj,
-            status__in=["issued", "partial", "overdue"]
-        ).aggregate(
-            total_balance=Sum("balance")
-        )["total_balance"]
-        
-        return float(balance or 0)
+            status__in=["issued", "partial", "overdue"],
+        )
+        total = sum(
+            (inv.balance for inv in invoices),
+            Decimal("0.00"),
+        )
+        return float(total)
 
     def get_book_issues(self, obj):
         """Get current and past book issues."""
@@ -1338,7 +1339,7 @@ class Student360Serializer(serializers.ModelSerializer):
             issues = BookIssue.objects.filter(
                 student=obj
             ).select_related(
-                "book_copy__book", "issued_by"
+                "book_copy__book", "teacher"
             ).order_by("-issue_date")
             
             return [
@@ -1420,7 +1421,7 @@ class Student360Serializer(serializers.ModelSerializer):
         """Get discipline summary."""
         try:
             from apps.discipline.models import Incident
-            from django.db.models import Sum, Count
+            from django.db.models import Q, Sum, Count
             
             incidents = Incident.objects.filter(student=obj)
             

@@ -69,7 +69,7 @@ urlpatterns = [
         name="admission-list",
     ),
     path(
-        "<int:pk>/360/",
+        "<int:student_id>/360/",
         Student360View.as_view(),
         name="student-360",
     ),
@@ -173,7 +173,7 @@ urlpatterns = [
         name="student-activate",
     ),
     path(
-        "<int:pk>/360/",
+        "<int:student_id>/360/",
         Student360View.as_view(),
         name="student-360",
     ),

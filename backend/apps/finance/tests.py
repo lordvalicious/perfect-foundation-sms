@@ -1,10 +1,22 @@
 from datetime import date, timedelta
 from decimal import Decimal
 
+import base64
+import re
+import zlib
+
 from django.core.exceptions import ValidationError
 from django.test import TestCase
+from rest_framework.test import APIRequestFactory
 
-from apps.accounts.models import InstitutionMembership, Role, RoleAssignment, User
+from apps.accounts.access import apply_campus_scope
+from apps.accounts.models import (
+    InstitutionMembership,
+    Role,
+    RoleAssignment,
+    StaffProfile,
+    User,
+)
 from apps.finance.late_fee_service import apply_late_fees
 from apps.finance.models import (
     Account,
@@ -73,6 +85,29 @@ def create_base_school():
         "enrollment": enrollment,
         "category": category,
     }
+
+
+def pdf_contains_text(pdf_bytes, text):
+    """True when ``text`` appears in any decoded content stream of a PDF.
+
+    ReportLab writes text into compressed (FlateDecode) streams, so a raw
+    byte search never matches. Decompresses ASCII85 + Flate streams and
+    checks each for the needle.
+    """
+    needle = text.encode()
+    for block in re.finditer(rb"stream\r?\n(.*?)endstream", pdf_bytes, re.DOTALL):
+        raw = block.group(1).strip()
+        try:
+            data = base64.a85decode(raw, adobe=True)
+        except Exception:
+            data = raw
+        try:
+            data = zlib.decompress(data)
+        except Exception:
+            pass
+        if needle in data:
+            return True
+    return False
 
 
 class FinanceModelTests(TestCase):
@@ -621,6 +656,7 @@ class OutstandingBalanceTests(TestCase):
         # Create paid invoice
         paid_invoice = Invoice.objects.create(
             invoice_number="INV-PAID-001",
+            institution=self.school,
             student=self.student,
             enrollment=self.enrollment,
             academic_year=self.year,
@@ -642,6 +678,7 @@ class OutstandingBalanceTests(TestCase):
         # Create outstanding invoice
         outstanding_invoice = Invoice.objects.create(
             invoice_number="INV-OUT-001",
+            institution=self.school,
             student=self.student,
             enrollment=self.enrollment,
             academic_year=self.year,
@@ -656,6 +693,7 @@ class OutstandingBalanceTests(TestCase):
         # Create overdue invoice
         overdue_invoice = Invoice.objects.create(
             invoice_number="INV-OVD-001",
+            institution=self.school,
             student=self.student,
             enrollment=self.enrollment,
             academic_year=self.year,
@@ -680,6 +718,7 @@ class OutstandingBalanceTests(TestCase):
         for i in range(3):
             inv = Invoice.objects.create(
                 invoice_number=f"INV-SUM-{i}",
+                institution=self.school,
                 student=self.student,
                 enrollment=self.enrollment,
                 academic_year=self.year,
@@ -719,6 +758,7 @@ class PaymentIntegrityTests(TestCase):
 
         self.invoice = Invoice.objects.create(
             invoice_number="INV-PAY-001",
+            institution=self.school,
             student=self.student,
             enrollment=self.enrollment,
             academic_year=self.year,
@@ -730,18 +770,51 @@ class PaymentIntegrityTests(TestCase):
             invoice=self.invoice, category=self.category, description="Tuition", amount=Decimal("1000.00")
         )
 
-    def test_payment_audit_trail(self):
-        """Test payment creates audit record."""
-        payment = Payment.objects.create(
-            receipt_number="RCPT-AUDIT-001",
-            invoice=self.invoice,
-            amount=Decimal("500.00"),
-            payment_date=date.today(),
-            payment_method="cash",
-            status="completed",
-        )
+    def _admin_request(self):
+        from django.test import RequestFactory
 
+        if not hasattr(self, "_admin_user"):
+            self._admin_user = User.objects.create_user(
+                username="fin-admin",
+                email="fin-admin@test.edu",
+                password="pass",
+                is_superuser=True,
+            )
+
+        request = RequestFactory().post("/")
+        request.user = self._admin_user
+        request.institution = self.school
+        request.query_params = {}
+        return request
+
+    def _create_payment(self, amount, receipt):
+        from apps.finance.serializers import PaymentCreateSerializer
+        from apps.finance.views import PaymentCreateView
+
+        request = self._admin_request()
+        serializer = PaymentCreateSerializer(
+            data={
+                "invoice": self.invoice.pk,
+                "amount": amount,
+                "payment_date": date.today().isoformat(),
+                "payment_method": "cash",
+            },
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        view = PaymentCreateView()
+        view.request = request
+        view.perform_create(serializer)
+        payment = serializer.instance
+        self.assertIsNotNone(payment)
+        return payment
+
+    def test_payment_audit_trail(self):
+        """Test payment through the view path creates an audit record."""
         from apps.audit.models import AuditLog
+
+        payment = self._create_payment(Decimal("500.00"), "RCPT-AUDIT-001")
+
         audit = AuditLog.objects.filter(
             model_name="Payment", object_id=str(payment.pk)
         ).first()
@@ -749,25 +822,28 @@ class PaymentIntegrityTests(TestCase):
         self.assertEqual(audit.action, "payment")
 
     def test_payment_reversal_audit_trail(self):
-        """Test payment reversal creates audit record."""
-        payment = Payment.objects.create(
-            receipt_number="RCPT-REV-001",
-            invoice=self.invoice,
-            amount=Decimal("500.00"),
-            payment_date=date.today(),
-            payment_method="cash",
-            status="completed",
-        )
-
-        from apps.finance.models import PaymentReversal
-        reversal = PaymentReversal.objects.create(
-            institution=self.school,
-            payment=payment,
-            amount=Decimal("500.00"),
-            reason="Customer request",
-        )
-
+        """Test payment reversal through the view path creates an audit record."""
         from apps.audit.models import AuditLog
+        from apps.finance.serializers import PaymentReversalSerializer
+        from apps.finance.views import PaymentReversalCreateView
+
+        payment = self._create_payment(Decimal("500.00"), "RCPT-REV-001")
+
+        request = self._admin_request()
+        serializer = PaymentReversalSerializer(
+            data={
+                "payment": payment.pk,
+                "amount": Decimal("500.00"),
+                "reason": "Customer request",
+            },
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        view = PaymentReversalCreateView()
+        view.request = request
+        view.perform_create(serializer)
+        reversal = serializer.instance
+
         audit = AuditLog.objects.filter(
             model_name="PaymentReversal", object_id=str(reversal.pk)
         ).first()
@@ -775,24 +851,28 @@ class PaymentIntegrityTests(TestCase):
         self.assertEqual(audit.action, "payment_reversal")
 
     def test_payment_refund_audit_trail(self):
-        """Test payment refund creates audit record."""
-        payment = Payment.objects.create(
-            receipt_number="RCPT-REF-001",
-            invoice=self.invoice,
-            amount=Decimal("1000.00"),
-            payment_date=date.today(),
-            payment_method="cash",
-            status="completed",
-        )
-
-        refund = PaymentRefund.objects.create(
-            institution=self.school,
-            payment=payment,
-            amount=Decimal("500.00"),
-            reason="Partial refund",
-        )
-
+        """Test payment refund through the view path creates an audit record."""
         from apps.audit.models import AuditLog
+        from apps.finance.serializers import PaymentRefundSerializer
+        from apps.finance.views import PaymentRefundCreateView
+
+        payment = self._create_payment(Decimal("1000.00"), "RCPT-REF-001")
+
+        request = self._admin_request()
+        serializer = PaymentRefundSerializer(
+            data={
+                "payment": payment.pk,
+                "amount": Decimal("500.00"),
+                "reason": "Partial refund",
+            },
+            context={"request": request},
+        )
+        serializer.is_valid(raise_exception=True)
+        view = PaymentRefundCreateView()
+        view.request = request
+        view.perform_create(serializer)
+        refund = serializer.instance
+
         audit = AuditLog.objects.filter(
             model_name="PaymentRefund", object_id=str(refund.pk)
         ).first()
@@ -892,16 +972,19 @@ class SecurityAccessTests(TestCase):
             amount=Decimal("12000.00"),
         )
 
-        # User A should only see School A fee structures
-        from apps.accounts.access import apply_campus_scope
-        from rest_framework.test import APIRequestFactory
-
+        # FeeStructure links to an institution through academic_year.school,
+        # so institution scoping must use that resolvable path.
         request = APIRequestFactory().get("/")
         request.user = self.user_a
         request.institution = self.school_a
         request.query_params = {}
 
-        qs = apply_campus_scope(FeeStructure.objects.all(), request, "campus_id")
+        qs = apply_campus_scope(
+            FeeStructure.objects.all(),
+            request,
+            "campus_id",
+            institution_field="academic_year__school_id",
+        )
         self.assertEqual(qs.count(), 1)
         self.assertEqual(qs.first().pk, fs_a.pk)
 
@@ -961,7 +1044,7 @@ class SecurityAccessTests(TestCase):
         request = APIRequestFactory().get("/")
         request.user = self.user_a
         request.institution = self.school_a
-        request.query_params = {}
+        request.query_params = {"campus": str(self.campus_a1.pk)}
 
         # Create staff profile with campus A1
         StaffProfile.objects.create(
@@ -994,11 +1077,15 @@ class SecurityAccessTests(TestCase):
         )
         invoice_a = Invoice.objects.create(
             invoice_number="INV-A-001",
+            institution=self.school_a,
             student=student_a,
             enrollment=enrollment_a,
             academic_year=self.year_a,
             issue_date=date.today(),
             due_date=date.today() + timedelta(days=30),
+        )
+        InvoiceItem.objects.create(
+            invoice=invoice_a, category=self.category_a, description="Tuition", amount=Decimal("1000.00")
         )
         payment = Payment.objects.create(
             receipt_number="RCPT-A-001",
@@ -1090,7 +1177,7 @@ class ReceiptTests(TestCase):
         pdf_bytes = payment_receipt_pdf(payment)
         self.assertIsInstance(pdf_bytes, bytes)
         self.assertTrue(pdf_bytes.startswith(b"%PDF"))
-        self.assertIn(b"RCPT-TEST-001", pdf_bytes)
+        self.assertTrue(pdf_contains_text(pdf_bytes, "RCPT-TEST-001"))
 
 
 class ConcessionTests(TestCase):
@@ -1227,7 +1314,12 @@ class ExpenseTests(TestCase):
         from django.test import RequestFactory
 
         request = RequestFactory().post("/")
-        request.user = User.objects.create_user(username="acct", email="acct@test.edu", password="pass")
+        request.user = User.objects.create_user(
+            username="acct",
+            email="acct@test.edu",
+            password="pass",
+            is_superuser=True,
+        )
         request.institution = self.school
 
         view = ExpensePostView()

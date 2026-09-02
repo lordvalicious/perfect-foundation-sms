@@ -497,11 +497,17 @@ class ExamResultIsolationTests(CampusIsolationBase):
         self.exam_b = self._make_exam(
             "Midterm B", self.campus_b, self.class_b
         )
+        subject_b = Subject.objects.create(
+            institution=self.school, name="Math B", code="MATH-B"
+        )
+        SubjectOffering.objects.create(
+            subject=subject_b,
+            class_obj=self.class_b,
+            academic_year=self.year,
+        )
         self.exam_subject_b = ExamSubject.objects.create(
             exam=self.exam_b,
-            subject=Subject.objects.create(
-                institution=self.school, name="Math B", code="MATH-B"
-            ),
+            subject=subject_b,
             maximum_marks=100,
             passing_marks=40,
         )

@@ -3,6 +3,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.test import TestCase
+from rest_framework.test import APIClient
 
 from apps.accounts.models import InstitutionMembership, Role, RoleAssignment, User
 from apps.schools.models import AcademicUnit, AcademicYear, Campus, Class, School, Section
@@ -448,6 +449,7 @@ class Student360APITests(TestCase):
             date_of_birth=date(2010, 1, 1),
             gender="male",
             guardian=self.guardian,
+            institution=self.school,
         )
         self.admin = User.objects.create_user(
             username="admin",
@@ -563,6 +565,7 @@ class Student360APITests(TestCase):
             last_name="Student",
             gender="female",
             guardian=self.guardian,
+            institution=self.school,
         )
         
         self.student.user = User.objects.create_user(

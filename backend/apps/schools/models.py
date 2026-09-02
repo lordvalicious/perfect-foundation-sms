@@ -283,6 +283,21 @@ class Section(models.Model):
     class Meta:
         ordering = ["class_obj__name", "name"]
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+
+        if self.class_obj_id and self.name:
+            qs = Section.objects.filter(
+                class_obj_id=self.class_obj_id,
+                name=self.name,
+            )
+            if self.pk:
+                qs = qs.exclude(pk=self.pk)
+            if qs.exists():
+                raise ValidationError(
+                    {"name": "A section with this name already exists in this class."}
+                )
+
     def __str__(self):
         return self.name
 

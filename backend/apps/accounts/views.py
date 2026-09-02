@@ -202,12 +202,6 @@ class LoginView(APIView):
                 if user is not None:
                     record_failed_login(request, user, identifier)
 
-                record_audit(
-                    request=request,
-                    action="login_failed",
-                    details={"username": identifier},
-                )
-
             raise
 
         user = serializer.validated_data["user"]

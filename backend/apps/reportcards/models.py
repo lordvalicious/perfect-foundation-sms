@@ -451,6 +451,18 @@ class ReportCard(models.Model):
         """
         self._transition("published", user=user)
 
+        # Best-effort guardian notifications (scheduled outbox, retried
+        # by the cron processor). Publishing must never fail on notify.
+        try:
+            from apps.communication.notification_queue import notify_result_published
+
+            notify_result_published(self, user=user)
+        except Exception:
+            logger.exception(
+                "Failed to enqueue result notifications for report card %s",
+                self.pk,
+            )
+
     def lock(self, user=None):
         """Move a report card to the terminal locked state.
 

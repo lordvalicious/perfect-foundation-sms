@@ -28,7 +28,7 @@ class TimetableModelTests(TestCase):
 			start_date=date(2026, 8, 1),
 			end_date=date(2027, 7, 31),
 		)
-		subject = Subject.objects.create(name="English", code="ENG-TT")
+		subject = Subject.objects.create(institution=school, name="English", code="ENG-TT")
 		SubjectOffering.objects.create(
 			subject=subject,
 			class_obj=class_obj,
