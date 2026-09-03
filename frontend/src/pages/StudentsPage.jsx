@@ -91,6 +91,24 @@ import ProfileModal from "./ProfileModal";
   .btn-delete {
     color: var(--danger);
   }
+  .field-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+  }
+  .quick-add-link {
+    background: none;
+    border: none;
+    color: var(--primary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+  }
+  .quick-add-link:hover {
+    color: var(--primary-dark);
+  }
 `}</style>
 
 const STUDENTS_API_URL = "/api/students/";
@@ -273,6 +291,123 @@ function StudentsPage() {
     campusOptions.forEach((campus) => {
       fetchCampusStudents(campus.id, pageNumber);
     });
+  };
+
+  const loadSectionOptions = () =>
+    fetch("/api/schools/sections/", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => setSectionOptions(Array.isArray(data) ? data : []))
+      .catch(() => {});
+
+  const loadClassOptions = () =>
+    fetch("/api/schools/classes/", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => setClassOptions(Array.isArray(data) ? data : []))
+      .catch(() => {});
+
+  const loadYearOptions = () =>
+    fetch("/api/schools/academic-years/", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => setYearOptions(Array.isArray(data) ? data : []))
+      .catch(() => {});
+
+  const loadUnitOptions = () =>
+    fetch("/api/schools/units/", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => setUnitOptions(Array.isArray(data) ? data : []))
+      .catch(() => {});
+
+  const [unitOptions, setUnitOptions] = useState([]);
+  const [quickAdd, setQuickAdd] = useState("");
+  const [quickForm, setQuickForm] = useState({ name: "", start_date: "", end_date: "", unit: "", class_obj: "", capacity: 30 });
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickError, setQuickError] = useState("");
+
+  const setQuickField = (name) => (event) => {
+    setQuickForm((prev) => ({ ...prev, [name]: event.target.value }));
+  };
+
+  const openQuick = (kind) => {
+    setQuickError("");
+    setQuickForm({ name: "", start_date: "", end_date: "", unit: "", class_obj: "", capacity: 30 });
+    setQuickAdd(kind);
+  };
+
+  const submitQuickAdd = async (event) => {
+    event.preventDefault();
+    setQuickError("");
+    setQuickSaving(true);
+    try {
+      const postJson = async (url, payload) => {
+        const res = await fetch(url, {
+          method: "POST",
+          credentials: "include",
+          headers: jsonHeaders(),
+          body: JSON.stringify(payload),
+        });
+        const text = await res.text();
+        let data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
+        if (!res.ok) {
+          const parts = Object.entries(data)
+            .map(([f, v]) => `${f}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
+            .filter((x) => x && !x.startsWith("undefined"));
+          throw new Error(parts.length ? parts.join(" | ") : `Request failed (${res.status})`);
+        }
+        return data;
+      };
+
+      if (quickAdd === "year") {
+        if (!quickForm.name.trim() || !quickForm.start_date || !quickForm.end_date) {
+          setQuickError("Name, start and end dates are required.");
+          return;
+        }
+        await postJson("/api/schools/academic-years/", {
+          name: quickForm.name.trim(),
+          start_date: quickForm.start_date,
+          end_date: quickForm.end_date,
+          status: "active",
+        });
+        await loadYearOptions();
+        setQuickAdd("");
+        return;
+      }
+
+      if (quickAdd === "class") {
+        if (!quickForm.unit || !quickForm.name.trim()) {
+          setQuickError("Select a unit and enter a class name.");
+          return;
+        }
+        await postJson("/api/schools/classes/", {
+          unit: Number(quickForm.unit),
+          name: quickForm.name.trim(),
+        });
+        await loadUnitOptions();
+        await loadClassOptions();
+        setQuickAdd("");
+        setForm((prev) => ({ ...prev, class_obj: "", section: "" }));
+        return;
+      }
+
+      if (quickAdd === "section") {
+        if (!quickForm.class_obj || !quickForm.name.trim()) {
+          setQuickError("Select a class and enter a section name.");
+          return;
+        }
+        await postJson("/api/schools/sections/", {
+          class_obj: Number(quickForm.class_obj),
+          name: quickForm.name.trim(),
+          capacity: Number(quickForm.capacity) || 30,
+        });
+        await loadSectionOptions();
+        setQuickAdd("");
+        return;
+      }
+    } catch (err) {
+      setQuickError(err.message);
+    } finally {
+      setQuickSaving(false);
+    }
   };
 
   useEffect(() => {
@@ -1578,7 +1713,10 @@ function StudentsPage() {
                   </label>
 
                   <label>
-                    Academic Year
+                    <span className="field-label-row">
+                      <span>Academic Year</span>
+                      <button type="button" className="quick-add-link" onClick={() => openQuick("year")}>+ Add</button>
+                    </span>
                     <select
                       name="academic_year"
                       value={form.academic_year}
@@ -1601,7 +1739,10 @@ function StudentsPage() {
                   </label>
 
                   <label>
-                    Class
+                    <span className="field-label-row">
+                      <span>Class</span>
+                      <button type="button" className="quick-add-link" onClick={() => { loadUnitOptions(); openQuick("class"); }}>+ Add</button>
+                    </span>
                     <select
                       name="class_obj"
                       value={form.class_obj}
@@ -1631,7 +1772,10 @@ function StudentsPage() {
                   </label>
 
                   <label>
-                    Section
+                    <span className="field-label-row">
+                      <span>Section</span>
+                      <button type="button" className="quick-add-link" onClick={() => openQuick("section")}>+ Add</button>
+                    </span>
                     <select
                       name="section"
                       value={form.section}
@@ -1661,6 +1805,75 @@ function StudentsPage() {
                   </label>
                 </div>
               </div>
+
+              {quickAdd && (
+                <div className="form-section" style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
+                  <h4 style={{ marginBottom: 12 }}>Quick Add: {quickAdd === "year" ? "Academic Year" : quickAdd === "class" ? "Class" : "Section"}</h4>
+                  <form onSubmit={submitQuickAdd} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {quickAdd === "year" && (
+                      <>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Year name *</span>
+                          <input name="name" value={quickForm.name} onChange={setQuickField("name")} placeholder="e.g. 2026-2027" />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Start date *</span>
+                          <input type="date" name="start_date" value={quickForm.start_date} onChange={setQuickField("start_date")} />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>End date *</span>
+                          <input type="date" name="end_date" value={quickForm.end_date} onChange={setQuickField("end_date")} />
+                        </label>
+                      </>
+                    )}
+                    {quickAdd === "class" && (
+                      <>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Academic unit *</span>
+                          <select name="unit" value={quickForm.unit} onChange={setQuickField("unit")}>
+                            <option value="">Select unit</option>
+                            {unitOptions.map((u) => (
+                              <option key={u.id} value={u.id}>
+                                {u.campus_name ? `${u.campus_name} — ` : ""}{u.name}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Class name *</span>
+                          <input name="name" value={quickForm.name} onChange={setQuickField("name")} placeholder="e.g. Grade 7" />
+                        </label>
+                      </>
+                    )}
+                    {quickAdd === "section" && (
+                      <>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Class *</span>
+                          <select name="class_obj" value={quickForm.class_obj} onChange={setQuickField("class_obj")}>
+                            <option value="">Select class</option>
+                            {classOptions.map((c) => (
+                              <option key={c.id} value={c.id}>{c.name}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Section name *</span>
+                          <input name="name" value={quickForm.name} onChange={setQuickField("name")} placeholder="e.g. A" />
+                        </label>
+                        <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          <span style={{ fontSize: 13, color: "var(--text-muted)" }}>Capacity</span>
+                          <input type="number" name="capacity" value={quickForm.capacity} onChange={setQuickField("capacity")} />
+                        </label>
+                      </>
+                    )}
+                    {quickError && <div style={{ color: "var(--danger)", fontSize: 13 }}>{quickError}</div>}
+                    <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
+                      <button type="button" className="secondary-button" onClick={() => setQuickAdd("")} disabled={quickSaving}>Cancel</button>
+                      <button type="submit" className="primary-button" disabled={quickSaving}>{quickSaving ? "Saving..." : "Save"}</button>
+                    </div>
+                  </form>
+                </div>
+              )}
 
               <div className="form-section">
                 <h4>Contact Information</h4>

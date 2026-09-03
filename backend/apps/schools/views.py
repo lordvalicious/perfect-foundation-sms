@@ -223,7 +223,13 @@ class CampusViewSet(
         )
 
 
-class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
+def _raise_parent_not_in_school(label):
+    raise serializers.ValidationError(
+        {label: f"Selected {label} does not belong to your school."}
+    )
+
+
+class AcademicUnitListView(NoPaginationMixin, generics.ListCreateAPIView):
     serializer_class = AcademicUnitSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -242,8 +248,20 @@ class AcademicUnitListView(NoPaginationMixin, generics.ListAPIView):
 
         return queryset
 
+    def perform_create(self, serializer):
+        campus_id = serializer.validated_data.get("campus")
+        ok = campus_id and Campus.objects.filter(
+            pk=campus_id.pk,
+            school=self.request.institution,
+        ).exists()
 
-class ClassListView(NoPaginationMixin, generics.ListAPIView):
+        if not ok:
+            _raise_parent_not_in_school("campus")
+
+        serializer.save()
+
+
+class ClassListView(NoPaginationMixin, generics.ListCreateAPIView):
     serializer_class = ClassSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -267,8 +285,20 @@ class ClassListView(NoPaginationMixin, generics.ListAPIView):
 
         return queryset
 
+    def perform_create(self, serializer):
+        unit = serializer.validated_data.get("unit")
+        ok = unit and AcademicUnit.objects.filter(
+            pk=unit.pk,
+            campus__school=self.request.institution,
+        ).exists()
 
-class SectionListView(NoPaginationMixin, generics.ListAPIView):
+        if not ok:
+            _raise_parent_not_in_school("unit")
+
+        serializer.save()
+
+
+class SectionListView(NoPaginationMixin, generics.ListCreateAPIView):
     serializer_class = SectionSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -294,8 +324,20 @@ class SectionListView(NoPaginationMixin, generics.ListAPIView):
 
         return queryset
 
+    def perform_create(self, serializer):
+        class_obj = serializer.validated_data.get("class_obj")
+        ok = class_obj and Class.objects.filter(
+            pk=class_obj.pk,
+            unit__campus__school=self.request.institution,
+        ).exists()
 
-class AcademicYearListView(NoPaginationMixin, generics.ListAPIView):
+        if not ok:
+            _raise_parent_not_in_school("class_obj")
+
+        serializer.save()
+
+
+class AcademicYearListView(NoPaginationMixin, generics.ListCreateAPIView):
     serializer_class = AcademicYearSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -304,8 +346,11 @@ class AcademicYearListView(NoPaginationMixin, generics.ListAPIView):
             school=self.request.institution
         ).select_related("school").order_by("-start_date")
 
+    def perform_create(self, serializer):
+        serializer.save(school=self.request.institution)
 
-class TermListView(NoPaginationMixin, generics.ListAPIView):
+
+class TermListView(NoPaginationMixin, generics.ListCreateAPIView):
     serializer_class = TermSerializer
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
@@ -315,6 +360,18 @@ class TermListView(NoPaginationMixin, generics.ListAPIView):
         ).select_related("academic_year").order_by(
             "academic_year", "start_date"
         )
+
+    def perform_create(self, serializer):
+        academic_year = serializer.validated_data.get("academic_year")
+        ok = academic_year and AcademicYear.objects.filter(
+            pk=academic_year.pk,
+            school=self.request.institution,
+        ).exists()
+
+        if not ok:
+            _raise_parent_not_in_school("academic_year")
+
+        serializer.save()
 
 
 class SubjectListView(NoPaginationMixin, generics.ListAPIView):

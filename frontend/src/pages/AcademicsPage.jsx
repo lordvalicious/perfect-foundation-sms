@@ -3,6 +3,7 @@ import {
   BookOpen,
   CalendarDays,
   GraduationCap,
+  Plus,
   School,
   Search,
 } from "lucide-react";
@@ -15,6 +16,7 @@ const TERMS_URL = "/api/schools/terms/";
 const CAMPUSES_URL = "/api/schools/campuses/";
 const CLASSES_URL = "/api/schools/classes/";
 const SECTIONS_URL = "/api/schools/sections/";
+const UNITS_URL = "/api/schools/units/";
 const SUBJECTS_URL = "/api/schools/subjects/";
 const OFFERINGS_URL = "/api/schools/offerings/";
 const EVENTS_URL = "/api/events/";
@@ -33,6 +35,42 @@ const EMPTY_PROMO = {
   effective_date: "",
 };
 
+function CreateModal({ title, subtitle, onClose, onSubmit, saving, children }) {
+  return (
+    <div
+      className="modal-overlay"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !saving) onClose();
+      }}
+    >
+      <div className="teacher-modal">
+        <div className="modal-header">
+          <div>
+            <h3>{title}</h3>
+            {subtitle && <p className="hint" style={{ margin: "2px 0 0" }}>{subtitle}</p>}
+          </div>
+          <button className="modal-close" onClick={onClose} disabled={saving}>×</button>
+        </div>
+        <form onSubmit={onSubmit}>
+          <div className="modal-body">
+            <div className="form-grid" style={{ gridTemplateColumns: "1fr" }}>
+              {children}
+            </div>
+          </div>
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={onClose} disabled={saving}>
+              Cancel
+            </button>
+            <button type="submit" className="primary-button" disabled={saving}>
+              {saving ? "Saving..." : "Save"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function AcademicsPage() {
   const [tab, setTab] = useState("calendar");
 
@@ -49,6 +87,7 @@ export default function AcademicsPage() {
   const [offerings, setOfferings] = useState([]);
   const [events, setEvents] = useState([]);
   const [students, setStudents] = useState([]);
+  const [units, setUnits] = useState([]);
 
   const [structureCampus, setStructureCampus] = useState("");
   const [structureClass, setStructureClass] = useState("");
@@ -58,6 +97,34 @@ export default function AcademicsPage() {
   const [studentSearch, setStudentSearch] = useState("");
   const [promoting, setPromoting] = useState(false);
   const [promoResult, setPromoResult] = useState("");
+
+  const [showYear, setShowYear] = useState(false);
+  const [showTerm, setShowTerm] = useState(false);
+  const [showUnit, setShowUnit] = useState(false);
+  const [showClass, setShowClass] = useState(false);
+  const [showSection, setShowSection] = useState(false);
+  const [savingCreate, setSavingCreate] = useState(false);
+  const [createError, setCreateError] = useState("");
+
+  const [yearForm, setYearForm] = useState({ name: "", start_date: "", end_date: "", status: "active" });
+  const [termForm, setTermForm] = useState({ academic_year: "", name: "", start_date: "", end_date: "" });
+  const [unitForm, setUnitForm] = useState({ campus: "", name: "" });
+  const [classForm, setClassForm] = useState({ unit: "", name: "", level: "" });
+  const [sectionForm, setSectionForm] = useState({ class_obj: structureClass, name: "", capacity: 30 });
+
+  const setCreateField = (setter, name) => (event) => {
+    setter((prev) => ({ ...prev, [name]: event.target.value }));
+  };
+
+  const closeCreate = () => {
+    if (savingCreate) return;
+    setShowYear(false);
+    setShowTerm(false);
+    setShowUnit(false);
+    setShowClass(false);
+    setShowSection(false);
+    setCreateError("");
+  };
 
   const loadAll = useCallback(() => {
     setLoading(true);
@@ -69,17 +136,19 @@ export default function AcademicsPage() {
       fetch(CAMPUSES_URL, { credentials: "include" }).then(toListOrEmpty),
       fetch(`${CLASSES_URL}?page_size=500`, { credentials: "include" }).then(toListOrEmpty),
       fetch(`${SECTIONS_URL}?page_size=500`, { credentials: "include" }).then(toListOrEmpty),
+      fetch(`${UNITS_URL}?page_size=500`, { credentials: "include" }).then(toListOrEmpty),
       fetch(`${SUBJECTS_URL}?page_size=500`, { credentials: "include" }).then(toListOrEmpty),
       fetch(`${OFFERINGS_URL}?page_size=500`, { credentials: "include" }).then(toListOrEmpty),
       fetch(`${EVENTS_URL}?page_size=200`, { credentials: "include" }).then(toListOrEmpty),
       fetch(`${STUDENTS_URL}?page_size=500`, { credentials: "include" }).then(toListOrEmpty),
     ])
-      .then(([y, t, c, cl, se, su, of, ev, st]) => {
+      .then(([y, t, c, cl, se, un, su, of, ev, st]) => {
         setYears(emptyList(y));
         setTerms(emptyList(t));
         setCampuses(emptyList(c));
         setClasses(emptyList(cl));
         setSections(emptyList(se));
+        setUnits(emptyList(un));
         setSubjects(emptyList(su));
         setOfferings(emptyList(of));
         setEvents(emptyList(ev));
@@ -174,10 +243,132 @@ export default function AcademicsPage() {
     }
   };
 
+  const createApi = async (url, body, resetForm, message) => {
+    setError("");
+    setCreateError("");
+    setSavingCreate(true);
+    try {
+      await apiFetch(url, {
+        method: "POST",
+        headers: jsonHeaders(),
+        body: JSON.stringify(body),
+      });
+      setNotice(message);
+      resetForm();
+      closeCreate();
+      await loadAll();
+    } catch (requestError) {
+      setCreateError(requestError.message);
+    } finally {
+      setSavingCreate(false);
+    }
+  };
+
+  const submitYear = (event) => {
+    event.preventDefault();
+    if (!yearForm.name || !yearForm.start_date || !yearForm.end_date) {
+      setCreateError("Name, start and end dates are required.");
+      return;
+    }
+    createApi(
+      YEARS_URL,
+      {
+        name: yearForm.name,
+        start_date: yearForm.start_date,
+        end_date: yearForm.end_date,
+        status: yearForm.status,
+      },
+      () => setYearForm({ name: "", start_date: "", end_date: "", status: "active" }),
+      "Academic year created."
+    );
+  };
+
+  const submitTerm = (event) => {
+    event.preventDefault();
+    if (!termForm.academic_year || !termForm.name || !termForm.start_date || !termForm.end_date) {
+      setCreateError("Year, name, start and end dates are required.");
+      return;
+    }
+    createApi(
+      TERMS_URL,
+      {
+        academic_year: Number(termForm.academic_year),
+        name: termForm.name,
+        start_date: termForm.start_date,
+        end_date: termForm.end_date,
+      },
+      () => setTermForm({ academic_year: "", name: "", start_date: "", end_date: "" }),
+      "Term created."
+    );
+  };
+
+  const submitUnit = (event) => {
+    event.preventDefault();
+    if (!unitForm.campus || !unitForm.name.trim()) {
+      setCreateError("Select a campus and enter a unit name.");
+      return;
+    }
+    createApi(
+      "/api/schools/units/",
+      { campus: Number(unitForm.campus), name: unitForm.name.trim() },
+      () => setUnitForm({ campus: "", name: "" }),
+      "Academic unit created."
+    );
+  };
+
+  const submitClass = (event) => {
+    event.preventDefault();
+    if (!classForm.unit || !classForm.name.trim()) {
+      setCreateError("Select a unit and enter a class name.");
+      return;
+    }
+    createApi(
+      CLASSES_URL,
+      {
+        unit: Number(classForm.unit),
+        name: classForm.name.trim(),
+        level: classForm.level ? Number(classForm.level) : null,
+      },
+      () => setClassForm({ unit: "", name: "", level: "" }),
+      "Class created."
+    );
+  };
+
+  const submitSection = (event) => {
+    event.preventDefault();
+    if (!sectionForm.class_obj || !sectionForm.name.trim()) {
+      setCreateError("Select a class and enter a section name.");
+      return;
+    }
+    createApi(
+      SECTIONS_URL,
+      {
+        class_obj: Number(sectionForm.class_obj),
+        name: sectionForm.name.trim(),
+        capacity: sectionForm.capacity ? Number(sectionForm.capacity) : 30,
+      },
+      () => setSectionForm({ class_obj: structureClass, name: "", capacity: 30 }),
+      "Section created."
+    );
+  };
+
   const renderCalendar = () => (
     <>
       <div className="panel">
-        <PanelHeader title="Academic Sessions" count={`${years.length} years · ${terms.length} terms`} />
+        <PanelHeader
+          title="Academic Sessions"
+          count={`${years.length} years · ${terms.length} terms`}
+          action={
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button type="button" className="secondary-button secondary-button-sm" onClick={() => { setCreateError(""); setShowYear(true); }}>
+                <Plus size={13} style={{ verticalAlign: -2, marginRight: 4 }} /> Add Year
+              </button>
+              <button type="button" className="secondary-button secondary-button-sm" onClick={() => { setCreateError(""); setShowTerm(true); }}>
+                <Plus size={13} style={{ verticalAlign: -2, marginRight: 4 }} /> Add Term
+              </button>
+            </div>
+          }
+        />
         {years.length === 0 ? (
           <div className="state-card">No academic years configured.</div>
         ) : (
@@ -277,7 +468,20 @@ export default function AcademicsPage() {
         </div>
 
         <div className="panel">
-          <PanelHeader title="Classes" count={`${visibleClasses.length} classes`} />
+          <PanelHeader
+            title="Classes"
+            count={`${visibleClasses.length} classes`}
+            action={
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" className="secondary-button secondary-button-sm" onClick={() => { setCreateError(""); setShowUnit(true); }}>
+                  <Plus size={13} style={{ verticalAlign: -2, marginRight: 4 }} /> Add Unit
+                </button>
+                <button type="button" className="secondary-button secondary-button-sm" onClick={() => { setCreateError(""); setShowClass(true); }}>
+                  <Plus size={13} style={{ verticalAlign: -2, marginRight: 4 }} /> Add Class
+                </button>
+              </div>
+            }
+          />
           {visibleClasses.length === 0 ? (
             <div className="state-card">No classes found.</div>
           ) : (
@@ -312,7 +516,23 @@ export default function AcademicsPage() {
 
         {selectedClass && (
           <div className="panel">
-            <PanelHeader title={`Sections — ${selectedClass.name}`} count={`${visibleSections.length} sections`} />
+            <PanelHeader
+              title={`Sections — ${selectedClass.name}`}
+              count={`${visibleSections.length} sections`}
+              action={
+                <button
+                  type="button"
+                  className="secondary-button secondary-button-sm"
+                  onClick={() => {
+                    setCreateError("");
+                    setSectionForm((prev) => ({ ...prev, class_obj: String(selectedClass.id) }));
+                    setShowSection(true);
+                  }}
+                >
+                  <Plus size={13} style={{ verticalAlign: -2, marginRight: 4 }} /> Add Section
+                </button>
+              }
+            />
             {visibleSections.length === 0 ? (
               <div className="state-card">No sections for this class.</div>
             ) : (
@@ -538,6 +758,155 @@ export default function AcademicsPage() {
       <StateArea loading={loading} error={error} onRetry={loadAll}>
         {currentTab.render()}
       </StateArea>
+
+      {createError && (
+        <div className="state-card error" style={{ marginTop: 12 }}>
+          <strong>{createError}</strong>
+        </div>
+      )}
+
+      {showYear && (
+        <CreateModal
+          title="Add Academic Year"
+          subtitle="Create a new academic year for your school."
+          onClose={closeCreate}
+          onSubmit={submitYear}
+          saving={savingCreate}
+        >
+          <label>
+            Year name *
+            <input name="name" value={yearForm.name} onChange={setCreateField(setYearForm, "name")} placeholder="e.g. 2026-2027" />
+          </label>
+          <label>
+            Start date *
+            <input type="date" name="start_date" value={yearForm.start_date} onChange={setCreateField(setYearForm, "start_date")} />
+          </label>
+          <label>
+            End date *
+            <input type="date" name="end_date" value={yearForm.end_date} onChange={setCreateField(setYearForm, "end_date")} />
+          </label>
+          <label>
+            Status
+            <select name="status" value={yearForm.status} onChange={setCreateField(setYearForm, "status")}>
+              <option value="upcoming">Upcoming</option>
+              <option value="active">Active</option>
+              <option value="completed">Completed</option>
+            </select>
+          </label>
+        </CreateModal>
+      )}
+
+      {showTerm && (
+        <CreateModal
+          title="Add Term"
+          subtitle="Create a new term under an academic year."
+          onClose={closeCreate}
+          onSubmit={submitTerm}
+          saving={savingCreate}
+        >
+          <label>
+            Academic year *
+            <select name="academic_year" value={termForm.academic_year} onChange={setCreateField(setTermForm, "academic_year")}>
+              <option value="">Select year</option>
+              {years.map((y) => (
+                <option key={y.id} value={y.id}>{y.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Term name *
+            <input name="name" value={termForm.name} onChange={setCreateField(setTermForm, "name")} placeholder="e.g. Term 1" />
+          </label>
+          <label>
+            Start date *
+            <input type="date" name="start_date" value={termForm.start_date} onChange={setCreateField(setTermForm, "start_date")} />
+          </label>
+          <label>
+            End date *
+            <input type="date" name="end_date" value={termForm.end_date} onChange={setCreateField(setTermForm, "end_date")} />
+          </label>
+        </CreateModal>
+      )}
+
+      {showUnit && (
+        <CreateModal
+          title="Add Academic Unit"
+          subtitle="A unit (e.g. a grade or department) that groups classes under a campus."
+          onClose={closeCreate}
+          onSubmit={submitUnit}
+          saving={savingCreate}
+        >
+          <label>
+            Campus *
+            <select name="campus" value={unitForm.campus} onChange={setCreateField(setUnitForm, "campus")}>
+              <option value="">Select campus</option>
+              {campuses.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Unit name *
+            <input name="name" value={unitForm.name} onChange={setCreateField(setUnitForm, "name")} placeholder="e.g. Junior School" />
+          </label>
+        </CreateModal>
+      )}
+
+      {showClass && (
+        <CreateModal
+          title="Add Class"
+          subtitle="Create a new class under an academic unit."
+          onClose={closeCreate}
+          onSubmit={submitClass}
+          saving={savingCreate}
+        >
+          <label>
+            Academic unit *
+            <select name="unit" value={classForm.unit} onChange={setCreateField(setClassForm, "unit")}>
+              <option value="">Select unit</option>
+              {units.map((u) => (
+                <option key={u.id} value={u.id}>{u.campus_name ? `${u.campus_name} — ` : ""}{u.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Class name *
+            <input name="name" value={classForm.name} onChange={setCreateField(setClassForm, "name")} placeholder="e.g. Grade 7" />
+          </label>
+          <label>
+            Level
+            <input name="level" type="number" value={classForm.level} onChange={setCreateField(setClassForm, "level")} placeholder="e.g. 7" />
+          </label>
+        </CreateModal>
+      )}
+
+      {showSection && (
+        <CreateModal
+          title="Add Section"
+          subtitle="Create a new section under a class."
+          onClose={closeCreate}
+          onSubmit={submitSection}
+          saving={savingCreate}
+        >
+          <label>
+            Class *
+            <select name="class_obj" value={sectionForm.class_obj} onChange={setCreateField(setSectionForm, "class_obj")}>
+              <option value="">Select class</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Section name *
+            <input name="name" value={sectionForm.name} onChange={setCreateField(setSectionForm, "name")} placeholder="e.g. A" />
+          </label>
+          <label>
+            Capacity
+            <input name="capacity" type="number" value={sectionForm.capacity} onChange={setCreateField(setSectionForm, "capacity")} />
+          </label>
+        </CreateModal>
+      )}
     </section>
   );
 }
