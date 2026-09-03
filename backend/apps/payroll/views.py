@@ -218,7 +218,7 @@ class PayslipListView(generics.ListAPIView):
                 "record__employee",
             ),
             self.request,
-            teacher_path="record__employee",
+            employee_path="record__employee",
         )
 
         employee = self.request.query_params.get("employee")

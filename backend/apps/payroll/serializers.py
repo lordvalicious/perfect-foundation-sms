@@ -5,7 +5,7 @@ from .models import PayrollRecord, Payslip, SalaryStructure
 
 class SalaryStructureSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(
-        source="teacher.full_name",
+        source="employee.full_name",
         read_only=True,
     )
     total_allowances = serializers.DecimalField(
@@ -23,10 +23,9 @@ class SalaryStructureSerializer(serializers.ModelSerializer):
         model = SalaryStructure
         fields = [
             "id",
-            "teacher",
+            "employee",
             "teacher_name",
             "basic_salary",
-            "allowances",
             "total_allowances",
             "gross_salary",
             "effective_date",
@@ -36,15 +35,15 @@ class SalaryStructureSerializer(serializers.ModelSerializer):
 
 class PayrollRecordSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(
-        source="teacher.full_name",
+        source="employee.full_name",
         read_only=True,
     )
     teacher_number = serializers.CharField(
-        source="teacher.employee_number",
+        source="employee.employee_number",
         read_only=True,
     )
     structure_basic = serializers.DecimalField(
-        source="structure.basic_salary",
+        source="salary_structure.basic_salary",
         read_only=True,
         max_digits=12,
         decimal_places=2,
@@ -54,19 +53,18 @@ class PayrollRecordSerializer(serializers.ModelSerializer):
         model = PayrollRecord
         fields = [
             "id",
-            "teacher",
+            "employee",
             "teacher_name",
             "teacher_number",
-            "structure",
+            "salary_structure",
             "structure_basic",
             "month",
             "year",
             "working_days",
             "paid_days",
             "basic_salary",
-            "allowances",
+            "total_allowances",
             "gross_salary",
-            "deductions",
             "total_deductions",
             "net_salary",
             "status",
@@ -89,7 +87,7 @@ class PayrollRecordSerializer(serializers.ModelSerializer):
 
 class PayslipSerializer(serializers.ModelSerializer):
     teacher_name = serializers.CharField(
-        source="record.teacher.full_name",
+        source="record.employee.full_name",
         read_only=True,
     )
     period = serializers.SerializerMethodField()
