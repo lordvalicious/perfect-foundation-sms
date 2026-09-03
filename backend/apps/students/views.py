@@ -861,7 +861,7 @@ class InquiryListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = Inquiry.objects.select_related(
-            "guardian", "campus", "academic_year", "class_obj", "assigned_to", "converted_by"
+            "campus", "academic_year", "class_obj", "assigned_to", "converted_by"
         ).filter(
             institution=self.request.institution
         )
