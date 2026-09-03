@@ -174,6 +174,10 @@ class AcademicYearSerializer(serializers.ModelSerializer):
         source="school.name",
         read_only=True,
     )
+    school = serializers.PrimaryKeyRelatedField(
+        required=False,
+        read_only=True,
+    )
 
     class Meta:
         model = AcademicYear
