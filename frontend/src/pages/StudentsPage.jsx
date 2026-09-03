@@ -1809,7 +1809,7 @@ function StudentsPage() {
               {quickAdd && (
                 <div className="form-section" style={{ marginTop: 16, borderTop: "1px solid var(--border)", paddingTop: 16 }}>
                   <h4 style={{ marginBottom: 12 }}>Quick Add: {quickAdd === "year" ? "Academic Year" : quickAdd === "class" ? "Class" : "Section"}</h4>
-                  <form onSubmit={submitQuickAdd} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     {quickAdd === "year" && (
                       <>
                         <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -1869,9 +1869,9 @@ function StudentsPage() {
                     {quickError && <div style={{ color: "var(--danger)", fontSize: 13 }}>{quickError}</div>}
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 8 }}>
                       <button type="button" className="secondary-button" onClick={() => setQuickAdd("")} disabled={quickSaving}>Cancel</button>
-                      <button type="submit" className="primary-button" disabled={quickSaving}>{quickSaving ? "Saving..." : "Save"}</button>
+                      <button type="button" className="primary-button" onClick={submitQuickAdd} disabled={quickSaving}>{quickSaving ? "Saving..." : "Save"}</button>
                     </div>
-                  </form>
+                  </div>
                 </div>
               )}
 
