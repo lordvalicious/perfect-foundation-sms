@@ -1,5 +1,5 @@
 {
-  "buildCommand": "",
+  "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput",
   "crons": [
     {
       "path": "/api/finance/cron/late-fees/",
@@ -25,7 +25,6 @@
   "functions": {
     "api/index.py": {
       "runtime": "python3.12",
-      "framework": "asgi",
       "maxDuration": 60
     }
   },
