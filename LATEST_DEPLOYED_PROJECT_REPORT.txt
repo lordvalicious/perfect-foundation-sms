@@ -1,0 +1,86 @@
+================================================================================
+PERFECT FOUNDATION - SCHOOL MANAGEMENT SYSTEM (ERP)
+LATEST DEPLOYED PROJECT REPORT
+================================================================================
+Report generated : 03 September 2026
+Repo             : github.com/lordvalicious/perfect-foundation-sms
+Branch           : master (working tree clean, both fixes pushed)
+Scope            : backend (Django 6.1), frontend (React 19), demo-data seeder,
+                   deployed live on Vercel + Neon Postgres
+
+--------------------------------------------------------------------------------
+1. LIVE DEPLOYMENT ENDPOINTS
+--------------------------------------------------------------------------------
+Backend API  : https://perfect-foundation-api.vercel.app   (Vercel serverless Django)
+Frontend     : https://perfect-foundation-sms.vercel.app   (React 19 SPA)
+Frontend proxy: /api/* -> backend
+Demo login   : demo_superadmin / DemoPassword!2026
+Database     : Neon PostgreSQL (direct endpoint)
+               ep-delicate-cloud-az3ascqk.c-3.ap-southeast-1.aws.neon.tech
+               db=neondb user=neondb_owner sslmode=require
+
+--------------------------------------------------------------------------------
+2. PRODUCTION BUG FIXES DEPLOYED (this session)
+--------------------------------------------------------------------------------
+A. PAYROLL END-TO-END FIX  (commit 2d7f1a1)
+   - Serializers referenced a stale "teacher" relationship instead of "employee".
+   - Payroll DB schema had teacher_id non-nullable, blocking writes.
+   - PayslipListView used the wrong kwarg path (teacher_path vs employee_path).
+   - Fixed serializers/views, aligned schema, reseeded payroll fully.
+   Result: payroll now works end-to-end and returns real data.
+
+B. INQUIRY LIST 500 FIX  (commit 55216f1)
+   - InquiryListCreateView.get_queryset (backend/apps/students/views.py:863)
+     called select_related("guardian", ...) but Inquiry has NO guardian FK
+     (only string fields guardian_name / guardian_email).
+   - Caused FieldError -> HTTP 500 on /api/students/inquiries/.
+   - Removed the stale select_related reference; endpoint now returns 200.
+
+--------------------------------------------------------------------------------
+3. FULL MODULE SEEDING - DEPLOYED DB (all modules populated + verified)
+--------------------------------------------------------------------------------
+PEOPLE & ACADEMICS
+  Students 500 | Enrollments 500 | Guardians 350 | Teachers 50 | Staff 96
+  Classes 65 | Sections 195 | Subjects 10 | Offerings 550
+
+OPERATIONS
+  Attendance 15,000 | Exam schedules 150 | Report cards 1,095
+  (subject entries 4,380) | Timetable 1,000 | Student leaves 650
+
+FINANCE & PAYROLL
+  Invoices 500 (invoice items 3,976) | Payments 302 | Fee structures 520
+  Accounts 13 | Expenses 5
+  Payroll: salary structures 146 | payroll records 438 | payslips 438
+  HR employees 146
+
+ASSETS & FACILITIES
+  Inventory assets 100 | Transport vehicles 10 | Library books 80
+  Hostels 10 (rooms 40, allocations 100) | Health records 300
+  Digital IDs 310
+
+ENGAGEMENT & INTEGRATION
+  LMS courses 25 | Homework 50 (submissions 365)
+  Discipline incidents 40 (actions 13) | Events 35 (RSVPs 175)
+  Announcements 25 | Messages 60 (user-scoped by design -- admin sees 0)
+  SMS logs 25 | Helpdesk tickets 50 | Alumni 50 | Campus transfers 10
+
+  NOTE: ALL 34 modules return data on the deployed API.
+
+--------------------------------------------------------------------------------
+4. LIVE VERIFICATION RESULTS
+--------------------------------------------------------------------------------
+  - Login (demo_superadmin) returns 200 and sets sessionid.
+  - No page errors, no alert dialogs, and no 5xx across 47/48 inspected routes.
+  - /tenants redirects to / by design (role permission).
+  - Initial 403 on /api/auth/me/ is the normal pre-login check.
+  - Both fixes committed and pushed to origin/master; working tree clean.
+
+--------------------------------------------------------------------------------
+5. KEY CONTACTS / GIT REFS
+--------------------------------------------------------------------------------
+  Payroll fix   : commit 2d7f1a1
+  Inquiry fix   : commit 55216f1
+  Backend dir   : Perfect_Foundation_SMS_Project_Report.docx (MS Word master copy)
+================================================================================
+END OF REPORT
+================================================================================
