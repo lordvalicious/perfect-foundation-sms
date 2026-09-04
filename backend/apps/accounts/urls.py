@@ -29,6 +29,9 @@ from .views import (
     SessionListView,
     SessionRevokeAllView,
     SessionRevokeView,
+    SuperAdminSchoolCreateView,
+    SuperAdminSchoolListView,
+    SuperAdminSchoolSwitchView,
     UserPermissionCreateView,
     UserPermissionDeleteView,
     UserPermissionListView,
@@ -113,5 +116,22 @@ urlpatterns = [
         "google/login/",
         GoogleLoginView.as_view(),
         name="google-login",
+    ),
+
+    # Super Admin School Management
+    path(
+        "super-admin/schools/",
+        SuperAdminSchoolListView.as_view(),
+        name="super-admin-school-list",
+    ),
+    path(
+        "super-admin/schools/create/",
+        SuperAdminSchoolCreateView.as_view(),
+        name="super-admin-school-create",
+    ),
+    path(
+        "super-admin/switch/",
+        SuperAdminSchoolSwitchView.as_view(),
+        name="super-admin-switch",
     ),
 ]

@@ -38,6 +38,21 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
     phone = models.CharField(max_length=20, blank=True)
 
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="users",
+        help_text="Primary institution for this user. Null for super_admin users.",
+    )
+
+    username = models.CharField(
+        max_length=150,
+        unique=False,
+        help_text="Username unique per institution. Super_admin users may have null institution.",
+    )
+
     photo = models.ImageField(
         upload_to="profiles/users/",
         blank=True,
@@ -60,6 +75,15 @@ class User(AbstractUser):
     last_failed_login_at = models.DateTimeField(null=True, blank=True)
     password_changed_at = models.DateTimeField(auto_now_add=True)
     must_change_password = models.BooleanField(default=False)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "username"],
+                name="unique_username_per_institution",
+                condition=models.Q(institution__isnull=False),
+            ),
+        ]
 
     def get_active_memberships(self):
         return self.memberships.filter(status="active").select_related(
@@ -336,11 +360,6 @@ class StaffProfile(SoftDeleteMixin):
     )
 
     email = models.EmailField(
-        blank=True,
-    )
-
-    campus = models.CharField(
-        max_length=150,
         blank=True,
     )
 

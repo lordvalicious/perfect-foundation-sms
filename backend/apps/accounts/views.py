@@ -28,7 +28,10 @@ from apps.accounts.permissions import (
     IsAdminOrReadOnly,
     IsAdminRole,
     IsStaffRole,
+    IsSuperAdmin,
 )
+from apps.schools.serializers import SchoolSerializer
+from apps.schools.models import School
 
 from .models import (
     FailedLoginAttempt,
@@ -1691,3 +1694,147 @@ class UserPermissionsSummaryView(APIView):
             ],
             "effective_permissions": sorted(list(effective)),
         }).data)
+
+# =============================================================================
+# SUPER ADMIN SCHOOL MANAGEMENT
+# =============================================================================
+
+class SuperAdminSchoolCreateView(APIView):
+    """
+    Super Admin endpoint to create a new school with an admin user.
+    
+    POST /api/super-admin/schools/
+    {
+        "name": "Lahore School",
+        "code": "LHR-001",  // optional, auto-generated if not provided
+        "institution_type": "school",
+        "timezone": "Asia/Karachi",
+        "currency": "PKR",
+        "address": "123 Main St, Lahore",
+        "city": "Lahore",
+        "admin_username": "admin",  // optional, auto-generated if not provided
+        "admin_password": "TempPass123!",  // optional, auto-generated if not provided
+        "admin_email": "admin@lahoreschool.edu",
+        "admin_first_name": "John",
+        "admin_last_name": "Doe",
+        "admin_phone": "+923001234567"
+    }
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def post(self, request):
+        serializer = SchoolSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        school = serializer.save()
+
+        # Create admin user
+        admin_data = {
+            "username": request.data.get("admin_username") or f"admin-{school.code.lower()}",
+            "email": request.data.get("admin_email"),
+            "first_name": request.data.get("admin_first_name", "Admin"),
+            "last_name": request.data.get("admin_last_name", school.name),
+            "phone": request.data.get("admin_phone", ""),
+        }
+        password = request.data.get("admin_password") or User.objects.make_random_password(length=12)
+
+        admin_user = User.objects.create_user(
+            username=admin_data["username"],
+            email=admin_data["email"],
+            password=password,
+            first_name=admin_data["first_name"],
+            last_name=admin_data["last_name"],
+            phone=admin_data["phone"],
+            institution=school,
+            is_active=True,
+        )
+
+        # Create institution membership with admin role
+        membership = InstitutionMembership.objects.create(
+            user=admin_user,
+            institution=school,
+            status="active",
+        )
+        RoleAssignment.objects.create(
+            membership=membership,
+            role=Role.ADMIN,
+        )
+
+        # Generate credentials response
+        credentials = {
+            "username": admin_user.username,
+            "password": password,
+            "school_code": school.code,
+            "school_name": school.name,
+        }
+
+        record_audit(
+            request=request,
+            action="school_create",
+            model_name="School",
+            object_id=str(school.pk),
+            object_repr=school.name,
+            details={
+                "school_code": school.code,
+                "admin_username": admin_user.username,
+            },
+        )
+
+        return Response({
+            "school": SchoolSerializer(school).data,
+            "admin_credentials": credentials,
+            "message": "School and admin user created successfully. Save the credentials securely.",
+        }, status=status.HTTP_201_CREATED)
+
+
+class SuperAdminSchoolListView(APIView):
+    """List all schools for Super Admin."""
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        schools = School.objects.all().order_by("-created_at")
+        return Response(SchoolSerializer(schools, many=True).data)
+
+
+class SuperAdminSchoolSwitchView(APIView):
+    """
+    Super Admin endpoint to switch active institution.
+    
+    POST /api/super-admin/switch/
+    {
+        "institution_id": 1
+    }
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def post(self, request):
+        institution_id = request.data.get("institution_id")
+        if not institution_id:
+            return Response(
+                {"detail": "institution_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        school = School.objects.filter(pk=institution_id, status="active").first()
+        if not school:
+            return Response(
+                {"detail": "School not found or inactive."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Update session
+        request.session["active_institution_id"] = school.id
+
+        record_audit(
+            request=request,
+            action="institution_switched",
+            details={"institution_id": school.id, "institution_name": school.name},
+        )
+
+        return Response({
+            "institution": {
+                "id": school.id,
+                "name": school.name,
+                "code": school.code,
+            },
+            "message": f"Switched to {school.name}",
+        })

@@ -5,7 +5,7 @@ from .models import User
 
 
 class EmailOrUsernameBackend(ModelBackend):
-    """Authenticate with either username or email."""
+    """Authenticate with either username or email, scoped to institution."""
 
     def authenticate(self, request, username=None, password=None, **kwargs):
         email = kwargs.get("email")
@@ -15,12 +15,23 @@ class EmailOrUsernameBackend(ModelBackend):
         if not identifier:
             return None
 
-        user = User.objects.filter(
+        # Determine institution from request
+        institution = getattr(request, "institution", None)
+
+        # Build base queryset
+        queryset = User.objects.all()
+
+        # Filter by institution if available (non-super_admin users)
+        # Super admin users have institution=None or is_superuser=True
+        if institution is not None:
+            queryset = queryset.filter(institution=institution)
+
+        user = queryset.filter(
             email__iexact=identifier
         ).first()
 
         if user is None:
-            user = User.objects.filter(
+            user = queryset.filter(
                 username=identifier
             ).first()
 
