@@ -1352,7 +1352,7 @@ class Student360Serializer(serializers.ModelSerializer):
                     "due_date": i.due_date,
                     "return_date": i.return_date,
                     "status": i.status,
-                    "fine_amount": float(i.fine_amount) if i.fine_amount else 0,
+                    "fine_amount": float(i.fine) if i.fine else 0,
                 }
                 for i in issues
             ]
