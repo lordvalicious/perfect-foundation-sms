@@ -303,19 +303,7 @@ class SectionListView(NoPaginationMixin, generics.ListCreateAPIView):
     permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
 
     def get_queryset(self):
-        queryset = (
-            Section.objects.filter(
-                class_obj__unit__campus__school=self.request.institution
-            )
-            .select_related("class_obj", "class_obj__unit__campus")
-            .order_by("class_obj__name", "name")
-        )
-
-        queryset = apply_campus_scope(
-            queryset,
-            self.request,
-            "class_obj__unit__campus_id",
-        )
+        queryset = section_queryset(self.request)
 
         class_obj = self.request.query_params.get("class")
 
@@ -335,6 +323,42 @@ class SectionListView(NoPaginationMixin, generics.ListCreateAPIView):
             _raise_parent_not_in_school("class_obj")
 
         serializer.save()
+
+
+class SectionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = SectionSerializer
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+    queryset = Section.objects.all()
+
+    def get_queryset(self):
+        return section_queryset(self.request)
+
+    def perform_destroy(self, instance):
+        assert_campus_allowed(self.request.user, instance.class_obj.unit.campus_id)
+        instance.delete()
+
+    def perform_update(self, serializer):
+        instance = self.get_object()
+        assert_campus_allowed(self.request.user, instance.class_obj.unit.campus_id)
+        serializer.save()
+
+
+def section_queryset(request):
+    """Base queryset for Section views, scoped to the current institution
+    and campus, with the class parent validated against the institution."""
+    queryset = (
+        Section.objects.filter(
+            class_obj__unit__campus__school=request.institution
+        )
+        .select_related("class_obj", "class_obj__unit__campus")
+        .order_by("class_obj__name", "name")
+    )
+
+    return apply_campus_scope(
+        queryset,
+        request,
+        "class_obj__unit__campus_id",
+    )
 
 
 class AcademicYearListView(NoPaginationMixin, generics.ListCreateAPIView):
