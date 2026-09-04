@@ -284,6 +284,21 @@ h1, h2, h3, h4,
   white-space: nowrap;
 }
 
+.school-switcher-label {
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.school-switcher-name {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .school-switcher-wrap {
   position: relative;
 }
@@ -3309,6 +3324,43 @@ select {
 }
 
 .state-card .secondary-button { margin-top: 4px; }
+
+.credential-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  width: 100%;
+  max-width: 420px;
+  padding: 8px 10px;
+  margin: 2px 0;
+  border-radius: 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  text-align: left;
+  font-size: 13px;
+}
+
+.credential-row > span {
+  overflow-wrap: anywhere;
+}
+
+.credential-row .secondary-button {
+  margin-top: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 520px) {
+  .credential-row {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+  }
+
+  .credential-row .secondary-button {
+    align-self: center;
+  }
+}
 
 .empty-state {
   display: flex;

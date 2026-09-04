@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { installSessionWatch, onSessionExpired } from "./sessionWatch";
 
 const AuthContext = createContext(null);
 
@@ -73,6 +74,16 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     fetchMe();
   }, [fetchMe]);
+
+  useEffect(() => {
+    installSessionWatch();
+
+    return onSessionExpired(() => {
+      setUser(null);
+      setLoading(false);
+      setError("Your session has expired. Please sign in again.");
+    });
+  }, []);
 
   const login = useCallback(
     async (username, password, schoolCode = "", otp = "") => {
@@ -167,15 +178,7 @@ export function AuthProvider({ children }) {
       
       // Check user's effective permissions
       const permissions = new Set();
-      
-      // Get permissions from memberships
-      for (const membership of user.memberships || []) {
-        for (const assignment of membership.roles || []) {
-          // Role-based permissions would be fetched from backend
-          // For now, we use role-based fallback
-        }
-      }
-      
+
       // If user has explicit permissions in the data, use them
       if (user.permissions) {
         for (const p of user.permissions) {
