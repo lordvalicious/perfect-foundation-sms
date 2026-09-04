@@ -413,77 +413,6 @@ class Subject(models.Model):
         return self.name
 
 
-class SubjectOffering(models.Model):
-    institution = models.ForeignKey(
-        School,
-        on_delete=models.CASCADE,
-        related_name="subject_offerings",
-        null=True,
-        blank=True,
-    )
-    academic_year = models.ForeignKey(
-        AcademicYear,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    class_obj = models.ForeignKey(
-        Class,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    subject = models.ForeignKey(
-        Subject,
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-    )
-    teacher = models.ForeignKey(
-        "teachers.Teacher",
-        on_delete=models.PROTECT,
-        related_name="subject_offerings",
-        null=True,
-        blank=True,
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=STATUS_CHOICES,
-        default="active",
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering = ["class_obj__name", "subject__name"]
-        constraints = [
-            models.UniqueConstraint(
-                fields=["academic_year", "class_obj", "subject"],
-                name="unique_subject_offering_per_class_per_year",
-            ),
-        ]
-
-    def clean(self):
-        from django.core.exceptions import ValidationError
-
-        errors = {}
-
-        if self.class_obj_id:
-            class_school = self.class_obj.unit.campus.school
-            if self.subject_id and self.subject.institution_id != class_school.pk:
-                errors["subject"] = (
-                    "Subject must belong to the same school as the class."
-                )
-
-            if self.teacher_id:
-                teacher_school = self.teacher.primary_campus.school
-                if teacher_school.pk != class_school.pk:
-                    errors["teacher"] = "Teacher must belong to the same school."
-
-        if errors:
-            raise ValidationError(errors)
-
-    def __str__(self):
-        return f"{self.subject.name} ({self.class_obj.name})"
-
-
 class SchoolSettings(models.Model):
     school = models.OneToOneField(
         School,
@@ -749,6 +678,13 @@ class AcademicCalendar(models.Model):
 
 
 class SubjectOffering(models.Model):
+    institution = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="subject_offerings",
+        null=True,
+        blank=True,
+    )
     academic_year = models.ForeignKey(
         AcademicYear,
         on_delete=models.PROTECT,

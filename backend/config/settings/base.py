@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -18,10 +19,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 load_dotenv(BASE_DIR / ".env")
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = os.environ.get(
-    "DJANGO_SECRET_KEY",
-    "django-insecure-x=lj&ur9!fz1zx-1#g9ctlw6t!!jie$*s6lzwu=&svrf55q=9g",
-)
+# No hardcoded fallback: the key MUST come from the environment so that an
+# insecure default can never be silently used in a real deployment.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY")
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "DJANGO_SECRET_KEY must be set. Configure it in the environment "
+        "or backend/.env — do not rely on a default value."
+    )
 
 DEBUG = False
 
@@ -126,18 +131,23 @@ if database_url:
         )
     }
 else:
+    # Credentials are read strictly from the environment (see backend/.env);
+    # no embedded password or username defaults are used.
+    required_db_vars = ["DB_ENGINE", "DB_NAME", "DB_USER", "DB_PASSWORD"]
+    missing = [v for v in required_db_vars if not os.environ.get(v)]
+    if missing:
+        raise ImproperlyConfigured(
+            "Missing required database settings for the fallback (non-"
+            "DATABASE_URL) configuration: "
+            + ", ".join(missing)
+            + ". Set them in the environment or backend/.env."
+        )
     DATABASES = {
         "default": {
-            "ENGINE": os.environ.get(
-                "DB_ENGINE",
-                "django.db.backends.postgresql",
-            ),
-            "NAME": os.environ.get("DB_NAME", "perfect_foundation"),
-            "USER": os.environ.get("DB_USER", "school_admin"),
-            "PASSWORD": os.environ.get(
-                "DB_PASSWORD",
-                "school_password",
-            ),
+            "ENGINE": os.environ["DB_ENGINE"],
+            "NAME": os.environ["DB_NAME"],
+            "USER": os.environ["DB_USER"],
+            "PASSWORD": os.environ["DB_PASSWORD"],
             "HOST": os.environ.get("DB_HOST", "localhost"),
             "PORT": os.environ.get("DB_PORT", "5432"),
         }
