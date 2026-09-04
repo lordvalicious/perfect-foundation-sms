@@ -43,7 +43,9 @@ class BookListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         from apps.accounts.access import assert_campus_allowed
 
-        assert_campus_allowed(self.request.user, serializer.validated_data.get("campus"))
+        campus = serializer.validated_data.get("campus")
+        if campus:
+            assert_campus_allowed(self.request.user, campus)
         serializer.save()
 
 
@@ -56,7 +58,9 @@ class BookDetailView(generics.RetrieveUpdateDestroyAPIView):
     def perform_update(self, serializer):
         from apps.accounts.access import assert_campus_allowed
 
-        assert_campus_allowed(self.request.user, serializer.validated_data.get("campus", serializer.instance.campus))
+        campus = serializer.validated_data.get("campus", serializer.instance.campus)
+        if campus:
+            assert_campus_allowed(self.request.user, campus)
         serializer.save()
 
 

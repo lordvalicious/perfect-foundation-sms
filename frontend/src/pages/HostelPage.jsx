@@ -4,12 +4,14 @@ import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
 
 const BASE = "/api/hostel/";
+const CAMPUSES_URL = "/api/schools/campuses/";
 
 export default function HostelPage() {
   const [tab, setTab] = useState("hostels");
   const [rows, setRows] = useState([]);
   const [students, setStudents] = useState([]);
   const [roomOptions, setRoomOptions] = useState([]);
+  const [campuses, setCampuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -20,10 +22,22 @@ export default function HostelPage() {
 
   const [hostelForm, setHostelForm] = useState({
     name: "",
+    campus: "",
     warden: "",
     gender: "mixed",
     address: "",
   });
+
+  const loadCampuses = useCallback(() => {
+    fetch(CAMPUSES_URL, { credentials: "include" })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => setCampuses(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadCampuses();
+  }, [loadCampuses]);
 
   const [roomForm, setRoomForm] = useState({
     hostel: "",
@@ -168,6 +182,18 @@ export default function HostelPage() {
                       setHostelForm({ ...hostelForm, name: e.target.value })
                     }
                   />
+                  <select
+                    required
+                    value={hostelForm.campus}
+                    onChange={(e) =>
+                      setHostelForm({ ...hostelForm, campus: e.target.value })
+                    }
+                  >
+                    <option value="">Campus *</option>
+                    {campuses.map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
                   <input
                     placeholder="Warden"
                     value={hostelForm.warden}
@@ -185,6 +211,13 @@ export default function HostelPage() {
                     <option value="girls">Girls</option>
                     <option value="mixed">Mixed</option>
                   </select>
+                  <input
+                    placeholder="Address"
+                    value={hostelForm.address}
+                    onChange={(e) =>
+                      setHostelForm({ ...hostelForm, address: e.target.value })
+                    }
+                  />
                 </>
               )}
 
