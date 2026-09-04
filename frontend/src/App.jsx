@@ -1,5 +1,6 @@
 ﻿import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -62,6 +63,7 @@ import {
 import "./App.css";
 import "./dark-dash.css";
 import { AuthProvider, useAuth } from "./auth";
+import { SchoolProvider, useSchool } from "./schoolContext";
 import { LanguageProvider, useLang } from "./i18n";
 import LanguageToggle from "./components/LanguageToggle";
 import LoginPage from "./pages/LoginPage";
@@ -406,7 +408,21 @@ const navGroups = [
 
 function Layout({ children, hasRole, modules = { loaded: false, enabled: [], isPlatformAdmin: false } }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [schoolDropdownOpen, setSchoolDropdownOpen] = useState(false);
+  const schoolSwitcherRef = useRef(null);
   const { t } = useLang();
+  const { currentSchool, availableSchools, switchSchool, loading: schoolLoading } = useSchool();
+
+  useEffect(() => {
+    if (!schoolDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (schoolSwitcherRef.current && !schoolSwitcherRef.current.contains(e.target)) {
+        setSchoolDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [schoolDropdownOpen]);
 
   const moduleAllows = (item) => {
     if (!item.module) return true;
@@ -447,6 +463,46 @@ function Layout({ children, hasRole, modules = { loaded: false, enabled: [], isP
       <header className="topbar">
         <div className="topbar-left">
           <div className="brand-logo">S</div>
+          {currentSchool && (
+            <div className="school-indicator">
+              {availableSchools.length > 1 && modules.isPlatformAdmin ? (
+                <div className="school-switcher-wrap" ref={schoolSwitcherRef}>
+                  <button
+                    className="school-switcher-trigger"
+                    onClick={() => setSchoolDropdownOpen((v) => !v)}
+                    disabled={schoolLoading}
+                  >
+                    <Building2 size={14} />
+                    <span>{currentSchool.name}</span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {schoolDropdownOpen && (
+                    <div className="school-switcher-dropdown">
+                      {availableSchools.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={`school-switcher-item ${s.id === currentSchool.id ? "active" : ""}`}
+                          onClick={() => {
+                            setSchoolDropdownOpen(false);
+                            if (s.id !== currentSchool.id) switchSchool(s.id);
+                          }}
+                        >
+                          <Building2 size={13} />
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <span className="school-name-readonly">
+                  <Building2 size={14} />
+                  {currentSchool.name}
+                </span>
+              )}
+            </div>
+          )}
           <nav className="topbar-nav">
             {dashItem && (
               <NavLink
@@ -614,35 +670,10 @@ function RequireRoles({ roles, children }) {
 
 function Shell() {
   const { user, loading, hasRole } = useAuth();
+  const { modules, loading: schoolLoading } = useSchool();
   const location = useLocation();
-  const [modules, setModules] = useState({
-    loaded: false,
-    enabled: [],
-    isPlatformAdmin: false,
-  });
 
-  useEffect(() => {
-    if (!user) return;
-
-    fetch("/api/schools/modules/current/", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setModules({
-            loaded: true,
-            enabled: data.enabled || [],
-            isPlatformAdmin: !!data.is_platform_admin,
-          });
-        } else {
-          setModules({ loaded: true, enabled: [], isPlatformAdmin: false });
-        }
-      })
-      .catch(() =>
-        setModules({ loaded: true, enabled: [], isPlatformAdmin: false })
-      );
-  }, [user]);
-
-  if (loading) {
+  if (loading || (user && schoolLoading)) {
     return (
       <div className="auth-loading">
         <div className="brand-logo">S</div>
@@ -955,9 +986,11 @@ function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <Shell />
-        </BrowserRouter>
+        <SchoolProvider>
+          <BrowserRouter>
+            <Shell />
+          </BrowserRouter>
+        </SchoolProvider>
       </AuthProvider>
     </LanguageProvider>
   );
