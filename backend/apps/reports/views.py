@@ -319,6 +319,7 @@ class ResultsReportView(APIView):
             return []
 
         queryset = queryset.filter(exam_id=exam)
+        queryset = apply_campus_scope(queryset, request, "exam__campus_id")
 
         prefetch_reportcard_results(queryset)
 
@@ -642,8 +643,10 @@ class SubjectPerformanceReportView(APIView):
         results = (
             StudentResult.objects
             .filter(exam_id=exam, is_absent=False)
-            .select_related("exam_subject", "exam_subject__subject")
+            .select_related("exam_subject", "exam_subject__subject", "exam_subject__exam")
         )
+
+        results = apply_campus_scope(results, request, "exam_subject__exam__campus_id")
 
         rows = {}
 
@@ -790,6 +793,10 @@ class PaymentMethodsReportView(APIView):
                 "invoice__enrollment__campus",
                 "invoice__academic_year",
             )
+        )
+
+        queryset = apply_campus_scope(
+            queryset, request, "invoice__enrollment__campus_id",
         )
 
         start_date = request.query_params.get("start_date")
@@ -1616,6 +1623,8 @@ class StudentProgressTrendReportView(APIView):
             )
             .order_by("exam__start_date")
         )
+
+        queryset = apply_campus_scope(queryset, request, "exam__campus_id")
 
         exams = []
         for rc in queryset:

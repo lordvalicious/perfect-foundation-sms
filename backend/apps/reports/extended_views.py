@@ -1206,6 +1206,8 @@ class SmsUsageReportView(APIView):
 
         queryset = SMSLog.objects.all()
 
+        queryset = apply_campus_scope(queryset, request, "campus_id")
+
         institution = getattr(request, "institution", None)
 
         if institution is not None:
@@ -1331,6 +1333,8 @@ class TopPerformersReportView(APIView):
                 "exam__class_obj",
             )
         )
+
+        queryset = apply_campus_scope(queryset, request, "exam__campus_id")
 
         classes = {}
 

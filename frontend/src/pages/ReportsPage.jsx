@@ -240,6 +240,8 @@ export default function ReportsPage() {
   const [classList, setClassList] = useState([]);
   const [sectionList, setSectionList] = useState([]);
   const [subjectList, setSubjectList] = useState([]);
+  const [campuses, setCampuses] = useState([]);
+  const [selectedCampus, setSelectedCampus] = useState("");
   const [queries, setQueries] = useState({});
 
   const [atRisk, setAtRisk] = useState(null);
@@ -303,6 +305,10 @@ export default function ReportsPage() {
     (key) => {
       const params = new URLSearchParams();
 
+      if (selectedCampus) {
+        params.append("campus", selectedCampus);
+      }
+
       if (EXAM_REPORTS.includes(key) && exam) {
         params.append("exam", exam);
       }
@@ -317,7 +323,7 @@ export default function ReportsPage() {
 
       return params;
     },
-    [exam, studentId, threshold]
+    [exam, studentId, threshold, selectedCampus]
   );
 
   const load = useCallback(
@@ -391,6 +397,13 @@ export default function ReportsPage() {
       .catch(() => {});
   }, []);
 
+  useEffect(() => {
+    fetch("/api/schools/campuses/", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((json) => setCampuses(Array.isArray(json) ? json : json.results || []))
+      .catch(() => setCampuses([]));
+  }, []);
+
   const loadGradebook = useCallback(() => {
     if (!gbFilters.class_obj || !gbFilters.subject) return;
 
@@ -420,6 +433,16 @@ export default function ReportsPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active, exam, studentId]);
+
+  useEffect(() => {
+    setData({});
+    if (active !== GRADEBOOK_KEY && active !== AT_RISK_KEY &&
+        active !== STUDENT_DETAIL_KEY && active !== TEACHER_DETAIL_KEY &&
+        active !== STAFF_DETAIL_KEY) {
+      load(active);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCampus]);
 
   const switchReport = (key) => {
     setActive(key);
@@ -533,6 +556,17 @@ export default function ReportsPage() {
           subtitle="generated from live data"
           action={
             <div className="report-toolbar">
+              <select
+                value={selectedCampus}
+                onChange={(e) => setSelectedCampus(e.target.value)}
+                style={{ minWidth: 160 }}
+              >
+                <option value="">All Campuses</option>
+                {campuses.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+
               {isStandardReport && (
                 <div className="filter-search report-search">
                   <input

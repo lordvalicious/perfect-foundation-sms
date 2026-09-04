@@ -386,8 +386,8 @@ class StudentProfileReportView(BaseReportView):
         discipline = self.get_discipline_summary(incidents)
 
         # Transport
-        from apps.transport.models import RouteAssignment
-        transport = RouteAssignment.objects.filter(student=student, status="active").select_related(
+        from apps.transport.models import TransportAssignment
+        transport = TransportAssignment.objects.filter(student=student, status="active").select_related(
             "route", "route__vehicle", "route__driver"
         ).first()
 

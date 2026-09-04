@@ -489,7 +489,7 @@ class CampusDashboardReportView(AggregateReportView):
         from apps.finance.models import Invoice, Payment
         from apps.reportcards.models import ReportCard
         from apps.library.models import BookIssue
-        from apps.transport.models import RouteAssignment
+        from apps.transport.models import TransportAssignment
 
         campus = queryset.first()
         if not campus:
@@ -530,7 +530,7 @@ class CampusDashboardReportView(AggregateReportView):
         ).count()
 
         # Transport
-        transport_students = RouteAssignment.objects.filter(route__campus=campus, status="active").count()
+        transport_students = TransportAssignment.objects.filter(route__campus=campus, status="active").count()
 
         return {
             "campus": campus.name,
