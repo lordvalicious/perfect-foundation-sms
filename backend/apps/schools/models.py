@@ -282,6 +282,12 @@ class Section(models.Model):
 
     class Meta:
         ordering = ["class_obj__name", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["class_obj", "name"],
+                name="unique_section_name_per_class",
+            ),
+        ]
 
     def clean(self):
         from django.core.exceptions import ValidationError
@@ -297,6 +303,10 @@ class Section(models.Model):
                 raise ValidationError(
                     {"name": "A section with this name already exists in this class."}
                 )
+
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        return super().save(*args, **kwargs)
 
     def __str__(self):
         return self.name
