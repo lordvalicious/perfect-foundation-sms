@@ -46,7 +46,13 @@ def scoped_user_queryset(identifier, school_code=None, institution=None):
     qs = User.objects.all()
 
     if institution is not None:
-        qs = qs.filter(institution=institution)
+        qs = qs.filter(
+            Q(institution=institution)
+            | Q(
+                memberships__institution=institution,
+                memberships__status="active",
+            )
+        ).distinct()
 
     if school_code:
         school_code = str(school_code).strip().lower()

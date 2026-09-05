@@ -13,8 +13,11 @@ Covers:
     credentials, cleared on password change, interim flag surfaces at login
   * Passwords never exposed in login/me responses, generated credential
     returned exactly once by the approved creation flow
-  * Post-auth school context is server-controlled (session-bound), not
-    client-controllable
+* Post-auth school context is server-controlled (session-bound), not
+     client-controllable
+   * Failed-login attribution stays in scope: ambiguous shared-username
+     attempts never lock out an arbitrary account (no cross-school lockout
+     DoS)
 """
 from concurrent.futures import ThreadPoolExecutor
 from unittest import mock
@@ -25,6 +28,7 @@ from django.test import TestCase, TransactionTestCase
 from rest_framework.test import APIClient
 
 from apps.accounts.models import (
+    FailedLoginAttempt,
     InstitutionMembership,
     Role,
     RoleAssignment,
@@ -261,6 +265,33 @@ class ScopedLookupTests(SchoolAuthBase):
             self.lhr_user,
         )
         self.assertEqual(login_candidate_count("0001-lhr@test.edu"), 1)
+
+    def test_institution_scope_resolves_membership_only_user(self):
+        # A user whose institution FK is NULL but holds an active membership
+        # must still resolve inside that institution's scope (host logins and
+        # failed-login attribution rely on this).
+        user = User.objects.create_user(
+            username="member-only",
+            email="member-only@test.edu",
+            password=PASSWORD,
+        )
+        InstitutionMembership.objects.create(
+            user=user,
+            institution=self.lahore,
+            status="active",
+        )
+        self.assertEqual(
+            scoped_user_queryset(
+                "member-only", institution=self.lahore
+            ).get(),
+            user,
+        )
+        self.assertEqual(
+            scoped_user_queryset(
+                "member-only", institution=self.sialkot
+            ).count(),
+            0,
+        )
 
     def test_backend_authenticates_scoped_username(self):
         from django.contrib.auth import authenticate
@@ -663,3 +694,87 @@ class SchoolContextControlTests(SchoolAuthBase):
         self.assertEqual(
             client.session["active_institution_id"], self.lahore.id
         )
+
+
+# =============================================================================
+# FAILED-LOGIN ATTRIBUTION STAYS IN SCOPE (no cross-school lockout DoS)
+# =============================================================================
+
+class FailedLoginAttributionTests(SchoolAuthBase):
+    def _failed_attempt(self, payload):
+        client = APIClient()
+        client.post("/api/auth/csrf/", {}, format="json")
+        return client.post(
+            "/api/auth/login/",
+            payload,
+            format="json",
+        )
+
+    def _assert_counters(self, lhr, skt):
+        self.lhr_user.refresh_from_db()
+        self.skt_user.refresh_from_db()
+        self.assertEqual(self.lhr_user.failed_login_attempts, lhr)
+        self.assertEqual(self.skt_user.failed_login_attempts, skt)
+
+    def test_ambiguous_unscoped_failures_never_lock_an_arbitrary_account(self):
+        # Five failed unscoped logins for a username shared by two schools
+        # must not attribute a single attempt to either account: the ambiguity
+        # gate refuses them before any specific account can be blamed.
+        for _ in range(5):
+            response = self._failed_attempt(
+                {"username": "0001", "password": "TotallyWrong!1"}
+            )
+            self.assertEqual(response.status_code, 400)
+
+        self._assert_counters(0, 0)
+        self.assertIsNone(self.lhr_user.locked_until)
+        self.assertIsNone(self.skt_user.locked_until)
+        self.assertFalse(
+            FailedLoginAttempt.objects.filter(
+                user__in=(self.lhr_user, self.skt_user),
+                username_or_email="0001",
+            ).exists()
+        )
+
+    def test_scoped_failed_login_attributed_to_declared_school_only(self):
+        response = self._failed_attempt(
+            {
+                "username": "0001",
+                "password": "TotallyWrong!1",
+                "school_code": "SKT",
+            }
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assert_counters(0, 1)
+
+    @mock.patch(
+        "apps.accounts.middleware.ActiveInstitutionMiddleware._resolve_by_host"
+    )
+    def test_white_label_host_failure_attributed_to_host_account(self, resolve):
+        resolve.return_value = self.lahore
+
+        response = self._failed_attempt(
+            {"username": "0001", "password": "TotallyWrong!1"}
+        )
+        self.assertEqual(response.status_code, 400)
+        self._assert_counters(1, 0)
+
+    def test_login_failed_view_notification_obeys_same_scope(self):
+        client = APIClient()
+        client.post("/api/auth/csrf/", {}, format="json")
+
+        # Ambiguous unscoped notification is attributed to nobody.
+        client.post(
+            "/api/auth/login/failed/",
+            {"username": "0001"},
+            format="json",
+        )
+        self._assert_counters(0, 0)
+
+        # Declared-school notification is attributed to that school only.
+        client.post(
+            "/api/auth/login/failed/",
+            {"username": "0001", "school_code": "SKT"},
+            format="json",
+        )
+        self._assert_counters(0, 1)

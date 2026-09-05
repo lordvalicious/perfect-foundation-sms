@@ -89,6 +89,41 @@ def get_client_ip(request):
     return request.META.get("REMOTE_ADDR")
 
 
+def _login_scope(request):
+    """Explicit school_code plus the host-resolved institution in effect."""
+    school_code = str(request.data.get("school_code") or "").strip().lower()
+    return school_code, getattr(request, "institution", None)
+
+
+def _scoped_user(request, identifier):
+    """First account matching ``identifier`` inside the request's login scope."""
+    from .services import scoped_user_queryset
+
+    school_code, institution = _login_scope(request)
+    return scoped_user_queryset(
+        identifier,
+        school_code=school_code,
+        institution=institution,
+    ).first()
+
+
+def _identifiable_in_scope(request, identifier):
+    """True when the attempt targets exactly one candidate account.
+
+    A declared ``school_code`` or a white-label host pins the attempt to one
+    school; without either, the identifier must be globally unique.
+    Ambiguous (shared) identifiers are never attributed to an arbitrary
+    account, otherwise one school's failed attempts could lock out another
+    school's account holding the same username.
+    """
+    from .services import login_candidate_count
+
+    school_code, institution = _login_scope(request)
+    if school_code or institution is not None:
+        return True
+    return login_candidate_count(identifier) == 1
+
+
 def record_failed_login(request, user, username_or_email):
     """Record a failed login attempt and apply lockout if threshold exceeded.
 
@@ -183,8 +218,6 @@ class LoginView(APIView):
     throttle_scope = "login"
 
     def post(self, request):
-        from .services import login_candidate_count, scoped_user_queryset
-
         # Lockout is surfaced explicitly (403) BEFORE credential validation,
         # and only when the account can be identified unambiguously in the
         # declared school scope. A locked duplicate username without a
@@ -194,17 +227,9 @@ class LoginView(APIView):
             or request.data.get("email")
             or ""
         ).strip()
-        school_code = str(
-            request.data.get("school_code") or ""
-        ).strip().lower()
 
-        if identifier and (
-            school_code or login_candidate_count(identifier) == 1
-        ):
-            candidate = scoped_user_queryset(
-                identifier,
-                school_code=school_code,
-            ).first()
+        if identifier and _identifiable_in_scope(request, identifier):
+            candidate = _scoped_user(request, identifier)
             if (
                 candidate is not None
                 and candidate.locked_until
@@ -238,18 +263,13 @@ class LoginView(APIView):
                 or ""
             ).strip()
 
-            if identifier:
-                from .services import scoped_user_queryset
-
-                # Record against the account in the declared school, never an
-                # arbitrary match when the username exists in several schools.
-                school_code = str(
-                    request.data.get("school_code") or ""
-                ).strip().lower()
-                user = scoped_user_queryset(
-                    identifier,
-                    school_code=school_code,
-                ).first()
+            # Attribute the failure only when the account is unambiguous in the
+            # declared scope. Shared usernames without a school or host context
+            # are never recorded against an arbitrary account: doing so would
+            # let one school's login attempts lock out another school's account
+            # with the same username.
+            if identifier and _identifiable_in_scope(request, identifier):
+                user = _scoped_user(request, identifier)
 
                 if user is not None:
                     record_failed_login(request, user, identifier)
@@ -342,19 +362,12 @@ class LoginFailedView(APIView):
         username_or_email = request.data.get("username") or request.data.get("email", "")
         user = None
 
-        if username_or_email:
-            from .services import scoped_user_queryset
-
-            # Attribute the failure to the account in the declared school;
-            # never to an arbitrary match when the username exists in several
-            # schools.
-            school_code = str(
-                request.data.get("school_code") or ""
-            ).strip().lower()
-            user = scoped_user_queryset(
-                username_or_email,
-                school_code=school_code,
-            ).first()
+        # Attribute the failure only when unambiguous in the declared scope;
+        # shared usernames never lock out an arbitrary account.
+        if username_or_email and _identifiable_in_scope(
+            request, username_or_email
+        ):
+            user = _scoped_user(request, username_or_email)
 
         if user:
             record_failed_login(request, user, username_or_email)
