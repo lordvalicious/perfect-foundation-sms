@@ -2,6 +2,7 @@ asgiref==3.12.1
 Django==6.1
 djangorestframework==3.18.0
 drf_spectacular==0.20.0
+reportlab
 psycopg==3.3.4
 psycopg-binary==3.3.4
 python-dotenv==1.2.2
