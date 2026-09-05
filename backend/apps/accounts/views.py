@@ -1,3 +1,16 @@
+
+
+# API Contract for Developer B - School Switching
+# Endpoint: POST /api/auth/active-institution/
+# Permissions: IsAuthenticated, IsSuperAdmin
+# Responses:
+#   200: Successfully switched to institution
+#   400: institution_id is required
+#   403: Normal users forbidden (Admin/Accountant/Teacher/Student)
+#   404: School not found or inactive
+# Audit: Records 'institution_switched' action
+# Note: Switching does NOT modify school activation status
+
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
@@ -1939,14 +1952,32 @@ class SuperAdminSchoolListView(APIView):
 
 class SuperAdminSchoolSwitchView(APIView):
     """
-    Super Admin endpoint to switch active institution.
-    
-    POST /api/super-admin/switch/
+    Super Admin endpoint to switch active institution context.
+
+    POST /api/auth/active-institution/
     {
         "institution_id": 1
     }
+
+    Switches the active school context for the Super Admin without requiring
+    a full login/logout cycle. The Super Admin can toggle between multiple
+    institution memberships (e.g., Lahore → Sialkot → Islamabad → Lahore).
+
+    Permissions:
+    - IsAuthenticated: Only authenticated users can access
+    - IsSuperAdmin: Only the platform Super Admin can switch institutions
+
+    Responses:
+    - 200: Successfully switched to the specified institution
+    - 400: institution_id is required
+    - 403: Normal users (Admin, Accountant, Teacher, Student) forbidden
+    - 404: School not found or inactive
+
+    Audit:
+    - Records 'institution_switched' action with institution details
+
+    Note: Switching does NOT modify the school's activation status.
     """
-    permission_classes = [IsAuthenticated, IsSuperAdmin]
 
     def post(self, request):
         institution_id = request.data.get("institution_id")
