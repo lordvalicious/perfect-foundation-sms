@@ -243,7 +243,6 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "phone",
             "email",
-            "campus",
             "designation",
             "department",
             "joining_date",

@@ -525,6 +525,23 @@ class StudentResultDetailView(generics.RetrieveUpdateDestroyAPIView):
                 "Cannot edit a locked result. Request rechecking instead."
             )
 
+        # Check if the associated report card is in a state that allows direct edits.
+        # Once a report card is published or locked, direct edits are prohibited;
+        # changes must go through the GradeAmendment workflow.
+        from apps.reportcards.models import ReportCard
+
+        report_card = ReportCard.objects.filter(
+            exam=result.exam,
+            student=result.student,
+        ).first()
+
+        if report_card and report_card.status in {"published", "locked"}:
+            raise PermissionDenied(
+                "This result belongs to a published/locked report card. "
+                "Direct edits are not allowed. Use the Grade Amendment workflow "
+                "to request a correction."
+            )
+
     def perform_update(self, serializer):
         instance = self.get_object()
         self.check_object_write(instance)

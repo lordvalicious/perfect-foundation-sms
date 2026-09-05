@@ -74,6 +74,7 @@ INSTALLED_APPS = [
 
     "corsheaders",
     "rest_framework",
+    "drf_spectacular",
 
     "django.contrib.admin",
     "django.contrib.auth",
@@ -230,6 +231,22 @@ REST_FRAMEWORK = {
         "password_reset": "10/hour",
         "public_apply": "20/hour",
     },
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+# drf-spectacular settings
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Perfect Foundation SMS API",
+    "DESCRIPTION": "School Management System API documentation",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "SORT_OPERATIONS": True,
+    "SORT_OPERATION_PARAMETERS": True,
+    "SCHEMA_PATH_PREFIX": "/api/",
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAuthenticated"],
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+    ],
 }
 
 CORS_ALLOW_CREDENTIALS = True

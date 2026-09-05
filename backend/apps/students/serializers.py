@@ -904,6 +904,7 @@ class TransferCertificateSerializer(serializers.ModelSerializer):
             "final_percentage",
             "attendance_percentage",
             "conduct",
+            "conduct_display",
             "status",
             "status_display",
             "issued_by",

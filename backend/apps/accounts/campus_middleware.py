@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 # Endpoints that should skip campus validation
 CAMPUS_VALIDATION_EXEMPT_PATHS = [
     "/api/auth/",
-    "/api/schools/",
     "/api/health/",
     "/admin/",
     "/api/auth/google/",

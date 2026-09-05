@@ -72,7 +72,7 @@ class ActiveInstitutionMiddleware:
                 request.institution = membership.institution
                 request.institution_membership = membership
 
-        # Set thread-local state for TenantManager
+        # Set contextvar state for TenantManager (async-safe)
         set_current_institution(request.institution)
         set_current_request(request)
 
@@ -100,6 +100,11 @@ class ActiveInstitutionMiddleware:
             platform_host = "vercel.app"
 
         if not host or host in ("localhost", "127.0.0.1", "0.0.0.0", "testserver"):
+            return None
+
+        # Validate host against allowed platforms to prevent host header spoofing
+        allowed_hosts = os.environ.get("ALLOWED_HOSTS", "").split(",")
+        if allowed_hosts and host not in allowed_hosts and not host.endswith(f".{platform_host}"):
             return None
 
         from apps.schools.models import School
