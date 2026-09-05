@@ -3,7 +3,8 @@ from django.contrib.auth import logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
-from django.db import models
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, models
 from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
@@ -58,6 +59,7 @@ from .serializers import (
     PermissionSerializer,
     RolePermissionCreateSerializer,
     RolePermissionSerializer,
+    SchoolAdminProvisionSerializer,
     StaffAttendanceCorrectionSerializer,
     StaffAttendanceSerializer,
     StaffLeaveActionSerializer,
@@ -1831,39 +1833,74 @@ class SuperAdminSchoolCreateView(APIView):
     permission_classes = [IsAuthenticated, IsSuperAdmin]
 
     def post(self, request):
-        serializer = SchoolSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        school = serializer.save()
+        school_serializer = SchoolSerializer(data=request.data)
+        school_serializer.is_valid(raise_exception=True)
 
-        # Create admin user. Usernames are unique per school, and password is
-        # auto-generated (forcing a change on first login) unless provided.
-        from .services import create_user_with_username
-
-        admin_user, admin_username, password = create_user_with_username(
-            request.data.get("admin_username")
-            or f"admin-{school.code.lower()}",
-            institution=school,
-            email=request.data.get("admin_email") or None,
-            password=request.data.get("admin_password") or None,
-            first_name=request.data.get("admin_first_name", "Admin"),
-            last_name=request.data.get("admin_last_name", school.name),
+        admin_serializer = SchoolAdminProvisionSerializer(
+            data={
+                "username": request.data.get("admin_username") or "",
+                "email": request.data.get("admin_email") or "",
+                "password": request.data.get("admin_password") or "",
+                "first_name": request.data.get("admin_first_name", ""),
+                "last_name": request.data.get("admin_last_name", ""),
+                "phone": request.data.get("admin_phone") or "",
+            }
         )
-        if request.data.get("admin_phone"):
-            admin_user.phone = request.data.get("admin_phone")
-            admin_user.save(update_fields=["phone"])
+        admin_serializer.is_valid(raise_exception=True)
 
-        # Create institution membership with admin role
-        membership = InstitutionMembership.objects.create(
-            user=admin_user,
-            institution=school,
-            status="active",
-        )
-        RoleAssignment.objects.create(
-            membership=membership,
-            role=Role.ADMIN,
-        )
+        # Provision the school together with its admin inside one transaction
+        # (see provision_school_with_admin). Any failure below means the
+        # school was rolled back, so no partial provisioning can leak out.
+        from .services import provision_school_with_admin
 
-        # Generate credentials response
+        try:
+            school, admin_user, admin_username, password = (
+                provision_school_with_admin(
+                    school_serializer.validated_data,
+                    admin_serializer.validated_data,
+                )
+            )
+        except (IntegrityError, RuntimeError):
+            record_audit(
+                request=request,
+                action="school_create_failed",
+                model_name="School",
+                object_repr=request.data.get("name", ""),
+                details={
+                    "reason": "Admin provisioning failed; school was rolled back.",
+                    "admin_username": admin_serializer.validated_data.get(
+                        "username", ""
+                    ),
+                    "admin_email": admin_serializer.validated_data.get("email", ""),
+                },
+            )
+            return Response(
+                {
+                    "detail": (
+                        "School creation rolled back: the admin account could "
+                        "not be provisioned. Check that the email/username is "
+                        "available and retry."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as exc:
+            record_audit(
+                request=request,
+                action="school_create_failed",
+                model_name="School",
+                object_repr=request.data.get("name", ""),
+                details={
+                    "reason": "Membership validation failed; school rolled back.",
+                    "admin_username": admin_serializer.validated_data.get(
+                        "username", ""
+                    ),
+                },
+            )
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Credentials are returned exactly once. They are never persisted and
+        # never written to the audit log.
         credentials = {
             "username": admin_username,
             "password": password,
@@ -1880,13 +1917,14 @@ class SuperAdminSchoolCreateView(APIView):
             details={
                 "school_code": school.code,
                 "admin_username": admin_user.username,
+                "admin_must_change_password": admin_user.must_change_password,
             },
         )
 
         return Response({
             "school": SchoolSerializer(school).data,
             "admin_credentials": credentials,
-            "message": "School and admin user created successfully. Save the credentials securely.",
+            "message": "School and admin user created successfully. Save the credentials securely.", 
         }, status=status.HTTP_201_CREATED)
 
 

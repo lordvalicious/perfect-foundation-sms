@@ -223,3 +223,64 @@ def create_user_with_username(
         f"Could not allocate a unique username for base '{base}' "
         f"after {max_attempts} attempts."
     )
+
+
+def provision_school_with_admin(school_data, admin_data=None):
+    """Create a school together with its School Admin, atomically.
+
+    A school is only usable once it has a working admin user, so both must
+    succeed or neither may. Within one transaction this creates:
+
+      * the ``School`` (from validated create data; ``code`` auto-generated
+        when blank),
+      * its ``SchoolSettings`` row (white-label / branding defaults),
+      * the admin ``User`` — per-school unique username, hash-verified
+        password (a temporary one when none is supplied),
+      * an active ``InstitutionMembership`` plus a ``Role.ADMIN`` assignment
+        binding the admin to *this* school only (a foreign ``institution``
+        value in the payload is ignored — there is no cross-school branch).
+
+    ``create_user_with_username`` uses nested savepoints, so an \u201cundo
+    transaction\u201d bug is impossible: any ``IntegrityError`` /
+    ``ValidationError`` / ``RuntimeError`` (e.g. duplicate username base,
+    email conflict, exhausted candidates) rolls the whole operation back —
+    no orphaned school, user, membership or role.
+
+    Returns ``(school, admin_user, admin_username, password)`` where
+    ``password`` is the plaintext password in force. The caller may return it
+    to the user exactly once; it is never persisted here beyond the hash and
+    is never written to audit logs.
+    """
+    from apps.accounts.models import (
+        InstitutionMembership,
+        Role,
+        RoleAssignment,
+    )
+    from apps.schools.models import School, SchoolSettings
+
+    admin_data = admin_data or {}
+    with transaction.atomic():
+        school = School.objects.create(**school_data)
+        SchoolSettings.objects.get_or_create(school=school)
+
+        base = admin_data.get("username") or f"admin-{school.code.lower()}"
+        admin_user, admin_username, password = create_user_with_username(
+            base,
+            institution=school,
+            email=admin_data.get("email") or None,
+            password=admin_data.get("password") or None,
+            first_name=admin_data.get("first_name", "School"),
+            last_name=admin_data.get("last_name", school.name),
+        )
+        if admin_data.get("phone"):
+            admin_user.phone = admin_data["phone"]
+            admin_user.save(update_fields=["phone"])
+
+        membership = InstitutionMembership.objects.create(
+            user=admin_user,
+            institution=school,
+            status="active",
+        )
+        RoleAssignment.objects.create(membership=membership, role=Role.ADMIN)
+
+    return school, admin_user, admin_username, password

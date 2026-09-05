@@ -895,3 +895,50 @@ class UserPermissionsSummarySerializer(serializers.Serializer):
         child=serializers.CharField(),
         help_text="All effective permission codenames"
     )
+
+
+class SchoolAdminProvisionSerializer(serializers.Serializer):
+    """Validates the School Admin block of the super-admin school-create API.
+
+    All fields are optional — the provisioning service derives a per-school
+    username, placeholder email and a secure temporary password when a field
+    is left blank. Passwords are write-only and validated against the Django
+    password validators before any account is created.
+    """
+    username = serializers.CharField(
+        required=False, allow_blank=True, max_length=150,
+        help_text="Admin username; unique within the new school.",
+    )
+    email = serializers.EmailField(
+        required=False, allow_blank=True,
+        help_text="Admin email; uniqueness is enforced school-wide.",
+    )
+    password = serializers.CharField(
+        required=False, allow_blank=True, write_only=True,
+        style={"input_type": "password"},
+        help_text="Optional explicit password. Omit to generate a secure "
+                  "temporary password (must-change).",
+    )
+    first_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=150,
+    )
+    last_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=150,
+    )
+    phone = serializers.CharField(
+        required=False, allow_blank=True, max_length=20,
+    )
+
+    def validate_password(self, value):
+        if not value:
+            return value
+        from django.contrib.auth.password_validation import (
+            validate_password as django_validate_password,
+        )
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            django_validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+        return value
