@@ -1608,6 +1608,11 @@ class ConcessionListCreateView(generics.ListCreateAPIView):
         return apply_campus_scope(queryset, self.request, "invoice__enrollment__campus_id")
 
     def perform_create(self, serializer):
+        invoice = serializer.validated_data["invoice"]
+        if invoice.academic_year.school_id != self.request.institution.id:
+            raise PermissionDenied("Invoice is outside the active institution.")
+        from apps.accounts.access import assert_campus_allowed
+        assert_campus_allowed(self.request.user, invoice.enrollment.campus_id)
         serializer.save(institution=self.request.institution)
 
 
@@ -1667,6 +1672,14 @@ class FineListCreateView(generics.ListCreateAPIView):
         return apply_campus_scope(queryset, self.request, "student__enrollments__campus_id")
 
     def perform_create(self, serializer):
+        academic_year = serializer.validated_data["academic_year"]
+        if academic_year.school_id != self.request.institution.id:
+            raise PermissionDenied("Academic year is outside the active institution.")
+        student = serializer.validated_data["student"]
+        from apps.accounts.access import assert_campus_allowed
+        enrollment = student.enrollments.filter(status="active").first()
+        if enrollment is not None:
+            assert_campus_allowed(self.request.user, enrollment.campus_id)
         serializer.save(institution=self.request.institution, issued_by=self.request.user)
 
 
@@ -1770,6 +1783,18 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
         return apply_campus_scope(queryset, self.request, "student__enrollments__campus_id")
 
     def perform_create(self, serializer):
+        invoice = serializer.validated_data.get("invoice")
+        if invoice is not None and invoice.academic_year.school_id != self.request.institution.id:
+            raise PermissionDenied("Invoice is outside the active institution.")
+        payment = serializer.validated_data.get("payment")
+        if payment is not None and payment.invoice.academic_year.school_id != self.request.institution.id:
+            raise PermissionDenied("Payment is outside the active institution.")
+        student = serializer.validated_data.get("student")
+        if student is not None:
+            from apps.accounts.access import assert_campus_allowed
+            enrollment = student.enrollments.filter(status="active").first()
+            if enrollment is not None:
+                assert_campus_allowed(self.request.user, enrollment.campus_id)
         serializer.save(institution=self.request.institution, created_by=self.request.user)
 
 
