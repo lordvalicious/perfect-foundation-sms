@@ -11,6 +11,7 @@ from .twofa_views import (
 )
 from .views import (
     AccountLockoutStatusView,
+    ActiveCampusView,
     ActiveInstitutionView,
     AdminUnlockAccountView,
     CurrentUserView,
@@ -54,6 +55,11 @@ urlpatterns = [
         "active-institution/",
         ActiveInstitutionView.as_view(),
         name="active-institution",
+    ),
+    path(
+        "active-campus/",
+        ActiveCampusView.as_view(),
+        name="active-campus",
     ),
     path(
         "users/<int:pk>/",

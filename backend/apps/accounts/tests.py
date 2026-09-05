@@ -847,28 +847,50 @@ class SchoolSwitchingTests(TestCase):
 
         # Clients
         self.super_client = APIClient()
-        self.super_client.force_authenticate(user=self.super_admin)
+        self.super_client.force_login(self.super_admin)
         self.admin_client = APIClient()
-        self.admin_client.force_authenticate(user=self.normal_admin)
+        self.admin_client.force_login(self.normal_admin)
         self.acct_client = APIClient()
-        self.acct_client.force_authenticate(user=self.accountant)
+        self.acct_client.force_login(self.accountant)
         self.teacher_client = APIClient()
-        self.teacher_client.force_authenticate(user=self.teacher)
+        self.teacher_client.force_login(self.teacher)
         self.student_client = APIClient()
-        self.student_client.force_authenticate(user=self.student)
+        self.student_client.force_login(self.student)
 
-        # Login helpers
+        # Deterministic starting context: pin the session to Lahore so the
+        # campus assertions never depend on membership ordering.
+        self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_lahore.pk},
+            format='json',
+        )
+        self.admin_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_lahore.pk},
+            format='json',
+        )
+        self.acct_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_lahore.pk},
+            format='json',
+        )
+        self.teacher_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_lahore.pk},
+            format='json',
+        )
+        self.student_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_lahore.pk},
+            format='json',
+        )
+
+        # CSRF cookie for subsequent API POSTs
         self.super_client.post('/api/auth/csrf/', {}, format='json')
         self.admin_client.post('/api/auth/csrf/', {}, format='json')
         self.acct_client.post('/api/auth/csrf/', {}, format='json')
         self.teacher_client.post('/api/auth/csrf/', {}, format='json')
         self.student_client.post('/api/auth/csrf/', {}, format='json')
-
-        self.super_client.post('/api/auth/login/', {'username': 'sa-switch', 'password': 'TestPass123!'}, format='json')
-        self.admin_client.post('/api/auth/login/', {'username': 'admin', 'password': 'Admin123!'}, format='json')
-        self.acct_client.post('/api/auth/login/', {'username': 'accountant', 'password': 'TestPass123!'}, format='json')
-        self.teacher_client.post('/api/auth/login/', {'username': 'teacher', 'password': 'TestPass123!'}, format='json')
-        self.student_client.post('/api/auth/login/', {'username': 'student', 'password': 'TestPass123!'}, format='json')
 
     def test_super_admin_can_switch_to_lahore(self):
         """Super Admin can switch to Lahore."""
@@ -974,3 +996,116 @@ class SchoolSwitchingTests(TestCase):
             format='json',
         )
         self.assertEqual(response.status_code, 404)
+
+    def test_super_admin_can_switch_to_school_without_membership_row(self):
+        """Platform Super Admin can switch into any active school even with no
+        membership row for it (mirrors ActiveInstitutionMiddleware)."""
+        quetta = School.objects.create(name="Quetta School", status="active")
+
+        response = self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': quetta.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['institution']['id'], quetta.pk)
+
+    def test_non_super_admin_still_cannot_switch_without_membership(self):
+        """A normal user never gains switch rights to a school with no row."""
+        quetta = School.objects.create(name="Quetta School", status="active")
+
+        response = self.admin_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': quetta.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_active_campus_returns_school_scoped_list(self):
+        """GET active-campus lists only the active school's campuses."""
+        response = self.super_client.get('/api/auth/active-campus/')
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        ids = [c["id"] for c in data["campuses"]]
+        self.assertIn(self.campus_lahore.pk, ids)
+        self.assertNotIn(self.campus_sialkot.pk, ids)
+        self.assertIsNone(data["campus"])
+
+    def test_active_campus_can_be_set_and_read(self):
+        """POST persists the active campus; GET returns it."""
+        response = self.super_client.post(
+            '/api/auth/active-campus/',
+            {'campus_id': self.campus_lahore.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()['campus']['id'],
+            self.campus_lahore.pk,
+        )
+
+        response = self.super_client.get('/api/auth/active-campus/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            response.json()['campus']['id'],
+            self.campus_lahore.pk,
+        )
+
+    def test_active_campus_cannot_target_another_school(self):
+        """A campus belonging to a different school is rejected (404)."""
+        response = self.super_client.post(
+            '/api/auth/active-campus/',
+            {'campus_id': self.campus_sialkot.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_active_campus_restricted_to_non_global_user(self):
+        """Non-global users may only select one of their allowed campuses."""
+        response = self.teacher_client.post(
+            '/api/auth/active-campus/',
+            {'campus_id': self.campus_lahore.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+        response = self.teacher_client.get('/api/auth/active-campus/')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['campuses'], [])
+
+    def test_active_campus_clear(self):
+        """POST with null campus_id clears the selection."""
+        self.super_client.post(
+            '/api/auth/active-campus/',
+            {'campus_id': self.campus_lahore.pk},
+            format='json',
+        )
+        response = self.super_client.post(
+            '/api/auth/active-campus/',
+            {'campus_id': None},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()['campus'])
+
+        response = self.super_client.get('/api/auth/active-campus/')
+        self.assertIsNone(response.json()['campus'])
+
+    def test_school_switch_clears_active_campus(self):
+        """Switching schools resets the persisted active campus."""
+        self.super_client.post(
+            '/api/auth/active-campus/',
+            {'campus_id': self.campus_lahore.pk},
+            format='json',
+        )
+        self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        response = self.super_client.get('/api/auth/active-campus/')
+        self.assertEqual(response.status_code, 200)
+        self.assertIsNone(response.json()['campus'])
+        ids = [c["id"] for c in response.json()["campuses"]]
+        self.assertNotIn(self.campus_lahore.pk, ids)
+        self.assertIn(self.campus_sialkot.pk, ids)

@@ -16,7 +16,10 @@ from django.contrib.auth import logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
-from django.core.exceptions import ValidationError as DjangoValidationError
+from django.core.exceptions import (
+    PermissionDenied as DjangoPermissionDenied,
+    ValidationError as DjangoValidationError,
+)
 from django.db import IntegrityError, models
 from django.db.models import Q
 from django.http import JsonResponse
@@ -36,7 +39,9 @@ from .access import (
     apply_campus_scope,
     assert_campus_allowed,
     can_manage_role,
+    is_global,
     restrict_to_allowed_campuses,
+    user_allowed_campus_ids,
 )
 from apps.accounts.permissions import (
     IsAcademicMemberRole,
@@ -486,29 +491,173 @@ class ActiveInstitutionView(APIView):
             status="active",
         ).select_related("institution").first()
 
-        if membership is None:
+        # The platform Super Admin may switch into any active school even
+        # without a membership row for it (they manage every tenant). This
+        # mirrors ActiveInstitutionMiddleware, which honors a non-membership
+        # session switch for super users. Holds for both Django superusers and
+        # accounts carrying the super_admin role.
+        is_platform_admin = (
+            request.user.is_superuser
+            or request.user.has_any_role(["super_admin"])
+        )
+
+        if membership is None and not is_platform_admin:
             raise PermissionDenied(
                 "You do not have an active membership in this institution."
             )
 
-        request.session["active_institution_id"] = membership.institution_id
+        request.session["active_institution_id"] = school.id
+        # A campus belongs to a specific school; reset it on every switch.
+        request.session.pop("active_campus_id", None)
         record_audit(
             request=request,
             action="institution_switched",
-            details={"institution_id": membership.institution_id},
+            details={"institution_id": school.id},
         )
+
+        if membership is not None:
+            roles = list(
+                membership.role_assignments.values_list("role", flat=True)
+            )
+        else:
+            roles = list(request.user.get_roles(school))
+
         return Response(
             {
                 "institution": {
-                    "id": membership.institution_id,
-                    "name": membership.institution.name,
-                    "institution_type": membership.institution.institution_type,
+                    "id": school.id,
+                    "name": school.name,
+                    "institution_type": school.institution_type,
                 },
-                "roles": list(
-                    membership.role_assignments.values_list("role", flat=True)
-                ),
+                "roles": roles,
             }
         )
+
+
+class ActiveCampusView(APIView):
+    """Read or switch the active campus for the current school context.
+
+    GET  /api/auth/active-campus/
+        -> {"campus": {"id", "name"} | null, "campuses": [{"id", "name"}, ...]}
+
+    ``campuses`` is restricted to the user's allowed campuses within the
+    active school (global roles see every active campus). ``campus`` is the
+    session-persisted selection, cleared on school switch.
+
+    POST /api/auth/active-campus/  {"campus_id": <id> | null}
+        Validates the campus belongs to the active school and that the user
+        may access it, then persists it to the session. Passing null (or no
+        campus_id) clears the selection.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    session_key = "active_campus_id"
+
+    def get(self, request):
+        from apps.schools.models import Campus
+
+        institution = getattr(request, "institution", None)
+        if institution is None:
+            return Response({"campus": None, "campuses": []})
+
+        school_campuses = Campus.objects.filter(
+            school=institution, status="active"
+        )
+
+        campus = None
+        raw = request.session.get(self.session_key)
+        if raw is not None:
+            try:
+                int(raw)
+            except (TypeError, ValueError):
+                request.session.pop(self.session_key, None)
+                raw = None
+            if raw is not None:
+                campus = school_campuses.filter(pk=raw).first()
+                if campus is None:
+                    request.session.pop(self.session_key, None)
+
+        accessible = school_campuses
+        if not is_global(request.user):
+            allowed = user_allowed_campus_ids(request.user)
+            accessible = (
+                school_campuses.filter(pk__in=allowed)
+                if allowed
+                else school_campuses.none()
+            )
+
+        return Response(
+            {
+                "campus": (
+                    {"id": campus.id, "name": campus.name}
+                    if campus is not None
+                    else None
+                ),
+                "campuses": [
+                    {"id": c.id, "name": c.name}
+                    for c in accessible.order_by("name")
+                ],
+            }
+        )
+
+    def post(self, request):
+        from apps.schools.models import Campus
+
+        institution = getattr(request, "institution", None)
+        if institution is None:
+            return Response(
+                {"detail": "No active school."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        raw = request.data.get("campus_id")
+
+        # Clear the active campus selection.
+        if raw is None or raw == "":
+            request.session.pop(self.session_key, None)
+            record_audit(
+                request=request,
+                action="campus_switched",
+                details={"campus_id": None},
+            )
+            return Response({"campus": None})
+
+        try:
+            campus_id = int(raw)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "Invalid campus ID."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Reuse the shared access helper (raises django PermissionDenied).
+        try:
+            assert_campus_allowed(request.user, campus_id)
+        except DjangoPermissionDenied as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        campus = Campus.objects.filter(
+            pk=campus_id,
+            school=institution,
+            status="active",
+        ).first()
+        if campus is None:
+            return Response(
+                {"detail": "Campus not found or inactive."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        request.session[self.session_key] = campus.id
+        record_audit(
+            request=request,
+            action="campus_switched",
+            details={"campus_id": campus.id, "campus_name": campus.name},
+        )
+        return Response({"campus": {"id": campus.id, "name": campus.name}})
 
 
 class UserProfileView(APIView):
@@ -2010,6 +2159,8 @@ class SuperAdminSchoolSwitchView(APIView):
 
         # Update session
         request.session["active_institution_id"] = school.id
+        # A campus belongs to a specific school; reset it on every switch.
+        request.session.pop("active_campus_id", None)
 
         record_audit(
             request=request,

@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 import { useAuth } from "./auth";
-import { apiFetch } from "./api";
+import { apiFetch, jsonHeaders } from "./api";
 
 const SchoolContext = createContext(null);
 
@@ -16,6 +16,9 @@ export function SchoolProvider({ children }) {
   const { user } = useAuth();
   const [currentSchool, setCurrentSchool] = useState(null);
   const [currentRoles, setCurrentRoles] = useState([]);
+  const [availableSchools, setAvailableSchools] = useState([]);
+  const [activeCampus, setActiveCampus] = useState(null);
+  const [campusList, setCampusList] = useState([]);
   const [modules, setModules] = useState({
     loaded: false,
     enabled: [],
@@ -32,17 +35,6 @@ export function SchoolProvider({ children }) {
   const seqRef = useRef(0);
   const abortRef = useRef(null);
 
-  const availableSchools = useMemo(() => {
-    if (!user?.memberships) return [];
-    return user.memberships
-      .filter((m) => m.status === "active")
-      .map((m) => ({
-        id: m.institution,
-        name: m.institution_name,
-        roles: m.roles.map((r) => r.role),
-      }));
-  }, [user]);
-
   const fetchActiveInstitution = useCallback(
     (mode = "initial") => {
       // Abort any in-flight request from a previous switch/refresh.
@@ -52,12 +44,14 @@ export function SchoolProvider({ children }) {
       abortRef.current = controller;
       const token = ++seqRef.current;
 
-      const apply = (school, roles, modData) => {
+      const apply = (school, roles, modData, campusData, allSchools) => {
         // Ignore the result if a newer request has already started.
         if (token !== seqRef.current) return;
 
         setCurrentSchool(school);
         setCurrentRoles(roles);
+        setActiveCampus(campusData?.campus || null);
+        setCampusList(campusData?.campuses || []);
         if (modData) {
           setModules({
             loaded: true,
@@ -66,6 +60,35 @@ export function SchoolProvider({ children }) {
             schoolStatus: modData.school_status || "active",
           });
         }
+
+        // Platform admins can switch into every school, not only the ones they
+        // hold membership rows for. Merge the memberships with the admin list.
+        const membershipSchools = (user?.memberships || [])
+          .filter((m) => m.status === "active")
+          .map((m) => ({
+            id: m.institution,
+            name: m.institution_name,
+            roles: m.roles.map((r) => r.role),
+          }));
+
+        if (Array.isArray(allSchools) && allSchools.length > 0) {
+          const seen = new Set();
+          const merged = [];
+          for (const s of [...allSchools, ...membershipSchools]) {
+            if (s && s.id != null && !seen.has(s.id)) {
+              seen.add(s.id);
+              merged.push({
+                id: s.id,
+                name: s.name || "Untitled School",
+                roles: s.roles || [],
+              });
+            }
+          }
+          setAvailableSchools(merged);
+        } else {
+          setAvailableSchools(membershipSchools);
+        }
+
         setError("");
         setLoading(false);
         if (mode === "switch") setIsSwitching(false);
@@ -74,6 +97,9 @@ export function SchoolProvider({ children }) {
       if (!user) {
         setCurrentSchool(null);
         setCurrentRoles([]);
+        setActiveCampus(null);
+        setCampusList([]);
+        setAvailableSchools([]);
         setModules({ loaded: false, enabled: [], isPlatformAdmin: false, schoolStatus: "active" });
         setLoading(false);
         if (mode === "switch") setIsSwitching(false);
@@ -94,11 +120,27 @@ export function SchoolProvider({ children }) {
           { signal: controller.signal },
           "Could not load modules."
         ),
-      ]).then(([instResult, modsResult]) => {
+        apiFetch(
+          "/api/auth/active-campus/",
+          { signal: controller.signal },
+          "Could not load active campus."
+        ),
+        // Only platform admins can read this; for everyone else it 403s and is
+        // ignored below.
+        apiFetch(
+          "/api/auth/super-admin/schools/",
+          { signal: controller.signal },
+          "Could not load schools."
+        ),
+      ]).then(([instResult, modsResult, campusResult, schoolsResult]) => {
         if (controller.signal.aborted) return;
 
         const inst = instResult.status === "fulfilled" ? instResult.value : null;
         const mods = modsResult.status === "fulfilled" ? modsResult.value : null;
+        const campusData =
+          campusResult.status === "fulfilled" ? campusResult.value : null;
+        const allSchools =
+          schoolsResult.status === "fulfilled" ? schoolsResult.value : null;
 
         const school =
           inst?.institution ||
@@ -116,7 +158,7 @@ export function SchoolProvider({ children }) {
             ? user.memberships[0].roles.map((r) => r.role)
             : inst?.roles || [];
 
-        apply(school, roles, mods);
+        apply(school, roles, mods, campusData, allSchools);
       });
     },
     [user]
@@ -145,7 +187,7 @@ export function SchoolProvider({ children }) {
           "/api/auth/active-institution/",
           {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: jsonHeaders(),
             body: JSON.stringify({ institution_id: institutionId }),
           },
           "Failed to switch school."
@@ -168,6 +210,30 @@ export function SchoolProvider({ children }) {
     },
     [fetchActiveInstitution]
   );
+
+  // Persist the active campus for the current school context. Pass null to
+  // clear the selection ("all campuses").
+  const setActiveCampusId = useCallback(async (campusId) => {
+    setError("");
+    try {
+      const data = await apiFetch(
+        "/api/auth/active-campus/",
+        {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ campus_id: campusId }),
+        },
+        "Failed to switch campus."
+      );
+      const campus = data?.campus || null;
+      setActiveCampus(campus);
+      setSchoolScopeVersion((v) => v + 1);
+      return campus;
+    } catch (err) {
+      setError(err.message);
+      throw err;
+    }
+  }, []);
 
   const refreshSchool = useCallback(() => {
     return fetchActiveInstitution("refresh");
@@ -204,12 +270,15 @@ export function SchoolProvider({ children }) {
       currentSchool,
       currentRoles,
       availableSchools,
+      activeCampus,
+      campusList,
       modules,
       loading,
       isSwitching,
       error,
       schoolScopeVersion,
       switchSchool,
+      setActiveCampusId,
       refreshSchool,
       scopedHasRole,
     }),
@@ -217,12 +286,15 @@ export function SchoolProvider({ children }) {
       currentSchool,
       currentRoles,
       availableSchools,
+      activeCampus,
+      campusList,
       modules,
       loading,
       isSwitching,
       error,
       schoolScopeVersion,
       switchSchool,
+      setActiveCampusId,
       refreshSchool,
       scopedHasRole,
     ]
