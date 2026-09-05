@@ -16,14 +16,16 @@ Concurrency-safe username generation
 """
 import re
 import string
+import time
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, transaction
 from django.utils.crypto import get_random_string
 
 User = get_user_model()
 
 USERNAME_MAX_ATTEMPTS = 50
+LOCK_MAX_RETRIES = 20
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +133,19 @@ def generate_username(base, institution=None, max_attempts=USERNAME_MAX_ATTEMPTS
     return f"{base}{get_random_string(6, allowed_chars=string.ascii_lowercase + string.digits)}"
 
 
+def _is_lock_error(exc):
+    """True for transient SQLite/SQLAlchemy-style table/busy lock failures."""
+    message = str(exc).lower()
+    return any(
+        token in message
+        for token in (
+            "database is locked",
+            "database table is locked",
+            "database is busy",
+        )
+    )
+
+
 def create_user_with_username(
     base,
     institution=None,
@@ -165,7 +180,9 @@ def create_user_with_username(
     email = (email or "").strip()
     generated_password = password or get_random_string(length=14)
 
-    for attempt in range(max_attempts):
+    attempt = 0
+    lock_retries = 0
+    while attempt < max_attempts:
         candidate = username_candidate(base, attempt)
         instance_email = email or fallback_email(candidate, institution)
         try:
@@ -181,8 +198,19 @@ def create_user_with_username(
                 )
             return user, candidate, generated_password
         except IntegrityError:
+            # Another writer won the (institution, username) slot; a new
+            # username can never fix an email conflict, so that one is terminal.
             if User.objects.filter(email__iexact=instance_email).exists():
                 raise
+            attempt += 1
+            continue
+        except OperationalError as exc:
+            # Transient DB lock (e.g. SQLite concurrent-writer table lock):
+            # retry the SAME candidate briefly before giving up.
+            if not _is_lock_error(exc) or lock_retries >= LOCK_MAX_RETRIES:
+                raise
+            lock_retries += 1
+            time.sleep(min(0.02 * lock_retries, 0.25))
             continue
 
     raise RuntimeError(
