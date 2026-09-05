@@ -9,8 +9,10 @@ Covers the PROMPT-4 security requirements:
 """
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import TestCase
+from django.utils import timezone
 from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.accounts.access import can_manage_role
@@ -109,6 +111,28 @@ class SuperAdminIntegrityTests(RoleSecurityBase):
             admin2.memberships.get(), Role.SUPER_ADMIN
         )
         self.assertFalse(created)
+        self.assertEqual(assignment.role, Role.ADMIN)
+        self.assertIsNotNone(note)
+        self.assertEqual(
+            RoleAssignment.objects.filter(role=Role.SUPER_ADMIN).count(),
+            1,
+        )
+
+    def test_assign_role_safely_same_user_second_membership_stays_single(self):
+        # Re-seeding the holder of the Super Admin role on another school must
+        # NOT crash with IntegrityError - it degrades to an admin assignment
+        # while keeping exactly one super_admin row.
+        sa = self._user("sa-dup", Role.SUPER_ADMIN, self.school_a)
+
+        assignment, created, note = assign_role_safely(
+            InstitutionMembership.objects.create(
+                user=sa,
+                institution=self.school_b,
+                status="active",
+            ),
+            Role.SUPER_ADMIN,
+        )
+        self.assertTrue(created)
         self.assertEqual(assignment.role, Role.ADMIN)
         self.assertIsNotNone(note)
         self.assertEqual(
@@ -420,3 +444,113 @@ class WrongSchoolAssignmentTests(RoleSecurityBase):
         )
         # Sanity: the FK points at the same school as the membership.
         self.assertEqual(user.institution_id, membership.institution_id)
+
+
+class SuperAdminCouplingTests(RoleSecurityBase):
+    """Granting the role must elevate, and a non-superuser may not hold it."""
+
+    def test_granting_super_admin_role_elevates_to_django_superuser(self):
+        holder = self._user("cpl-holder", Role.ADMIN, self.school_a)
+        self.assertFalse(holder.is_superuser)
+        self.assertFalse(holder.is_staff)
+
+        RoleAssignment.objects.create(
+            membership=holder.memberships.get(),
+            role=Role.SUPER_ADMIN,
+        )
+        holder.refresh_from_db()
+        self.assertTrue(holder.is_superuser)
+        self.assertTrue(holder.is_staff)
+
+    def test_admin_role_does_not_elevate(self):
+        admin = self._user("cpl-admin", Role.ADMIN, self.school_a)
+        admin.refresh_from_db()
+        self.assertFalse(admin.is_superuser)
+        self.assertFalse(admin.is_staff)
+
+    def test_super_admin_role_rejected_on_non_superuser_by_clean(self):
+        teacher = self._user("cpl-teacher", Role.TEACHER, self.school_a)
+        assignment = RoleAssignment(
+            membership=teacher.memberships.get(),
+            role=Role.SUPER_ADMIN,
+        )
+        with self.assertRaises(ValidationError):
+            assignment.clean()
+
+    def test_user_clean_rejects_role_flag_drift(self):
+        holder = self._user("cpl-drift", Role.ADMIN, self.school_a)
+        RoleAssignment.objects.create(
+            membership=holder.memberships.get(),
+            role=Role.SUPER_ADMIN,
+        )
+        holder.refresh_from_db()
+        holder.is_superuser = False  # simulated drift / raw DB edit
+        with self.assertRaises(ValidationError):
+            holder.clean()
+
+
+class IntegrityCommandTests(RoleSecurityBase):
+    """audit_superadmin command: reporting + --fix backfill."""
+
+    def _command_ok(self):
+        try:
+            call_command("audit_superadmin")
+            return True
+        except SystemExit as exc:
+            return exc.code in (0, None)
+
+    def _exit_code(self, *args, **kwargs):
+        try:
+            call_command("audit_superadmin", *args, **kwargs)
+            return None  # clean exit (code 0)
+        except SystemExit as exc:
+            return exc.code
+
+    def test_audit_passes_when_invariants_hold(self):
+        self._user("audit-sa", Role.SUPER_ADMIN, self.school_a)
+        self._user("audit-admin", Role.ADMIN, self.school_a)
+        self.assertTrue(self._command_ok())
+
+    def test_audit_flags_missing_super_admin(self):
+        self._user("audit-nobody", Role.ADMIN, self.school_a)
+        self.assertEqual(self._exit_code(), 1)
+
+    def test_audit_flags_superuser_without_role(self):
+        self._user(
+            "audit-root",
+            Role.ADMIN,
+            self.school_a,
+            is_superuser=True,
+        )
+        self.assertEqual(self._exit_code(), 1)
+
+    def test_audit_warns_on_duplicate_memberships_and_fix_demotes(self):
+        self._user("audit-sa2", Role.SUPER_ADMIN, self.school_a)
+        teacher = self._user("audit-t2", Role.TEACHER, self.school_a)
+
+        # Create historical drift by bypassing the single-school save guard.
+        InstitutionMembership.objects.bulk_create(
+            [
+                InstitutionMembership(
+                    user=teacher,
+                    institution=self.school_b,
+                    status="active",
+                    created_at=timezone.now(),
+                    joined_at=timezone.now().date(),
+                )
+            ]
+        )
+        self.assertEqual(
+            teacher.memberships.filter(status="active").count(),
+            2,
+        )
+
+        # Without --fix the command reports the drift (exit 1)...
+        self.assertEqual(self._exit_code(), 1)
+
+        # ...and with --fix it demotes the extra membership (exit 0).
+        self.assertIsNone(self._exit_code(fix=True))
+        self.assertEqual(
+            teacher.memberships.filter(status="active").count(),
+            1,
+        )

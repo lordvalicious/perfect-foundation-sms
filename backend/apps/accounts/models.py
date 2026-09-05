@@ -207,6 +207,23 @@ class User(AbstractUser):
                     }
                 )
 
+        # Hard-couple the role with Django superuser. A user holding the
+        # super_admin role MUST be a Django superuser (unchecked demotions would
+        # silently close the single-Super-Admin invariant surface).
+        if (
+            not self.is_superuser
+            and self.has_role(Role.SUPER_ADMIN)
+        ):
+            raise ValidationError(
+                {
+                    "is_superuser": (
+                        "This account holds the super_admin role but is not a "
+                        "Django superuser. Keep is_superuser=True for the "
+                        "platform Super Admin."
+                    )
+                }
+            )
+
     def is_superadmin_expected(self):
         """Whether this user holds (or is being assigned) Super Admin powers.
 
@@ -462,6 +479,38 @@ class RoleAssignment(models.Model):
                 f"({existing.membership.user.username}). Duplicate Super Admin "
                 "accounts are not allowed."
             )
+        if self.membership_id and not self.membership.user.is_superuser:
+            raise ValidationError(
+                {
+                    "role": (
+                        "The super_admin role requires a Django superuser "
+                        "account (is_superuser=True). Elevate the account first "
+                        "(e.g. via ensure_superuser) so the platform stays "
+                        "consistent."
+                    )
+                }
+            )
+
+    def save(self, *args, **kwargs):
+        """Persist the assignment and keep the Super Admin invariant tight.
+
+        Granting ``super_admin`` automatically elevates the account to a Django
+        superuser (and staff), so the role can never exist on an account that is
+        not also ``is_superuser`` — the model layer hard-couples the two. The
+        flip is done through ``QuerySet.update`` to avoid recursion and is only
+        applied *after* the row is safely inserted (a duplicate ``super_admin``
+        raises IntegrityError before any elevation).
+        """
+        super().save(*args, **kwargs)
+        if self.role == Role.SUPER_ADMIN and self.membership_id:
+            user_id = InstitutionMembership.objects.filter(
+                pk=self.membership_id
+            ).values_list("user_id", flat=True).first()
+            if user_id is not None:
+                User.objects.filter(pk=user_id).update(
+                    is_superuser=True,
+                    is_staff=True,
+                )
 
     def __str__(self):
         return f"{self.membership} - {self.get_role_display()}"
@@ -479,13 +528,18 @@ def assign_role_safely(membership, role):
     instead of failing, keeping seeds and commands idempotent.
     """
     if role == Role.SUPER_ADMIN:
+        # Any *other* membership that already holds the role — even the same
+        # account's membership in another school — means this request wants the
+        # second (impossible) Super Admin row. Downgrade to ``admin`` instead of
+        # letting the partial unique constraint raise IntegrityError, keeping
+        # re-seeds idempotent.
         holder = (
             RoleAssignment.objects.filter(role=Role.SUPER_ADMIN)
             .select_related("membership__user")
             .exclude(membership=membership)
             .first()
         )
-        if holder is not None and holder.membership.user_id != membership.user_id:
+        if holder is not None:
             assignment, created = RoleAssignment.objects.get_or_create(
                 membership=membership,
                 role=Role.ADMIN,
@@ -504,6 +558,53 @@ def assign_role_safely(membership, role):
         role=role,
     )
     return assignment, created, None
+
+
+def demote_extra_active_memberships(user):
+    """Enforce the single-school rule over historical ``InstitutionMembership``
+    data for one user.
+
+    A user who is NOT Super Admin and holds more than one *active* membership
+    has all but one demoted to ``inactive``. The kept membership prefers the one
+    matching ``user.institution`` (denormalized FK), else the earliest row.
+    Super Admin users are left untouched.
+
+    Uses ``bulk_update`` on purpose: ``InstitutionMembership.save()`` runs the
+    single-school guard, which would refuse this exact historical demotion.
+
+    Returns the list of demoted (now inactive) memberships.
+    """
+    if user.pk is None or user.is_superuser:
+        return []
+    if RoleAssignment.objects.filter(
+        membership__user=user,
+        role=Role.SUPER_ADMIN,
+    ).exists():
+        return []
+
+    actives = list(
+        InstitutionMembership.objects.filter(
+            user=user,
+            status="active",
+        ).order_by("created_at", "id")
+    )
+    if len(actives) <= 1:
+        return []
+
+    keeper = None
+    if user.institution_id is not None:
+        keeper = next(
+            (m for m in actives if m.institution_id == user.institution_id),
+            None,
+        )
+    if keeper is None:
+        keeper = actives[0]
+
+    demoted = [m for m in actives if m.pk != keeper.pk]
+    for membership in demoted:
+        membership.status = "inactive"
+    InstitutionMembership.objects.bulk_update(demoted, ["status"])
+    return demoted
 
 
 class StaffProfile(SoftDeleteMixin):
