@@ -1,9 +1,12 @@
 /**
- * sessionWatch — global 401 (session-expiry) detection.
+ * sessionWatch — global 401/403 (session-expiry) detection.
  *
  * Wraps window.fetch once and dispatches a `pf:unauthorized` event whenever an
- * authenticated API request returns HTTP 401. The AuthProvider subscribes to
- * this event and clears the in-memory user so the Shell redirects to login.
+ * authenticated API request returns HTTP 401, or returns HTTP 403 while the
+ * session is actually gone. The 403 case is verified against /api/auth/me/ so
+ * that legitimate "authenticated but forbidden" responses do not force a
+ * logout. The AuthProvider subscribes to this event and clears the in-memory
+ * user so the Shell redirects to login.
  *
  * This is a UX convenience (session expiry). It is NOT a security mechanism —
  * the backend remains the sole authority on authorization.
@@ -21,6 +24,8 @@ const EXCLUDED_PATHS = [
   "/api/schools/tenant-config/",
 ];
 
+const SESSION_PROBE = "/api/auth/me/";
+
 let installed = false;
 
 export function installSessionWatch() {
@@ -28,6 +33,24 @@ export function installSessionWatch() {
   installed = true;
 
   const originalFetch = window.fetch.bind(window);
+  let probing = false;
+
+  const fireExpired = () => {
+    window.dispatchEvent(new CustomEvent(INIT_EVENT));
+  };
+
+  const probeSession = () => {
+    if (probing) return;
+    probing = true;
+    originalFetch(SESSION_PROBE, { credentials: "include" })
+      .then((response) => {
+        if (!response.ok) fireExpired();
+      })
+      .catch(() => {})
+      .finally(() => {
+        probing = false;
+      });
+  };
 
   window.fetch = function (input, init) {
     const url =
@@ -46,7 +69,9 @@ export function installSessionWatch() {
     if (shouldWatch) {
       promise.then((response) => {
         if (response.status === 401) {
-          window.dispatchEvent(new CustomEvent(INIT_EVENT));
+          fireExpired();
+        } else if (response.status === 403) {
+          probeSession();
         }
       });
     }
