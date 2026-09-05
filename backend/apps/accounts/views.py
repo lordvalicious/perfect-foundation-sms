@@ -183,6 +183,47 @@ class LoginView(APIView):
     throttle_scope = "login"
 
     def post(self, request):
+        from .services import login_candidate_count, scoped_user_queryset
+
+        # Lockout is surfaced explicitly (403) BEFORE credential validation,
+        # and only when the account can be identified unambiguously in the
+        # declared school scope. A locked duplicate username without a
+        # school_code stays ambiguous and is handled as a plain 400 below.
+        identifier = str(
+            request.data.get("username")
+            or request.data.get("email")
+            or ""
+        ).strip()
+        school_code = str(
+            request.data.get("school_code") or ""
+        ).strip().lower()
+
+        if identifier and (
+            school_code or login_candidate_count(identifier) == 1
+        ):
+            candidate = scoped_user_queryset(
+                identifier,
+                school_code=school_code,
+            ).first()
+            if (
+                candidate is not None
+                and candidate.locked_until
+                and candidate.locked_until > timezone.now()
+            ):
+                lockout_remaining = int(
+                    (candidate.locked_until - timezone.now()).total_seconds() / 60
+                ) + 1
+                return Response(
+                    {
+                        "detail": (
+                            f"Account temporarily locked. Try again in "
+                            f"{lockout_remaining} minutes."
+                        ),
+                        "locked_until": candidate.locked_until.isoformat(),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         serializer = LoginSerializer(
             data=request.data,
             context={"request": request},
@@ -198,9 +239,16 @@ class LoginView(APIView):
             ).strip()
 
             if identifier:
-                user = User.objects.filter(
-                    Q(email__iexact=identifier)
-                    | Q(username=identifier)
+                from .services import scoped_user_queryset
+
+                # Record against the account in the declared school, never an
+                # arbitrary match when the username exists in several schools.
+                school_code = str(
+                    request.data.get("school_code") or ""
+                ).strip().lower()
+                user = scoped_user_queryset(
+                    identifier,
+                    school_code=school_code,
                 ).first()
 
                 if user is not None:
@@ -261,7 +309,7 @@ class LoginView(APIView):
         school_code = serializer.validated_data.get("school_code", "").strip().lower()
         memberships = user.get_active_memberships()
         membership = memberships.filter(
-            institution__code=school_code
+            institution__code__iexact=school_code
         ).first() if school_code else memberships.first()
         if membership is not None:
             request.session["active_institution_id"] = membership.institution_id
@@ -295,10 +343,17 @@ class LoginFailedView(APIView):
         user = None
 
         if username_or_email:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-            user = User.objects.filter(
-                models.Q(email__iexact=username_or_email) | models.Q(username=username_or_email)
+            from .services import scoped_user_queryset
+
+            # Attribute the failure to the account in the declared school;
+            # never to an arbitrary match when the username exists in several
+            # schools.
+            school_code = str(
+                request.data.get("school_code") or ""
+            ).strip().lower()
+            user = scoped_user_queryset(
+                username_or_email,
+                school_code=school_code,
             ).first()
 
         if user:
@@ -1767,26 +1822,22 @@ class SuperAdminSchoolCreateView(APIView):
         serializer.is_valid(raise_exception=True)
         school = serializer.save()
 
-        # Create admin user
-        admin_data = {
-            "username": request.data.get("admin_username") or f"admin-{school.code.lower()}",
-            "email": request.data.get("admin_email"),
-            "first_name": request.data.get("admin_first_name", "Admin"),
-            "last_name": request.data.get("admin_last_name", school.name),
-            "phone": request.data.get("admin_phone", ""),
-        }
-        password = request.data.get("admin_password") or User.objects.make_random_password(length=12)
+        # Create admin user. Usernames are unique per school, and password is
+        # auto-generated (forcing a change on first login) unless provided.
+        from .services import create_user_with_username
 
-        admin_user = User.objects.create_user(
-            username=admin_data["username"],
-            email=admin_data["email"],
-            password=password,
-            first_name=admin_data["first_name"],
-            last_name=admin_data["last_name"],
-            phone=admin_data["phone"],
+        admin_user, admin_username, password = create_user_with_username(
+            request.data.get("admin_username")
+            or f"admin-{school.code.lower()}",
             institution=school,
-            is_active=True,
+            email=request.data.get("admin_email") or None,
+            password=request.data.get("admin_password") or None,
+            first_name=request.data.get("admin_first_name", "Admin"),
+            last_name=request.data.get("admin_last_name", school.name),
         )
+        if request.data.get("admin_phone"):
+            admin_user.phone = request.data.get("admin_phone")
+            admin_user.save(update_fields=["phone"])
 
         # Create institution membership with admin role
         membership = InstitutionMembership.objects.create(
@@ -1801,7 +1852,7 @@ class SuperAdminSchoolCreateView(APIView):
 
         # Generate credentials response
         credentials = {
-            "username": admin_user.username,
+            "username": admin_username,
             "password": password,
             "school_code": school.code,
             "school_name": school.name,

@@ -205,8 +205,12 @@ MEDIA_ROOT = os.environ.get(
 AUTH_USER_MODEL = "accounts.User"
 
 AUTHENTICATION_BACKENDS = [
+    # EmailOrUsernameBackend subclasses ModelBackend, so it alone provides
+    # username/email authentication AND admin login (get_user). Keeping the
+    # plain ModelBackend in the chain would crash authenticate() with
+    # MultipleObjectsReturned as soon as the same username exists in two
+    # schools (its get_by_natural_key lookup is unscoped).
     "apps.accounts.authentication.EmailOrUsernameBackend",
-    "django.contrib.auth.backends.ModelBackend",
 ]
 
 REST_FRAMEWORK = {

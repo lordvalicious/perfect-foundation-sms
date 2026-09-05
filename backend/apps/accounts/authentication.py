@@ -5,10 +5,21 @@ from .models import User
 
 
 class EmailOrUsernameBackend(ModelBackend):
-    """Authenticate with either username or email, scoped to institution."""
+    """Authenticate with either username or email, scoped to institution.
+
+    Scoping sources, in order:
+      * the request's resolved institution (white-label host/session);
+      * an explicit ``school_code`` passed by the caller (school-aware login).
+
+    With no scope at all the lookup is global - the caller must guarantee
+    unambiguity (see ``LoginSerializer``, which refuses ambiguous logins).
+    """
 
     def authenticate(self, request, username=None, password=None, **kwargs):
+        from .services import scoped_user_queryset
+
         email = kwargs.get("email")
+        school_code = kwargs.get("school_code")
 
         identifier = username or email
 
@@ -18,13 +29,11 @@ class EmailOrUsernameBackend(ModelBackend):
         # Determine institution from request
         institution = getattr(request, "institution", None)
 
-        # Build base queryset
-        queryset = User.objects.all()
-
-        # Filter by institution if available (non-super_admin users)
-        # Super admin users have institution=None or is_superuser=True
-        if institution is not None:
-            queryset = queryset.filter(institution=institution)
+        queryset = scoped_user_queryset(
+            identifier,
+            school_code=school_code,
+            institution=institution,
+        )
 
         user = queryset.filter(
             email__iexact=identifier
