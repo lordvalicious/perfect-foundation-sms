@@ -1,0 +1,1841 @@
+{
+  "generated_at": "2026-09-06T00:53:58.449634",
+  "inventory": {
+    "backend": {
+      "apps": {
+        "accounts": {
+          "models": [
+            "Role",
+            "User",
+            "InstitutionMembership",
+            "RoleAssignment",
+            "StaffProfile",
+            "StaffAttendance",
+            "StaffAttendanceCorrection",
+            "StaffLeave",
+            "FailedLoginAttempt",
+            "PasswordHistory",
+            "UserSession",
+            "TwoFABackupCode",
+            "StudentTransfer",
+            "TransferManager",
+            "Permission",
+            "RolePermission",
+            "UserPermission"
+          ],
+          "endpoints": [
+            "csrf/",
+            "login/",
+            "login/failed/",
+            "logout/",
+            "me/",
+            "active-institution/",
+            "users/<int:pk>/",
+            "roles/",
+            "password-reset/",
+            "password-reset/confirm/",
+            "password-change/",
+            "lockout/status/",
+            "admin/unlock/<int:user_id>/",
+            "sessions/",
+            "sessions/revoke-all/",
+            "sessions/<int:session_id>/",
+            "2fa/status/",
+            "2fa/setup/",
+            "2fa/activate/",
+            "2fa/disable/",
+            "2fa/backup-codes/",
+            "2fa/verify-backup/",
+            "permissions/",
+            "permissions/<int:pk>/",
+            "role-permissions/",
+            "role-permissions/create/",
+            "role-permissions/<int:pk>/",
+            "user-permissions/",
+            "user-permissions/create/",
+            "user-permissions/<int:pk>/",
+            "user-permissions/summary/<int:user_id>/",
+            "google/config/",
+            "google/login/",
+            "super-admin/schools/",
+            "super-admin/schools/create/",
+            "super-admin/switch/"
+          ]
+        },
+        "alumni": {
+          "models": [
+            "AlumniProfile"
+          ],
+          "endpoints": [
+            "<int:pk>/"
+          ]
+        },
+        "attendance": {
+          "models": [
+            "Attendance",
+            "AttendanceCorrection"
+          ],
+          "endpoints": [
+            "bulk/",
+            "mark/",
+            "history/",
+            "corrections/",
+            "corrections/<int:pk>/",
+            "summary/",
+            "monthly/",
+            "device-sync/",
+            "cron/absence-alerts/"
+          ]
+        },
+        "audit": {
+          "models": [
+            "AuditLog"
+          ],
+          "endpoints": [
+            "actions/"
+          ]
+        },
+        "communication": {
+          "models": [
+            "Message",
+            "Announcement",
+            "Notification",
+            "SMSLog",
+            "NotificationPreference",
+            "NotificationDispatch",
+            "EmailLog",
+            "MessageTemplate",
+            "QueuedNotification"
+          ],
+          "endpoints": [
+            "announcements/",
+            "announcements/<int:pk>/",
+            "notifications/",
+            "notifications/read-all/",
+            "notifications/<int:pk>/read/",
+            "messages/",
+            "messages/recipients/",
+            "messages/unread-count/",
+            "messages/<int:pk>/",
+            "messages/<int:pk>/thread/",
+            "sms/send/",
+            "sms/logs/",
+            "notification-preferences/",
+            "email/send/",
+            "email/logs/",
+            "cron/fee-reminders/",
+            "cron/process-notifications/",
+            "templates/",
+            "templates/<int:pk>/",
+            "templates/<int:pk>/preview/"
+          ]
+        },
+        "core": {
+          "models": [
+            "SoftDeleteMixin",
+            "SoftDeleteManager",
+            "TimeStampedMixin",
+            "CampusScopedMixin",
+            "InstitutionScopedMixin",
+            "AuditableMixin"
+          ],
+          "endpoints": []
+        },
+        "dashboard": {
+          "models": [],
+          "endpoints": [
+            "overview/",
+            "attendance/",
+            "finance/",
+            "finance/breakdown/",
+            "exams/",
+            "executive/"
+          ]
+        },
+        "digital_ids": {
+          "models": [
+            "IdCard"
+          ],
+          "endpoints": [
+            "cards/",
+            "cards/<int:pk>/",
+            "cards/<int:pk>/revoke/",
+            "cards/<int:pk>/payload/"
+          ]
+        },
+        "discipline": {
+          "models": [
+            "Incident",
+            "DisciplinaryAction"
+          ],
+          "endpoints": [
+            "incidents/",
+            "incidents/<int:pk>/",
+            "incidents/<int:incident_id>/actions/",
+            "summary/"
+          ]
+        },
+        "documents": {
+          "models": [],
+          "endpoints": [
+            "upload/"
+          ]
+        },
+        "events": {
+          "models": [
+            "Event",
+            "EventAudience",
+            "EventRSVP"
+          ],
+          "endpoints": [
+            "<int:pk>/",
+            "<int:pk>/rsvp/"
+          ]
+        },
+        "exams": {
+          "models": [
+            "Exam",
+            "ExamSubject",
+            "StudentResult",
+            "PracticalResult",
+            "ExamSchedule",
+            "ExamSeating"
+          ],
+          "endpoints": [
+            "<int:pk>/",
+            "subjects/",
+            "subjects/<int:pk>/",
+            "schedules/",
+            "schedules/<int:pk>/",
+            "seating/",
+            "seating/bulk/",
+            "seating/<int:pk>/",
+            "results/",
+            "results/<int:pk>/",
+            "practical/",
+            "practical/<int:pk>/",
+            "gradebook/"
+          ]
+        },
+        "finance": {
+          "models": [
+            "FeeCategory",
+            "FeeStructure",
+            "Invoice",
+            "InvoiceItem",
+            "Payment",
+            "PaymentReversal",
+            "Account",
+            "JournalEntry",
+            "JournalLine",
+            "BankAccount",
+            "BankReconciliation",
+            "Budget",
+            "BudgetLine",
+            "Expense",
+            "Concession",
+            "Fine",
+            "Adjustment",
+            "PaymentRefund",
+            "StudentFeeOverride"
+          ],
+          "endpoints": [
+            "accounts/",
+            "journal/",
+            "expenses/",
+            "expenses/<int:pk>/post/",
+            "concessions/",
+            "concessions/<int:pk>/approve/",
+            "refunds/",
+            "reports/trial-balance/",
+            "reports/income-expense/",
+            "reports/receivables/",
+            "invoices/",
+            "invoices/create/",
+            "invoices/<int:pk>/",
+            "payments/",
+            "payments/create/",
+            "payments/<int:pk>/",
+            "payments/<int:pk>/receipt/",
+            "payments/<int:pk>/receipt.pdf/",
+            "payments/reversals/",
+            "stripe/checkout/",
+            "stripe/webhook/",
+            "jazzcash/checkout/",
+            "jazzcash/callback/",
+            "easypaisa/checkout/",
+            "easypaisa/callback/",
+            "categories/",
+            "fee-structures/",
+            "fee-structures/<int:pk>/",
+            "invoices/bulk/",
+            "payments/bulk/",
+            "cron/late-fees/",
+            "late-fees/apply/",
+            "late-fees/preview/",
+            "outstanding/",
+            "outstanding/student/<int:student_id>/",
+            "fee-overrides/",
+            "fee-overrides/<int:pk>/",
+            "invoices/<int:invoice_id>/installments/",
+            "fee-assignment/preview/",
+            "concessions/",
+            "concessions/<int:pk>/",
+            "concessions/<int:pk>/approve/",
+            "fines/",
+            "fines/<int:pk>/",
+            "fines/<int:pk>/approve/",
+            "fines/<int:pk>/waive/",
+            "adjustments/",
+            "adjustments/<int:pk>/",
+            "adjustments/<int:pk>/apply/",
+            "refunds/",
+            "journal-entries/",
+            "journal-entries/<int:pk>/",
+            "journal-entries/<int:pk>/post/",
+            "journal-entries/<int:pk>/void/",
+            "bank-accounts/",
+            "bank-accounts/<int:pk>/",
+            "bank-reconciliations/",
+            "bank-reconciliations/<int:pk>/",
+            "bank-reconciliations/<int:pk>/approve/",
+            "budgets/",
+            "budgets/<int:pk>/",
+            "budgets/<int:budget_id>/lines/",
+            "budgets/<int:pk>/approve/",
+            "budgets/<int:pk>/close/"
+          ]
+        },
+        "health": {
+          "models": [
+            "HealthRecord"
+          ],
+          "endpoints": [
+            "records/",
+            "records/<int:pk>/"
+          ]
+        },
+        "helpdesk": {
+          "models": [
+            "TicketCategory",
+            "SupportTicket",
+            "TicketMessage"
+          ],
+          "endpoints": [
+            "categories/",
+            "tickets/",
+            "tickets/<int:pk>/",
+            "tickets/<int:pk>/assign/",
+            "tickets/<int:pk>/resolve/",
+            "tickets/<int:pk>/reopen/",
+            "tickets/<int:pk>/messages/",
+            "my/tickets/",
+            "my/tickets/create/",
+            "my/tickets/<int:pk>/"
+          ]
+        },
+        "homework": {
+          "models": [
+            "Homework",
+            "Submission"
+          ],
+          "endpoints": [
+            "<int:pk>/",
+            "<int:homework_id>/submissions/",
+            "submissions/<int:pk>/grade/"
+          ]
+        },
+        "hostel": {
+          "models": [
+            "Hostel",
+            "Room",
+            "Allocation"
+          ],
+          "endpoints": [
+            "hostels/",
+            "hostels/<int:pk>/",
+            "rooms/",
+            "allocations/",
+            "allocations/<int:pk>/vacate/"
+          ]
+        },
+        "hr": {
+          "models": [
+            "Department",
+            "Designation",
+            "Employee",
+            "EmploymentContract",
+            "EmployeeDocument",
+            "WorkloadAssignment",
+            "PerformanceReview",
+            "EmploymentEvent",
+            "LeaveType",
+            "LeavePolicy",
+            "LeaveBalance",
+            "LeaveRequest",
+            "Allowance",
+            "Deduction",
+            "Bonus",
+            "Overtime",
+            "Loan",
+            "Advance",
+            "SalaryRevision",
+            "PayrollPeriod",
+            "ExitClearance",
+            "ClearanceItem",
+            "JobPosition",
+            "Candidate",
+            "Application",
+            "Interview"
+          ],
+          "endpoints": [
+            "departments/",
+            "departments/<int:pk>/",
+            "designations/",
+            "designations/<int:pk>/",
+            "employees/",
+            "employees/<int:pk>/",
+            "employees/<int:employee_id>/contracts/",
+            "employees/<int:employee_id>/documents/",
+            "employees/<int:employee_id>/workload/",
+            "employees/<int:employee_id>/reviews/",
+            "leave-types/",
+            "leave-types/<int:pk>/",
+            "leave-policies/",
+            "leave-policies/<int:pk>/",
+            "leave-balances/",
+            "leave-balances/<int:pk>/",
+            "leave-requests/",
+            "leave-requests/<int:pk>/",
+            "leave-requests/<int:pk>/<str:action>/",
+            "allowances/",
+            "allowances/<int:pk>/",
+            "deductions/",
+            "deductions/<int:pk>/",
+            "bonuses/",
+            "bonuses/<int:pk>/",
+            "overtime/",
+            "overtime/<int:pk>/",
+            "overtime/<int:pk>/<str:action>/",
+            "loans/",
+            "loans/<int:pk>/",
+            "loans/<int:pk>/<str:action>/",
+            "advances/",
+            "advances/<int:pk>/",
+            "advances/<int:pk>/<str:action>/",
+            "salary-revisions/",
+            "salary-revisions/<int:pk>/",
+            "payroll-periods/",
+            "payroll-periods/<int:pk>/",
+            "payroll-periods/<int:pk>/<str:action>/",
+            "exit-clearances/",
+            "exit-clearances/<int:pk>/",
+            "clearance-items/<int:pk>/<str:action>/",
+            "job-positions/",
+            "job-positions/<int:pk>/",
+            "candidates/",
+            "candidates/<int:pk>/",
+            "applications/",
+            "applications/<int:pk>/",
+            "interviews/",
+            "interviews/<int:pk>/",
+            "interviews/<int:pk>/<str:action>/",
+            "employment-events/",
+            "employment-events/create/",
+            "employees/<int:pk>/detail/",
+            "employees/<int:employee_id>/contracts/",
+            "employees/<int:employee_id>/documents/",
+            "employees/<int:employee_id>/workload/",
+            "employees/<int:employee_id>/reviews/",
+            "employment-events/",
+            "employment-events/create/"
+          ]
+        },
+        "inventory": {
+          "models": [
+            "AssetCategory",
+            "Supplier",
+            "Asset",
+            "AssetAssignment",
+            "MaintenanceRecord",
+            "StockLevel",
+            "StockMovement"
+          ],
+          "endpoints": [
+            "categories/",
+            "categories/<int:pk>/",
+            "suppliers/",
+            "suppliers/<int:pk>/",
+            "assets/",
+            "assets/<int:pk>/",
+            "assignments/",
+            "assignments/<int:pk>/",
+            "maintenance/",
+            "maintenance/<int:pk>/",
+            "stock/levels/",
+            "stock/levels/<int:pk>/",
+            "stock/movements/",
+            "stock/summary/"
+          ]
+        },
+        "library": {
+          "models": [
+            "Book",
+            "BookCopy",
+            "BookIssue"
+          ],
+          "endpoints": [
+            "books/",
+            "books/<int:pk>/",
+            "issues/",
+            "issues/<int:pk>/",
+            "issues/<int:pk>/return/"
+          ]
+        },
+        "lms": {
+          "models": [
+            "Course",
+            "Lesson",
+            "LessonCompletion",
+            "Quiz",
+            "Question",
+            "QuizAttempt"
+          ],
+          "endpoints": [
+            "courses/",
+            "courses/<int:pk>/",
+            "courses/<int:course_id>/lessons/",
+            "lessons/<int:lesson_id>/complete/",
+            "my-progress/",
+            "quizzes/",
+            "quizzes/<int:pk>/",
+            "quizzes/<int:quiz_id>/questions/",
+            "quizzes/<int:quiz_id>/questions/new/",
+            "questions/<int:pk>/",
+            "quizzes/<int:quiz_id>/submit/",
+            "quizzes/<int:quiz_id>/attempts/",
+            "quizzes/<int:quiz_id>/my-attempt/"
+          ]
+        },
+        "payroll": {
+          "models": [
+            "SalaryStructureComponent",
+            "SalaryStructure",
+            "PayrollRecord",
+            "Payslip",
+            "SalaryComponentTemplate"
+          ],
+          "endpoints": [
+            "salary-structures/",
+            "salary-structures/<int:pk>/",
+            "records/",
+            "records/<int:pk>/",
+            "records/<int:pk>/process/",
+            "records/<int:pk>/approve/",
+            "records/<int:pk>/pay/",
+            "records/<int:pk>/payslip.pdf",
+            "records/<int:pk>/payslip/",
+            "records/bank-file/",
+            "payslips/"
+          ]
+        },
+        "portal": {
+          "models": [],
+          "endpoints": [
+            "teacher/",
+            "student/",
+            "parent/"
+          ]
+        },
+        "reportcards": {
+          "models": [
+            "ReportCard",
+            "ReportCardSubject",
+            "GradeScale",
+            "GradeBand",
+            "GradeAmendment"
+          ],
+          "endpoints": [
+            "<int:pk>/",
+            "<int:pk>/pdf/",
+            "<int:pk>/status/",
+            "grade-scales/",
+            "amendments/",
+            "pdf/batch/"
+          ]
+        },
+        "reports": {
+          "models": [
+            "ReportCategory",
+            "ReportDefinition",
+            "SavedReport",
+            "ReportTemplate",
+            "ScheduledReport",
+            "ReportAuditLog",
+            "CustomReportDataSource",
+            "CustomReport"
+          ],
+          "endpoints": [
+            "enrollment/",
+            "attendance/",
+            "results/",
+            "fees/",
+            "staff/",
+            "subjects/",
+            "payments/",
+            "student-status/",
+            "fee-categories/",
+            "fee-defaulters/",
+            "teacher-workload/",
+            "class-performance/",
+            "student-progress/",
+            "collection-trend/",
+            "discounts/",
+            "chronic-absentee/",
+            "payroll-summary/",
+            "library/",
+            "route-utilization/",
+            "inventory-value/",
+            "maintenance-due/",
+            "event-participation/",
+            "sms-usage/",
+            "top-performers/",
+            "at-risk/",
+            "students/master/",
+            "students/list/",
+            "students/profile/",
+            "students/statistics/",
+            "admissions/",
+            "attendance/daily/",
+            "attendance/monthly/",
+            "attendance/student/",
+            "attendance/class/",
+            "attendance/analytics/",
+            "attendance/subject/",
+            "exams/schedule/",
+            "exams/marks/",
+            "exams/subject-performance/",
+            "exams/class-marks/",
+            "exams/student-result/",
+            "exams/analytics/",
+            "exams/ranking/",
+            "exams/report-card/",
+            "fees/collection/",
+            "fees/status/",
+            "fees/analytics/",
+            "fees/defaulters/",
+            "finance/",
+            "hr/employees/",
+            "hr/attendance/",
+            "hr/leave/",
+            "payroll/monthly/",
+            "payroll/salary-slip/",
+            "payroll/summary/",
+            "payroll/allowances/",
+            "payroll/deductions/",
+            "payroll/net-salary/",
+            "payroll/paid/",
+            "payroll/pending/",
+            "staff/master/",
+            "staff/teachers/",
+            "staff/attendance/",
+            "staff/teacher-attendance/",
+            "staff/leave/",
+            "staff/teacher-leave/",
+            "staff/workload/",
+            "staff/department/",
+            "staff/designation/",
+            "staff/joining/",
+            "staff/resignation/",
+            "academic/class-strength/",
+            "academic/section-strength/",
+            "academic/student-list/",
+            "academic/gender-distribution/",
+            "academic/performance/",
+            "academic/promotion/",
+            "academic/subjects/",
+            "academic/subject-allocation/",
+            "academic/subject-performance/",
+            "academic/teacher-subjects/",
+            "timetable/student/",
+            "timetable/class/",
+            "timetable/teacher/",
+            "timetable/room/",
+            "timetable/free-periods/",
+            "parents/master/",
+            "parents/relationship/",
+            "parents/contact/",
+            "parents/students/",
+            "parents/outstanding-fees/",
+            "parents/attendance/",
+            "parents/academic/",
+            "library/inventory/",
+            "library/available/",
+            "library/issued/",
+            "library/returned/",
+            "library/overdue/",
+            "library/fines/",
+            "library/activity/",
+            "library/most-borrowed/",
+            "library/student-history/",
+            "library/teacher-history/",
+            "transport/students/",
+            "transport/routes/",
+            "transport/vehicles/",
+            "transport/drivers/",
+            "transport/pickup-dropoff/",
+            "transport/students-by-route/",
+            "transport/students-by-vehicle/",
+            "transport/fees/",
+            "transport/vehicle-capacity/",
+            "transport/route-occupancy/",
+            "inventory/master/",
+            "inventory/stock/",
+            "inventory/low-stock/",
+            "inventory/out-of-stock/",
+            "inventory/movement/",
+            "inventory/purchases/",
+            "inventory/issues/",
+            "inventory/returns/",
+            "inventory/damaged/",
+            "inventory/lost/",
+            "inventory/category/",
+            "inventory/supplier/",
+            "inventory/valuation/",
+            "discipline/incidents/",
+            "discipline/student/",
+            "discipline/class/",
+            "discipline/campus/",
+            "discipline/type/",
+            "discipline/date-range/",
+            "discipline/warnings/",
+            "discipline/suspensions/",
+            "discipline/repeat/",
+            "discipline/history/",
+            "certificates/bonafide/",
+            "certificates/character/",
+            "certificates/leaving/",
+            "certificates/transfer/",
+            "certificates/enrollment/",
+            "certificates/fee-clearance/",
+            "certificates/student-id/",
+            "certificates/staff-id/",
+            "certificates/templates/",
+            "certificates/",
+            "campus/students/",
+            "campus/attendance/",
+            "campus/performance/",
+            "campus/fees/",
+            "campus/outstanding/",
+            "campus/staff/",
+            "campus/admissions/",
+            "campus/finance/",
+            "campus/comparison/",
+            "campus/dashboard/",
+            "templates/",
+            "templates/<int:pk>/",
+            "generate/",
+            "export/",
+            "export/<str:export_key>/",
+            "backup/",
+            "import/templates/<str:import_key>/",
+            "import/preview/",
+            "import/commit/",
+            "cron/email-weekly/",
+            "health/"
+          ]
+        },
+        "schools": {
+          "models": [
+            "School",
+            "Campus",
+            "AcademicUnit",
+            "Class",
+            "Section",
+            "AcademicYear",
+            "Term",
+            "Subject",
+            "SchoolSettings",
+            "SubjectGroup",
+            "ClassTeacher",
+            "AcademicCalendar",
+            "SubjectOffering"
+          ],
+          "endpoints": [
+            "<int:pk>/pause/",
+            "<int:pk>/activate/",
+            "<int:pk>/archive/",
+            "<int:pk>/unarchive/",
+            "campuses/",
+            "campuses/<int:pk>/",
+            "units/",
+            "classes/",
+            "sections/",
+            "sections/<int:pk>/",
+            "academic-years/",
+            "terms/",
+            "subjects/",
+            "offerings/",
+            "branding/",
+            "tenant-config/",
+            "modules/current/",
+            "tenants/",
+            "tenants/<int:pk>/"
+          ]
+        },
+        "search": {
+          "models": [],
+          "endpoints": []
+        },
+        "students": {
+          "models": [
+            "Guardian",
+            "Inquiry",
+            "StudentGuardian",
+            "AdmissionApplication",
+            "Meta",
+            "AcademicHistory",
+            "StudentLifecycleEvent",
+            "Student",
+            "Enrollment",
+            "StudentDocument",
+            "CampusTransfer",
+            "SectionTransfer",
+            "TransferCertificate",
+            "StudentLeaveRequest",
+            "StudentAlumni",
+            "ProgressionRecord"
+          ],
+          "endpoints": [
+            "admissions/",
+            "<int:student_id>/360/",
+            "campus-transfers/",
+            "campus-transfers/<int:pk>/",
+            "campus-transfers/<int:pk>/approve/",
+            "campus-transfers/<int:pk>/reject/",
+            "campus-transfers/<int:pk>/complete/",
+            "campus-transfers/<int:pk>/cancel/",
+            "students/transfer/",
+            "campus-transfers/<int:pk>/reverse/",
+            "section-transfers/",
+            "section-transfers/<int:pk>/",
+            "section-transfers/<int:pk>/approve/",
+            "section-transfers/<int:pk>/reject/",
+            "section-transfers/<int:pk>/complete/",
+            "section-transfers/<int:pk>/cancel/",
+            "alumni/",
+            "alumni/<int:pk>/",
+            "<int:pk>/graduate/",
+            "<int:pk>/withdraw/",
+            "<int:pk>/activate/",
+            "<int:student_id>/360/",
+            "admissions/<int:pk>/",
+            "admissions/<int:pk>/review/",
+            "admissions/<int:pk>/accept/",
+            "admissions/public/options/",
+            "admissions/public/apply/",
+            "inquiries/",
+            "inquiries/<int:pk>/",
+            "inquiries/<int:pk>/convert/",
+            "academic-history/",
+            "academic-history/<int:pk>/",
+            "transfer-certificates/",
+            "transfer-certificates/<int:pk>/",
+            "transfer-certificates/<int:pk>/issue/",
+            "transfer-certificates/<int:pk>/cancel/",
+            "transfer-certificates/verify/<str:code>/",
+            "guardian-links/",
+            "lifecycle/",
+            "leave/",
+            "leave/<int:pk>/action/",
+            "promotions/",
+            "progression/",
+            "promotions/<int:pk>/",
+            "me/",
+            "guardians/",
+            "guardians/me/",
+            "guardians/<int:pk>/",
+            "documents/",
+            "documents/<int:pk>/",
+            "enrollments/",
+            "<int:pk>/certificate/<str:cert_type>/",
+            "<int:pk>/transcript.pdf",
+            "enrollments/<int:pk>/",
+            "<int:pk>/lifecycle/",
+            "<int:pk>/"
+          ]
+        },
+        "teachers": {
+          "models": [
+            "Teacher",
+            "TeacherAssignment"
+          ],
+          "endpoints": [
+            "csrf/",
+            "me/",
+            "assignments/",
+            "assignments/<int:pk>/",
+            "<int:pk>/"
+          ]
+        },
+        "tests": {
+          "models": [],
+          "endpoints": []
+        },
+        "timetable": {
+          "models": [
+            "Period",
+            "TimetableEntry"
+          ],
+          "endpoints": [
+            "periods/",
+            "entries/",
+            "conflicts/",
+            "generate/"
+          ]
+        },
+        "transport": {
+          "models": [
+            "Vehicle",
+            "Driver",
+            "Route",
+            "RouteStop",
+            "TransportAssignment",
+            "VehicleLocationLog"
+          ],
+          "endpoints": [
+            "vehicles/",
+            "vehicles/<int:pk>/",
+            "drivers/",
+            "drivers/<int:pk>/",
+            "routes/",
+            "routes/<int:pk>/",
+            "assignments/",
+            "assignments/<int:pk>/",
+            "gps/ping/",
+            "gps/live/"
+          ]
+        },
+        "visitors": {
+          "models": [
+            "Visitor"
+          ],
+          "endpoints": [
+            "visitors/",
+            "visitors/<int:pk>/",
+            "visitors/<int:pk>/checkout/",
+            "visitors/stats/"
+          ]
+        },
+        "white_label": {
+          "models": [
+            "WhiteLabelBranding",
+            "SchoolSettings",
+            "DomainMapping",
+            "WhiteLabelAuditLog"
+          ],
+          "endpoints": [
+            "branding/",
+            "branding/theme-preview/",
+            "branding/css-variables/",
+            "branding/config/",
+            "settings/",
+            "domains/",
+            "domains/<int:pk>/",
+            "public/<slug:subdomain>/",
+            "audit/",
+            "audit/<int:pk>/"
+          ]
+        },
+        "workflow": {
+          "models": [
+            "WorkflowDefinition",
+            "WorkflowInstance",
+            "WorkflowApproval",
+            "WorkflowTransition"
+          ],
+          "endpoints": [
+            "definitions/",
+            "definitions/create/",
+            "definitions/<int:pk>/",
+            "definitions/<int:pk>/test/",
+            "instances/",
+            "instances/stats/",
+            "instances/<int:pk>/",
+            "instances/<int:pk>/action/",
+            "instances/<int:pk>/history/",
+            "approvals/",
+            "approvals/<int:pk>/decide/"
+          ]
+        }
+      }
+    },
+    "frontend": {
+      "routes": [
+        "/login",
+        "/",
+        "/profile",
+        "/profile/teacher/:id",
+        "/profile/student/:id",
+        "/profile/staff/:id",
+        "/students",
+        "/students/:id",
+        "/academics",
+        "/admissions",
+        "/parent-portal",
+        "/teachers",
+        "/staff",
+        "/hr",
+        "/assignments",
+        "/attendance",
+        "/finance",
+        "/finance/student-fees",
+        "/finance/bulk",
+        "/exams",
+        "/report-cards",
+        "/timetable",
+        "/campuses",
+        "/campus-dashboard",
+        "/executive-dashboard",
+        "/events",
+        "/announcements",
+        "/messages",
+        "/sms",
+        "/templates",
+        "/library",
+        "/transport",
+        "/inventory",
+        "/documents",
+        "/payroll",
+        "/reports",
+        "/report-builder",
+        "/data-export",
+        "/data-import",
+        "/discipline",
+        "/staff-operations",
+        "/homework",
+        "/health-records",
+        "/alumni",
+        "/tenants",
+        "/hostel",
+        "/lms",
+        "/helpdesk",
+        "/visitors",
+        "/digital-ids",
+        "/settings",
+        "/branding",
+        "/health",
+        "/audit-logs",
+        "*"
+      ],
+      "pages": {
+        "AcademicsPage": {
+          "lines": 912
+        },
+        "AdmissionsApplyPage": {
+          "lines": 216
+        },
+        "AdmissionsPage": {
+          "lines": 1251
+        },
+        "AlumniPage": {
+          "lines": 298
+        },
+        "AnnouncementsPage": {
+          "lines": 381
+        },
+        "AssignmentsPage": {
+          "lines": 991
+        },
+        "AttendancePage": {
+          "lines": 618
+        },
+        "AuditLogsPage": {
+          "lines": 283
+        },
+        "BrandingPage": {
+          "lines": 420
+        },
+        "BulkFinancePage": {
+          "lines": 544
+        },
+        "CampusDashboardPage": {
+          "lines": 232
+        },
+        "CampusesPage": {
+          "lines": 420
+        },
+        "Dashboard": {
+          "lines": 974
+        },
+        "DataImportPage": {
+          "lines": 264
+        },
+        "DigitalIdsPage": {
+          "lines": 328
+        },
+        "DisciplinePage": {
+          "lines": 533
+        },
+        "DocumentsPage": {
+          "lines": 439
+        },
+        "EventsPage": {
+          "lines": 561
+        },
+        "ExamFormModal": {
+          "lines": 404
+        },
+        "ExamsPage": {
+          "lines": 460
+        },
+        "ExecutiveDashboardPage": {
+          "lines": 342
+        },
+        "ExportPage": {
+          "lines": 149
+        },
+        "FinancePage": {
+          "lines": 1299
+        },
+        "HealthPage": {
+          "lines": 230
+        },
+        "HealthRecordsPage": {
+          "lines": 350
+        },
+        "HelpdeskPage": {
+          "lines": 517
+        },
+        "HomeworkPage": {
+          "lines": 411
+        },
+        "HostelPage": {
+          "lines": 391
+        },
+        "HRPage": {
+          "lines": 145
+        },
+        "InventoryPage": {
+          "lines": 567
+        },
+        "LibraryPage": {
+          "lines": 558
+        },
+        "LMSPage": {
+          "lines": 536
+        },
+        "LoginPage": {
+          "lines": 248
+        },
+        "ManageSchedulePanel": {
+          "lines": 625
+        },
+        "ManageSeatingPanel": {
+          "lines": 401
+        },
+        "ManageSubjectsPanel": {
+          "lines": 396
+        },
+        "MarksEntryPanel": {
+          "lines": 476
+        },
+        "MessagesPage": {
+          "lines": 604
+        },
+        "NotificationsPanel": {
+          "lines": 116
+        },
+        "ParentPortalPage": {
+          "lines": 829
+        },
+        "PayrollPage": {
+          "lines": 287
+        },
+        "PendingApprovalsPage": {
+          "lines": 145
+        },
+        "ProfileModal": {
+          "lines": 641
+        },
+        "ProfilePage": {
+          "lines": 677
+        },
+        "ReportBuilderPage": {
+          "lines": 555
+        },
+        "ReportCardsPage": {
+          "lines": 219
+        },
+        "ReportsCenter": {
+          "lines": 227
+        },
+        "ReportsPage": {
+          "lines": 1496
+        },
+        "SettingsPage": {
+          "lines": 447
+        },
+        "SingleDetailReports": {
+          "lines": 428
+        },
+        "SMSPage": {
+          "lines": 558
+        },
+        "StaffOperationsPage": {
+          "lines": 447
+        },
+        "StaffPage": {
+          "lines": 1149
+        },
+        "Student360Page": {
+          "lines": 724
+        },
+        "StudentFeesPage": {
+          "lines": 431
+        },
+        "StudentLifecyclePanel": {
+          "lines": 675
+        },
+        "StudentsPage": {
+          "lines": 2003
+        },
+        "TeachersPage": {
+          "lines": 1051
+        },
+        "TemplatesPage": {
+          "lines": 465
+        },
+        "TenantsPage": {
+          "lines": 635
+        },
+        "TimetablePage": {
+          "lines": 279
+        },
+        "TransportPage": {
+          "lines": 482
+        },
+        "TwoFASection": {
+          "lines": 166
+        },
+        "ui": {
+          "lines": 150
+        },
+        "VisitorsPage": {
+          "lines": 323
+        },
+        "WorkflowDefinitionAdminPage": {
+          "lines": 173
+        },
+        "WorkflowInstanceDetailPage": {
+          "lines": 97
+        }
+      },
+      "page_count": 67,
+      "api_call_count": 124,
+      "orphaned_pages": [
+        "PendingApprovalsPage",
+        "ReportsCenter",
+        "WorkflowDefinitionAdminPage",
+        "WorkflowInstanceDetailPage"
+      ],
+      "has_ai": false,
+      "sample_api_calls": [
+        "/api/alumni/",
+        "/api/attendance/",
+        "/api/attendance/bulk/",
+        "/api/attendance/cron/absence-alerts/",
+        "/api/audit/",
+        "/api/audit/actions/",
+        "/api/auth/2fa/",
+        "/api/auth/active-institution/",
+        "/api/auth/csrf/",
+        "/api/auth/google/config/",
+        "/api/auth/google/login/",
+        "/api/auth/login/",
+        "/api/auth/logout/",
+        "/api/auth/me/",
+        "/api/auth/users/",
+        "/api/communication",
+        "/api/communication/announcements/",
+        "/api/communication/cron/fee-reminders/",
+        "/api/communication/messages/",
+        "/api/communication/notifications/",
+        "/api/communication/sms/send/",
+        "/api/communication/templates/",
+        "/api/dashboard/executive/",
+        "/api/dashboard/finance/",
+        "/api/dashboard/finance/breakdown/",
+        "/api/dashboard/overview/",
+        "/api/digital-ids/cards/",
+        "/api/discipline/incidents/",
+        "/api/documents/",
+        "/api/documents/upload/",
+        "/api/events/",
+        "/api/exams/",
+        "/api/exams/gradebook/",
+        "/api/exams/practical/",
+        "/api/exams/results/",
+        "/api/exams/schedules/",
+        "/api/exams/seating/",
+        "/api/exams/seating/bulk/",
+        "/api/exams/subjects/",
+        "/api/finance/accounts/",
+        "/api/finance/categories/",
+        "/api/finance/fee-assignment/preview/",
+        "/api/finance/fee-overrides/",
+        "/api/finance/fee-structures/",
+        "/api/finance/invoices/",
+        "/api/finance/invoices/bulk/",
+        "/api/finance/outstanding/",
+        "/api/finance/payments/",
+        "/api/finance/payments/bulk/",
+        "/api/finance/payments/create/",
+        "/api/finance/reports/income-expense/",
+        "/api/finance/reports/receivables/",
+        "/api/finance/stripe/checkout/",
+        "/api/health-records/records/",
+        "/api/helpdesk/categories/",
+        "/api/helpdesk/tickets/",
+        "/api/homework/",
+        "/api/hostel/",
+        "/api/hr/employees/",
+        "/api/hr/employment-events/",
+        "/api/inventory/",
+        "/api/library/books/",
+        "/api/library/issues/",
+        "/api/lms/",
+        "/api/payroll/",
+        "/api/report-cards/",
+        "/api/reports/",
+        "/api/reports/attendance/",
+        "/api/reports/backup/",
+        "/api/reports/collection-trend/",
+        "/api/reports/enrollment/",
+        "/api/reports/export",
+        "/api/reports/export/",
+        "/api/reports/generate/",
+        "/api/reports/health/",
+        "/api/reports/import/commit/",
+        "/api/reports/import/preview/",
+        "/api/reports/import/templates/",
+        "/api/reports/staff/master/",
+        "/api/reports/staff/teachers/",
+        "/api/reports/students/profile/",
+        "/api/reports/templates/",
+        "/api/schools/",
+        "/api/schools/academic-years/",
+        "/api/schools/branding/",
+        "/api/schools/campuses/",
+        "/api/schools/classes/",
+        "/api/schools/modules/current/",
+        "/api/schools/offerings/",
+        "/api/schools/sections/",
+        "/api/schools/subjects/",
+        "/api/schools/tenant-config/",
+        "/api/schools/tenants/",
+        "/api/schools/terms/",
+        "/api/schools/units/",
+        "/api/search/",
+        "/api/staff/",
+        "/api/students/",
+        "/api/students/admissions/",
+        "/api/students/admissions/public/apply/",
+        "/api/students/admissions/public/options/",
+        "/api/students/campus-transfers/",
+        "/api/students/documents/",
+        "/api/students/enrollments/",
+        "/api/students/guardians/",
+        "/api/students/guardians/me/",
+        "/api/students/inquiries/",
+        "/api/students/leave/",
+        "/api/students/me/",
+        "/api/students/progression/",
+        "/api/students/promotions/",
+        "/api/students/section-transfers/",
+        "/api/teachers/",
+        "/api/teachers/assignments/",
+        "/api/teachers/me/",
+        "/api/timetable/entries/",
+        "/api/timetable/generate/",
+        "/api/timetable/periods/",
+        "/api/transport/",
+        "/api/visitors/visitors/",
+        "/api/workflow/approvals/",
+        "/api/workflow/definitions/",
+        "/api/workflow/instances",
+        "/api/workflow/instances/"
+      ]
+    },
+    "integrations": {
+      "2FA / TOTP": [
+        "backend/apps/accounts/tests.py",
+        "backend/apps/accounts/twofa_views.py",
+        "backend/apps/accounts/views.py"
+      ],
+      "Google SSO": [
+        "backend/apps/accounts/urls.py"
+      ],
+      "SMS provider (Twilio)": [
+        "backend/apps/communication/sms.py"
+      ],
+      "wallet: JazzCash": [
+        "backend/apps/finance/easypaisa_views.py",
+        "backend/apps/finance/jazzcash_views.py",
+        "backend/apps/finance/management/commands/setup_finance.py",
+        "backend/apps/finance/models.py",
+        "backend/apps/finance/urls.py"
+      ],
+      "wallet: EasyPaisa": [
+        "backend/apps/finance/easypaisa_views.py",
+        "backend/apps/finance/management/commands/setup_finance.py",
+        "backend/apps/finance/models.py",
+        "backend/apps/finance/urls.py"
+      ],
+      "online payment (Stripe)": [
+        "backend/apps/finance/jazzcash_views.py",
+        "backend/apps/finance/models.py",
+        "backend/apps/finance/services.py",
+        "backend/apps/finance/stripe_service.py",
+        "backend/apps/finance/stripe_views.py",
+        "backend/apps/finance/tests.py",
+        "backend/apps/finance/urls.py"
+      ],
+      "PDF generation": [
+        "backend/apps/finance/pdf.py",
+        "backend/apps/finance/services.py",
+        "backend/apps/finance/tests.py",
+        "backend/apps/payroll/payslips_pdf.py",
+        "backend/apps/reportcards/pdf.py",
+        "backend/apps/reports/pdf_views.py",
+        "backend/apps/schools/branding_context.py",
+        "backend/apps/students/certificates.py",
+        "backend/apps/students/transcripts.py"
+      ]
+    }
+  },
+  "analysis": {
+    "checklist": [
+      {
+        "category": "AI & smart features",
+        "status": "missing",
+        "signal_score": 0,
+        "signal_total": 3,
+        "matched": [],
+        "signals": [
+          [
+            "integration",
+            "LLM / AI provider"
+          ],
+          [
+            "frontend_ai",
+            "has_ai"
+          ],
+          [
+            "path_api",
+            "/api/ai"
+          ]
+        ],
+        "add": "ADD - No AI anywhere today; AI drafts feedback, alerts, reports, and smart search.",
+        "skip": "Add only after core modules are surfaced; keep it augmentation, not a platform."
+      },
+      {
+        "category": "Online payment (wallets)",
+        "status": "partial",
+        "signal_score": 3,
+        "signal_total": 5,
+        "matched": [
+          [
+            "integration",
+            "wallet: JazzCash"
+          ],
+          [
+            "integration",
+            "wallet: EasyPaisa"
+          ],
+          [
+            "frontend",
+            "stripe"
+          ]
+        ],
+        "signals": [
+          [
+            "integration",
+            "stripe"
+          ],
+          [
+            "integration",
+            "wallet: JazzCash"
+          ],
+          [
+            "integration",
+            "wallet: EasyPaisa"
+          ],
+          [
+            "frontend",
+            "stripe"
+          ],
+          [
+            "frontend",
+            "jazzcash"
+          ]
+        ],
+        "add": "ADD - JazzCash/EasyPaisa backends are complete but not wired into the UI.",
+        "skip": "Do not add PayPal or a 4th provider until existing wallet UIs ship."
+      },
+      {
+        "category": "Workflow / approvals",
+        "status": "partial",
+        "signal_score": 2,
+        "signal_total": 3,
+        "matched": [
+          [
+            "app_models",
+            "workflow"
+          ],
+          [
+            "app_routes",
+            "workflow"
+          ]
+        ],
+        "signals": [
+          [
+            "app_models",
+            "workflow"
+          ],
+          [
+            "app_routes",
+            "workflow"
+          ],
+          [
+            "frontend_route",
+            "approval"
+          ]
+        ],
+        "add": "ADD - Workflow engine is complete but its UI is unrouted; surfaces approvals per role.",
+        "skip": "No new engine work needed \u2014 only navigation."
+      },
+      {
+        "category": "Notifications & messaging",
+        "status": "complete",
+        "signal_score": 4,
+        "signal_total": 4,
+        "matched": [
+          [
+            "app_models",
+            "communication"
+          ],
+          [
+            "integration",
+            "SMS provider (Twilio)"
+          ],
+          [
+            "frontend",
+            "notifications"
+          ],
+          [
+            "app_routes",
+            "communication"
+          ]
+        ],
+        "signals": [
+          [
+            "app_models",
+            "communication"
+          ],
+          [
+            "integration",
+            "SMS provider (Twilio)"
+          ],
+          [
+            "frontend",
+            "notifications"
+          ],
+          [
+            "app_routes",
+            "communication"
+          ]
+        ],
+        "add": "OK",
+        "skip": "Do not rebuild the queue or add a 2nd SMS provider."
+      },
+      {
+        "category": "Reporting & analytics",
+        "status": "partial",
+        "signal_score": 3,
+        "signal_total": 4,
+        "matched": [
+          [
+            "app_models",
+            "reports"
+          ],
+          [
+            "app_routes",
+            "reports"
+          ],
+          [
+            "frontend",
+            "dashboard"
+          ]
+        ],
+        "signals": [
+          [
+            "app_models",
+            "reports"
+          ],
+          [
+            "app_routes",
+            "reports"
+          ],
+          [
+            "frontend",
+            "report-builder"
+          ],
+          [
+            "frontend",
+            "dashboard"
+          ]
+        ],
+        "add": "ADD - ~150 endpoints + builder exist; reduce to the surfaced catalog (ReportsCenter).",
+        "skip": "No new BI/ETL pipeline or separate analytics DB at this scale."
+      },
+      {
+        "category": "Auth & security",
+        "status": "complete",
+        "signal_score": 4,
+        "signal_total": 4,
+        "matched": [
+          [
+            "app_models",
+            "accounts"
+          ],
+          [
+            "integration",
+            "2FA / TOTP"
+          ],
+          [
+            "integration",
+            "Google SSO"
+          ],
+          [
+            "frontend",
+            "2fa"
+          ]
+        ],
+        "signals": [
+          [
+            "app_models",
+            "accounts"
+          ],
+          [
+            "integration",
+            "2FA / TOTP"
+          ],
+          [
+            "integration",
+            "Google SSO"
+          ],
+          [
+            "frontend",
+            "2fa"
+          ]
+        ],
+        "add": "OK",
+        "skip": "Do not build another auth system \u2014 SSO, 2FA, lockout already exist."
+      },
+      {
+        "category": "Finance automation",
+        "status": "complete",
+        "signal_score": 4,
+        "signal_total": 4,
+        "matched": [
+          [
+            "app_models",
+            "finance"
+          ],
+          [
+            "app_routes",
+            "finance"
+          ],
+          [
+            "frontend",
+            "finance"
+          ],
+          [
+            "integration",
+            "PDF generation"
+          ]
+        ],
+        "signals": [
+          [
+            "app_models",
+            "finance"
+          ],
+          [
+            "app_routes",
+            "finance"
+          ],
+          [
+            "frontend",
+            "finance"
+          ],
+          [
+            "integration",
+            "PDF generation"
+          ]
+        ],
+        "add": "OK",
+        "skip": "Accountancy ledgers, budgets, and reconciliations already exist."
+      },
+      {
+        "category": "Student/parent mobile",
+        "status": "complete",
+        "signal_score": 3,
+        "signal_total": 3,
+        "matched": [
+          [
+            "frontend_route",
+            "parent-portal"
+          ],
+          [
+            "frontend_file",
+            "sw.js"
+          ],
+          [
+            "app_routes",
+            "portal"
+          ]
+        ],
+        "signals": [
+          [
+            "frontend_route",
+            "parent-portal"
+          ],
+          [
+            "frontend_file",
+            "sw.js"
+          ],
+          [
+            "app_routes",
+            "portal"
+          ]
+        ],
+        "add": "OK",
+        "skip": "A full native app is overkill while the PWA is dormant."
+      },
+      {
+        "category": "Timetable management",
+        "status": "complete",
+        "signal_score": 3,
+        "signal_total": 3,
+        "matched": [
+          [
+            "app_models",
+            "timetable"
+          ],
+          [
+            "app_routes",
+            "timetable"
+          ],
+          [
+            "frontend",
+            "timetable"
+          ]
+        ],
+        "signals": [
+          [
+            "app_models",
+            "timetable"
+          ],
+          [
+            "app_routes",
+            "timetable"
+          ],
+          [
+            "frontend",
+            "timetable"
+          ]
+        ],
+        "add": "OK",
+        "skip": "Auto-generation exists; do not swap the engine."
+      },
+      {
+        "category": "Data import / export",
+        "status": "partial",
+        "signal_score": 1,
+        "signal_total": 3,
+        "matched": [
+          [
+            "app_routes",
+            "reports"
+          ]
+        ],
+        "signals": [
+          [
+            "app_routes",
+            "reports"
+          ],
+          [
+            "frontend",
+            "data-import"
+          ],
+          [
+            "frontend",
+            "data-export"
+          ]
+        ],
+        "add": "ADD - Extend UI import beyond students/teachers to the backend catalog.",
+        "skip": "Backend import engine already exists; don't rebuild it."
+      }
+    ],
+    "curated_add": [
+      {
+        "finding": "JazzCash/EasyPaisa backends built but unused by the UI",
+        "add": true,
+        "reason": "Wire to UI or remove the labels; server code is complete (hash + callbacks)."
+      },
+      {
+        "finding": "Workflow engine UI orphaned (no routes/nav)",
+        "add": true,
+        "reason": "Surface PendingApprovals/definitions; engine is done, navigation is missing."
+      },
+      {
+        "finding": "No AI features in frontend or backend",
+        "add": true,
+        "reason": "Add AI drafting/smart-search/prediction layers on existing data models."
+      },
+      {
+        "finding": "Email delivery depends on DJANGO_EMAIL_* (unset)",
+        "add": true,
+        "reason": "Configure an SMTP send provider or document SMS-first messaging."
+      },
+      {
+        "finding": "Frontend data import covers only students+teachers",
+        "add": true,
+        "reason": "Extend to the backend's import catalog; no new engine needed."
+      }
+    ],
+    "curated_skip": [
+      {
+        "finding": "ReportsCenter.jsx unreferenced dead code",
+        "add": false,
+        "reason": "Pick ReportsPage or ReportsCenter catalog; ship one, delete the other."
+      },
+      {
+        "finding": "Stripe is the only wired online payment path",
+        "add": false,
+        "reason": "Finish J/E wallets first; avoid adding more providers."
+      },
+      {
+        "finding": "Multi-tenancy + campus isolation already enforced in ORM",
+        "add": false,
+        "reason": "Do not redesign the tenancy layer."
+      },
+      {
+        "finding": "Auth stack is comprehensive (SSO, 2FA, lockout, password history)",
+        "add": false,
+        "reason": "Do not build another auth system."
+      }
+    ]
+  }
+}
