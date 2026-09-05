@@ -1,4 +1,4 @@
-import { useAuth } from "./auth";
+import { useAuth } from "../auth";
 
 /**
  * PermissionGate - Conditionally render children based on permission.

@@ -2,6 +2,8 @@ import { useState, useCallback, useEffect } from "react";
 import { Search, GraduationCap, UserCheck, Building2 } from "lucide-react";
 import { PageHeader } from "./ui";
 import ProfileModal from "./ProfileModal";
+import CredentialDisplay from "../components/CredentialDisplay";
+import { buildErrorMessage } from "../api";
 
 const TEACHERS_API_URL = "/api/teachers/";
 
@@ -249,30 +251,15 @@ function TeachersPage() {
     }
 
     if (!response.ok) {
-      let message = "Unable to save teacher.";
-
-      if (data && typeof data === "object") {
-        message = Object.entries(data)
-          .map(([field, value]) => {
-            const text = Array.isArray(value)
-              ? value.join(", ")
-              : String(value);
-
-            return `${field}: ${text}`;
-          })
-          .join(" | ");
-      }
-
-      if (
-        !message ||
-        message === "Unable to save teacher."
-      ) {
-        message =
-          responseText ||
-          `Request failed (${response.status})`;
-      }
-
-      throw new Error(message);
+      throw new Error(
+        buildErrorMessage({
+          status: response.status,
+          detail: data.detail,
+          fieldErrors: data,
+          responseText,
+          fallback: "Unable to save teacher.",
+        })
+      );
     }
 
     closeForm();
@@ -477,35 +464,13 @@ function TeachersPage() {
       {/* SUCCESS (ACCOUNT CREATED) */}
 
       {accountCreated && (
-        <div className="state-card success">
-          <strong>
-            Login account created for {accountCreated.name}.
-          </strong>
-
-          <span>
-            Username:{" "}
-            <strong>{accountCreated.username}</strong>
-          </span>
-
-          <span>
-            Password:{" "}
-            <strong>{accountCreated.password}</strong>
-          </span>
-
-          <span>
-            Share these credentials with the teacher and
-            remind them to change their password after first
-            login.
-          </span>
-
-          <button
-            className="secondary-button"
-            onClick={() => setAccountCreated(null)}
-            style={{ alignSelf: "flex-start" }}
-          >
-            Got It
-          </button>
-        </div>
+        <CredentialDisplay
+          username={accountCreated.username}
+          password={accountCreated.password}
+          name={accountCreated.name}
+          note="Share these credentials with the teacher and remind them to change their password after first login."
+          onDismiss={() => setAccountCreated(null)}
+        />
       )}
 
       {/* ERROR */}

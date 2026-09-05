@@ -1,5 +1,6 @@
 ﻿import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 import {
@@ -58,10 +59,12 @@ import {
   LifeBuoy,
   ShieldCheck,
   IdCard,
+  Receipt,
 } from "lucide-react";
 import "./App.css";
 import "./dark-dash.css";
 import { AuthProvider, useAuth } from "./auth";
+import { SchoolProvider, useSchool } from "./schoolContext";
 import { LanguageProvider, useLang } from "./i18n";
 import LanguageToggle from "./components/LanguageToggle";
 import LoginPage from "./pages/LoginPage";
@@ -94,6 +97,7 @@ import TeachersPage from "./pages/TeachersPage";
 import HRPage from "./pages/HRPage";
 import AdmissionsPage from "./pages/AdmissionsPage";
 import BulkFinancePage from "./pages/BulkFinancePage";
+import StudentFeesPage from "./pages/StudentFeesPage";
 import DocumentsPage from "./pages/DocumentsPage";
 import ReportBuilderPage from "./pages/ReportBuilderPage";
 import TemplatesPage from "./pages/TemplatesPage";
@@ -316,6 +320,7 @@ const navigation = [
   { label: "Attendance", module: "attendance", path: "/attendance", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Discipline", module: "discipline", path: "/discipline", icon: AlertOctagon, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
   { label: "Finance", module: "finance", path: "/finance", icon: Wallet, roles: ["super_admin", "admin", "principal", "academic", "accountant"] },
+  { label: "Student Fees", module: "finance", path: "/finance/student-fees", icon: Receipt, roles: ["super_admin", "admin", "accountant"] },
   { label: "Bulk Finance", module: "finance", path: "/finance/bulk", icon: Layers, roles: ["super_admin", "admin", "accountant"] },
   { label: "Exams", module: "exams", path: "/exams", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
   { label: "Report Cards", module: "exams", path: "/report-cards", icon: BookOpen, roles: ["super_admin", "admin", "principal", "academic", "teacher"] },
@@ -372,7 +377,7 @@ const navGroups = [
   },
   {
     label: "Finance",
-    items: ["/finance", "/finance/bulk", "/payroll", "/reports", "/report-builder", "/data-export", "/data-import"]
+    items: ["/finance", "/finance/student-fees", "/finance/bulk", "/payroll", "/reports", "/report-builder", "/data-export", "/data-import"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -404,9 +409,23 @@ const navGroups = [
    LAYOUT — Top navigation
    ========================= */
 
-function Layout({ children, hasRole, modules = { loaded: false, enabled: [], isPlatformAdmin: false } }) {
+function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAdmin: false } }) {
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [schoolDropdownOpen, setSchoolDropdownOpen] = useState(false);
+  const schoolSwitcherRef = useRef(null);
   const { t } = useLang();
+  const { currentSchool, availableSchools, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole } = useSchool();
+
+  useEffect(() => {
+    if (!schoolDropdownOpen) return;
+    const handleClickOutside = (e) => {
+      if (schoolSwitcherRef.current && !schoolSwitcherRef.current.contains(e.target)) {
+        setSchoolDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [schoolDropdownOpen]);
 
   const moduleAllows = (item) => {
     if (!item.module) return true;
@@ -447,6 +466,49 @@ function Layout({ children, hasRole, modules = { loaded: false, enabled: [], isP
       <header className="topbar">
         <div className="topbar-left">
           <div className="brand-logo">S</div>
+          {currentSchool && (
+            <div className="school-indicator">
+              {modules.isPlatformAdmin ? (
+                <div className="school-switcher-wrap" ref={schoolSwitcherRef}>
+                  <button
+                    className="school-switcher-trigger"
+                    onClick={() => setSchoolDropdownOpen((v) => !v)}
+                    disabled={isSwitching || schoolLoading}
+                  >
+                    <Building2 size={14} />
+                    <span className="school-switcher-label">Active School:</span>
+                    <span className="school-switcher-name">
+                      {isSwitching && !schoolLoading ? "Switching..." : currentSchool.name}
+                    </span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {schoolDropdownOpen && availableSchools.length > 1 && (
+                    <div className="school-switcher-dropdown">
+                      {availableSchools.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          className={`school-switcher-item ${s.id === currentSchool.id ? "active" : ""}`}
+                          onClick={() => {
+                            setSchoolDropdownOpen(false);
+                            if (s.id !== currentSchool.id) switchSchool(s.id);
+                          }}
+                        >
+                          <Building2 size={13} />
+                          {s.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <span className="school-name-readonly">
+                  <Building2 size={14} />
+                  {currentSchool.name}
+                </span>
+              )}
+            </div>
+          )}
           <nav className="topbar-nav">
             {dashItem && (
               <NavLink
@@ -593,14 +655,26 @@ function MobileNavSection({ label, items, onNavigate }) {
 }
 
 function RequireRoles({ roles, children }) {
-  const { user, hasRole } = useAuth();
+  const { user } = useAuth();
+  const { scopedHasRole } = useSchool();
+  const navigate = useNavigate();
   if (!user) return <Navigate to="/login" replace />;
-  if (roles.length > 0 && !hasRole(roles)) {
+  if (roles.length > 0 && !scopedHasRole(roles)) {
     return (
       <section className="content">
         <div className="state-card error">
-          <strong>Access denied.</strong>
-          <span>Your role does not have permission to view this page.</span>
+          <strong>Access denied</strong>
+          <span>
+            You don't have permission to view this page. If you believe this is
+            a mistake, contact your school administrator.
+          </span>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={() => navigate("/")}
+          >
+            Back to dashboard
+          </button>
         </div>
       </section>
     );
@@ -613,36 +687,11 @@ function RequireRoles({ roles, children }) {
    ========================= */
 
 function Shell() {
-  const { user, loading, hasRole } = useAuth();
+  const { user, loading } = useAuth();
+  const { modules, loading: schoolLoading, currentSchool, scopedHasRole } = useSchool();
   const location = useLocation();
-  const [modules, setModules] = useState({
-    loaded: false,
-    enabled: [],
-    isPlatformAdmin: false,
-  });
 
-  useEffect(() => {
-    if (!user) return;
-
-    fetch("/api/schools/modules/current/", { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) {
-          setModules({
-            loaded: true,
-            enabled: data.enabled || [],
-            isPlatformAdmin: !!data.is_platform_admin,
-          });
-        } else {
-          setModules({ loaded: true, enabled: [], isPlatformAdmin: false });
-        }
-      })
-      .catch(() =>
-        setModules({ loaded: true, enabled: [], isPlatformAdmin: false })
-      );
-  }, [user]);
-
-  if (loading) {
+  if (loading || (user && schoolLoading)) {
     return (
       <div className="auth-loading">
         <div className="brand-logo">S</div>
@@ -659,15 +708,27 @@ function Shell() {
   if (!user) return <LoginPage />;
 
   return (
-    <Layout hasRole={hasRole} modules={modules}>
-      <Routes>
+    <Layout modules={modules}>
+      <Routes key={currentSchool?.id ?? "none"}>
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/" element={<Dashboard />} />
 
         <Route path="/profile" element={<ProfilePage key={location.pathname} />} />
-        <Route path="/profile/teacher/:id" element={<ProfilePage key={location.pathname} />} />
-        <Route path="/profile/student/:id" element={<ProfilePage key={location.pathname} />} />
-        <Route path="/profile/staff/:id" element={<ProfilePage key={location.pathname} />} />
+        <Route path="/profile/teacher/:id" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <ProfilePage key={location.pathname} />
+          </RequireRoles>
+        } />
+        <Route path="/profile/student/:id" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher"]}>
+            <ProfilePage key={location.pathname} />
+          </RequireRoles>
+        } />
+        <Route path="/profile/staff/:id" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "vice_principal", "campus_admin", "hr"]}>
+            <ProfilePage key={location.pathname} />
+          </RequireRoles>
+        } />
 
         <Route path="/students" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"]}>
@@ -676,7 +737,7 @@ function Shell() {
         } />
 
         <Route path="/students/:id" element={
-          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"]}>
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "teacher"]}>
             <Student360Page />
           </RequireRoles>
         } />
@@ -732,6 +793,12 @@ function Shell() {
         <Route path="/finance" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant"]}>
             <FinancePage />
+          </RequireRoles>
+        } />
+
+        <Route path="/finance/student-fees" element={
+          <RequireRoles roles={["super_admin", "admin", "accountant"]}>
+            <StudentFeesPage />
           </RequireRoles>
         } />
 
@@ -871,7 +938,7 @@ function Shell() {
 
         <Route path="/homework" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "student", "parent"]}>
-            <HomeworkPage isStudent={hasRole(["student"])} />
+            <HomeworkPage isStudent={scopedHasRole(["student"])} />
           </RequireRoles>
         } />
 
@@ -899,7 +966,7 @@ function Shell() {
 
         <Route path="/lms" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "student"]}>
-            <LMSPage isStudent={hasRole(["student"])} />
+            <LMSPage isStudent={scopedHasRole(["student"])} />
           </RequireRoles>
         } />
 
@@ -955,9 +1022,11 @@ function App() {
   return (
     <LanguageProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <Shell />
-        </BrowserRouter>
+        <SchoolProvider>
+          <BrowserRouter>
+            <Shell />
+          </BrowserRouter>
+        </SchoolProvider>
       </AuthProvider>
     </LanguageProvider>
   );

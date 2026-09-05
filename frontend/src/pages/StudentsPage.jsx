@@ -1,10 +1,11 @@
 ﻿import { useState, useRef, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Search, Building2, Users, ClipboardCheck } from "lucide-react";
-import { useAuth } from "../auth";
+import { useSchool } from "../schoolContext";
 import { useLang } from "../i18n";
 import { StatusBadge, PageHeader } from "./ui";
 import ProfileModal from "./ProfileModal";
+import { buildErrorMessage } from "../api";
 
 /* Basic theming & component styles */
 <style>{`
@@ -142,12 +143,12 @@ function jsonHeaders(extra = {}) {
 
 function StudentsPage() {
   const { t } = useLang();
-  const { hasRole } = useAuth();
+  const { scopedHasRole } = useSchool();
   const campusSectionRefs = useRef({});
 
   const isStudentSelf =
-    hasRole(["student"]) &&
-    !hasRole([
+    scopedHasRole(["student"]) &&
+    !scopedHasRole([
       "super_admin",
       "admin",
       "principal",
@@ -157,7 +158,7 @@ function StudentsPage() {
       "staff",
     ]);
 
-  const canManage = hasRole([
+  const canManage = scopedHasRole([
     "super_admin",
     "admin",
     "principal",
@@ -346,13 +347,18 @@ function StudentsPage() {
           body: JSON.stringify(payload),
         });
         const text = await res.text();
-        let data = {};
+        let data;
         try { data = text ? JSON.parse(text) : {}; } catch { data = {}; }
         if (!res.ok) {
-          const parts = Object.entries(data)
-            .map(([f, v]) => `${f}: ${Array.isArray(v) ? v.join(", ") : String(v)}`)
-            .filter((x) => x && !x.startsWith("undefined"));
-          throw new Error(parts.length ? parts.join(" | ") : `Request failed (${res.status})`);
+          throw new Error(
+            buildErrorMessage({
+              status: res.status,
+              detail: data.detail,
+              fieldErrors: data,
+              responseText: text,
+              fallback: "Request failed.",
+            })
+          );
         }
         return data;
       };
@@ -709,30 +715,15 @@ function StudentsPage() {
       }
 
       if (!response.ok) {
-        let message = "Unable to save student.";
-
-        if (data && typeof data === "object") {
-          message = Object.entries(data)
-            .map(([field, value]) => {
-              const text = Array.isArray(value)
-                ? value.join(", ")
-                : String(value);
-
-              return `${field}: ${text}`;
-            })
-            .join(" | ");
-        }
-
-        if (
-          !message ||
-          message === "Unable to save student."
-        ) {
-          message =
-            responseText ||
-            `Request failed (${response.status})`;
-        }
-
-        throw new Error(message);
+        throw new Error(
+          buildErrorMessage({
+            status: response.status,
+            detail: data.detail,
+            fieldErrors: data,
+            responseText,
+            fallback: "Unable to save student.",
+          })
+        );
       }
 
       // A student only appears in the list when they have an active

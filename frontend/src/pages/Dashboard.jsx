@@ -1,5 +1,6 @@
 ﻿import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSchool } from "../schoolContext";
 import {
   Users,
   GraduationCap,
@@ -99,6 +100,7 @@ function greetingForHour(hour) {
 
 function Dashboard() {
   const navigate = useNavigate();
+  const { currentSchool } = useSchool();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -108,7 +110,14 @@ function Dashboard() {
   const [schoolName, setSchoolName] = useState("");
   const [now, setNow] = useState(() => new Date());
 
+  // The authoritative school context (active institution) is applied on mount
+  // and the whole route remounts on school switch, so this value is always the
+  // correct school for the data below — never a stale previous school. It works
+  // for every role: Super Admin gets the selected school, normal users their own.
+  const activeSchoolName = currentSchool?.name || schoolName;
+
   useEffect(() => {
+    // Fallback label for contexts where the active institution is unavailable.
     fetch("/api/schools/branding/", { credentials: "include" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) =>
@@ -376,6 +385,19 @@ function Dashboard() {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.22);
   font-size: 0.78rem;
+  color: #e0e7ff;
+}
+.dash-active-school {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  padding: 0.32rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 0.8rem;
+  font-weight: 600;
   color: #e0e7ff;
 }
 .dash-actions {
@@ -677,7 +699,13 @@ function Dashboard() {
               <Sparkles size={13} style={{ verticalAlign: "-2px", marginRight: "0.3rem" }} />
               {greeting}
             </p>
-            <h2>{schoolName || "School Dashboard"}</h2>
+            <h2>{activeSchoolName || "School Dashboard"}</h2>
+            {currentSchool && (
+              <div className="dash-active-school">
+                <Building2 size={14} />
+                Active School: {currentSchool.name}
+              </div>
+            )}
             <p className="dash-hero-sub">
               Here's the live picture of your school — students, staff, campus
               pulse and finances at a glance.
@@ -912,7 +940,7 @@ function Dashboard() {
                   </div>
                   <div>
                     <h3 style={{ margin: 0, fontWeight: 700, color: "#0f172a" }}>
-                      {schoolName || "Your school"}
+                      {activeSchoolName || "Your school"}
                     </h3>
                     <p style={{ margin: "0.15rem 0 0", fontSize: "0.8rem", color: "#64748b" }}>
                       Manage students, teachers, attendance, examinations, finance,

@@ -1,3 +1,70 @@
+// Maps an HTTP status to a safe, user-friendly message. Sensitive backend
+// internals are never surfaced; the message comes from the backend's own
+// `detail` when present (safe), otherwise a generic tone for the status.
+export function statusMessage(status) {
+  if (status === 400) {
+    return "The information you entered could not be saved. Please check the fields and try again.";
+  }
+
+  if (status === 401) {
+    return "Your session has expired. Please sign in again.";
+  }
+
+  if (status === 403) {
+    return "You do not have permission to perform this action.";
+  }
+
+  if (status === 404) {
+    return "The requested record could not be found.";
+  }
+
+  if (status === 409) {
+    return "A record already exists with those details. Please use a different value.";
+  }
+
+  if (status >= 500) {
+    return "Something went wrong on the server. Please try again shortly.";
+  }
+
+  return null;
+}
+
+// Builds a safe error message from a failed response. Uses the backend's own
+// `detail` (authored and intended for display) when present; otherwise a
+// status-based generic message. Field-level errors are summarized without
+// dumping raw values.
+export function buildErrorMessage({
+  status,
+  detail,
+  fieldErrors,
+  responseText,
+  fallback = "Request failed.",
+}) {
+  if (detail && typeof detail === "string" && detail.trim()) {
+    return detail;
+  }
+
+  const generic = statusMessage(status);
+
+  if (generic) {
+    return generic;
+  }
+
+  if (fieldErrors && typeof fieldErrors === "object") {
+    const fields = Object.keys(fieldErrors);
+    if (fields.length > 0) {
+      const label = fields.length === 1 ? fields[0] : "some fields";
+      return `Please check ${label} in the form.`;
+    }
+  }
+
+  if (responseText && typeof responseText === "string" && responseText.trim()) {
+    return fallback;
+  }
+
+  return fallback;
+}
+
 export function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
