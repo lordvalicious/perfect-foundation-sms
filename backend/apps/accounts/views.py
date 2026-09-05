@@ -468,6 +468,18 @@ class ActiveInstitutionView(APIView):
 
     def post(self, request):
         institution_id = request.data.get("institution_id")
+
+        school = (
+            School.objects.filter(pk=institution_id).first()
+            if institution_id is not None
+            else None
+        )
+        if school is None or school.status != "active":
+            return Response(
+                {"detail": "School not found or inactive."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
         membership = InstitutionMembership.objects.filter(
             user=request.user,
             institution_id=institution_id,
@@ -1978,6 +1990,8 @@ class SuperAdminSchoolSwitchView(APIView):
 
     Note: Switching does NOT modify the school's activation status.
     """
+
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
 
     def post(self, request):
         institution_id = request.data.get("institution_id")
