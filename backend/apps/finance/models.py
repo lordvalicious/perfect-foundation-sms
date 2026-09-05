@@ -1649,15 +1649,18 @@ class PaymentRefund(SoftDeleteMixin):
 
 
 class StudentFeeOverride(SoftDeleteMixin):
-    """Per-student fee amount override for a specific fee structure."""
+    """Per-student fee amount override for a specific fee structure.
+
+    The standard fee structure amount remains unchanged; this record only
+    controls the amount charged to this particular student.  The institution
+    field must always be set — never leave it null in production data.
+    """
     objects = SoftDeleteManager()
 
     institution = models.ForeignKey(
         School,
         on_delete=models.CASCADE,
         related_name="student_fee_overrides",
-        null=True,
-        blank=True,
     )
     campus = models.ForeignKey(
         Campus,
@@ -1723,6 +1726,10 @@ class StudentFeeOverride(SoftDeleteMixin):
             ).first()
             if not enrollment:
                 errors["student"] = "Student must be enrolled in the fee structure's class/campus/year."
+
+            # Ensure the enrollment belongs to the same institution
+            if enrollment and enrollment.academic_year.school_id != self.institution_id:
+                errors["student"] = "Student's enrollment is not in the same institution."
 
         if errors:
             raise ValidationError(errors)
