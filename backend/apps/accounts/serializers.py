@@ -64,6 +64,9 @@ class UserSerializer(serializers.ModelSerializer):
     student_profile_id = serializers.SerializerMethodField()
     teacher_profile_id = serializers.SerializerMethodField()
 
+    # Role/power fields are never writable through this serializer.
+    is_superuser = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = User
         fields = [
@@ -297,10 +300,20 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
             password=generated,
             first_name=staff.first_name,
             last_name=staff.last_name,
+            institution=(
+                getattr(self.context.get("request"), "institution", None) or None
+            ),
         )
 
+        # Prefer the request's active institution (correct school scoping);
+        # fall back to the profile's own institution, then the first active
+        # school only when no context is available.
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
         school = (
-            School.objects.filter(status="active").order_by("id").first()
+            active_institution
+            or staff.institution
+            or School.objects.filter(status="active").order_by("id").first()
             or School.objects.first()
         )
 

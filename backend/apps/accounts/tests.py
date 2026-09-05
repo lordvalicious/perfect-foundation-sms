@@ -191,15 +191,29 @@ class InstitutionIsolationTests(AuthBaseTestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_user_can_switch_only_to_an_active_membership(self):
-        membership = InstitutionMembership.objects.create(
-            user=self.user,
+        # Normal users belong to exactly one school; only the Super Admin may
+        # hold (and switch between) memberships in multiple schools.
+        super_admin = get_user_model().objects.create_superuser(
+            username="sa-switch",
+            email="sa-switch@test.edu",
+            password="TestPass123!",
+        )
+        InstitutionMembership.objects.create(
+            user=super_admin,
+            institution=self.school,
+            status="active",
+        )
+        InstitutionMembership.objects.create(
+            user=super_admin,
             institution=self.other_school,
+            status="active",
         )
-        RoleAssignment.objects.create(
-            membership=membership,
-            role=Role.ACCOUNTANT,
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post(
+            "/api/auth/login/",
+            {"username": "sa-switch", "password": "TestPass123!"},
+            format="json",
         )
-        self.login()
 
         response = self.client.post(
             "/api/auth/active-institution/",

@@ -21,6 +21,7 @@ from apps.audit.models import record_audit
 from .access import (
     apply_campus_scope,
     assert_campus_allowed,
+    can_manage_role,
     restrict_to_allowed_campuses,
 )
 from apps.accounts.permissions import (
@@ -364,9 +365,13 @@ class ActiveInstitutionView(APIView):
         if institution is None:
             return Response({"institution": None, "roles": []})
 
-        roles = request.institution_membership.role_assignments.values_list(
-            "role", flat=True
-        )
+        if request.institution_membership is not None:
+            roles = request.institution_membership.role_assignments.values_list(
+                "role", flat=True
+            )
+        else:
+            roles = request.user.get_roles(institution)
+
         return Response(
             {
                 "institution": {
@@ -1399,7 +1404,14 @@ class RolePermissionCreateView(APIView):
         
         serializer = RolePermissionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
+        # Escalation guard: you may only manage permissions for roles ranked
+        # strictly below your own (prevents granting your-own/higher powers).
+        if not can_manage_role(request.user, serializer.validated_data["role"]):
+            raise PermissionDenied(
+                "You cannot assign permissions to a role at or above your own level."
+            )
+
         # Set institution from request
         role_perm = serializer.save(institution=institution, granted_by=request.user)
         
@@ -1450,7 +1462,13 @@ class RolePermissionDeleteView(APIView):
                 {"detail": "Role permission not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
+
+        # Escalation guard: only a higher-ranked role manager may alter this.
+        if not can_manage_role(request.user, role_perm.role):
+            raise PermissionDenied(
+                "You cannot modify permissions for a role at or above your own level."
+            )
+
         # Prevent deleting system permissions
         if role_perm.permission.is_system:
             return Response(
@@ -1521,7 +1539,17 @@ class UserPermissionCreateView(APIView):
         
         serializer = UserPermissionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
+        # Escalation guards: no self-granting and no managing equal/higher roles.
+        target_user = serializer.validated_data["user"]
+        if target_user.pk == request.user.pk:
+            raise PermissionDenied("You cannot grant or modify your own permissions.")
+        if not can_manage_role(request.user, target_user.primary_role or Role.STUDENT):
+            raise PermissionDenied(
+                "You cannot manage permissions for a user with a role at or "
+                "above your own level."
+            )
+
         user_perm = serializer.save(
             institution=institution,
             granted_by=request.user,
@@ -1575,7 +1603,19 @@ class UserPermissionDeleteView(APIView):
                 {"detail": "User permission not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
+
+        # Escalation guard: you may only revoke permissions from lower-ranked users.
+        if (
+            user_perm.user_id != request.user.pk
+            and not can_manage_role(
+                request.user, user_perm.user.primary_role or Role.STUDENT
+            )
+        ):
+            raise PermissionDenied(
+                "You cannot manage permissions for a user with a role at or "
+                "above your own level."
+            )
+
         user_perm.delete()
         
         record_audit(

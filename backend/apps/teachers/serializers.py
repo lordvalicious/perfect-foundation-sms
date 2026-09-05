@@ -119,16 +119,22 @@ class TeacherSerializer(serializers.ModelSerializer):
 
         generated = password or get_random_string(length=12)
 
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
+
         user = User.objects.create_user(
             username=candidate,
             email=email,
             password=generated,
             first_name=teacher.first_name,
             last_name=teacher.last_name,
+            institution=(active_institution or None),
         )
 
         school = (
-            School.objects.filter(status="active").order_by("id").first()
+            active_institution
+            or teacher.institution
+            or School.objects.filter(status="active").order_by("id").first()
             or School.objects.first()
         )
 

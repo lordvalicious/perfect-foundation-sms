@@ -19,6 +19,7 @@ from apps.accounts.models import (
     RoleAssignment,
     StaffProfile,
     User,
+    assign_role_safely,
 )
 from apps.schools.models import (
     AcademicCalendar,
@@ -266,12 +267,17 @@ def membership(ctx, user, school=None):
 
 
 def assign_roles(ctx, user, roles, school=None):
-    """Assign roles to ``user`` in the demo school (idempotent)."""
+    """Assign roles to ``user`` in the demo school (idempotent).
+
+    Uses ``assign_role_safely`` so the single-Super-Admin invariant is never
+    violated: if a different account already holds ``super_admin``, the new
+    account is seeded as ``admin`` with a warning instead.
+    """
     mem = membership(ctx, user, school=school)
     for role in roles:
-        _, created = RoleAssignment.objects.get_or_create(
-            membership=mem, role=role
-        )
+        _, created, note = assign_role_safely(mem, role)
+        if note:
+            ctx.warn(note)
         if created:
             ctx.count(f"role:{role}")
             ctx.roles[(user.username, role)] = True

@@ -1,4 +1,5 @@
 ﻿from django.contrib.auth.models import AbstractUser
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 from rest_framework.exceptions import PermissionDenied
@@ -25,6 +26,34 @@ class Role(models.TextChoices):
     PARENT = "parent", "Parent / Guardian"
     STUDENT = "student", "Student"
     STAFF = "staff", "Staff Member"
+
+
+# Canonical role hierarchy (higher = more privilege). Used to prevent role
+# escalation: a user may only manage roles ranked strictly below their own.
+ROLE_RANK = {
+    Role.SUPER_ADMIN: 100,
+    Role.ORG_ADMIN: 90,
+    Role.HEAD_OFFICE: 85,
+    Role.ADMIN: 80,
+    Role.PRINCIPAL: 70,
+    Role.VICE_PRINCIPAL: 65,
+    Role.CAMPUS_ADMIN: 60,
+    Role.ACADEMIC: 55,
+    Role.ACCOUNTANT: 50,
+    Role.HR: 45,
+    Role.RECEPTIONIST: 40,
+    Role.LIBRARIAN: 35,
+    Role.GUARD: 30,
+    Role.TEACHER: 25,
+    Role.STAFF: 20,
+    Role.STUDENT: 10,
+    Role.PARENT: 5,
+}
+
+
+def role_rank(role):
+    """Return the numeric rank for a role value (or 0 for unknown roles)."""
+    return ROLE_RANK.get(role, 0)
 
 
 class User(AbstractUser):
@@ -146,6 +175,51 @@ class User(AbstractUser):
         membership = self.get_active_memberships().first()
         return membership.institution if membership else None
 
+    @property
+    def is_super_admin(self):
+        """True when this account is the platform Super Admin.
+
+        A Super Admin is either a Django superuser (system-wide access) or the
+        holder of the ``super_admin`` role. The platform enforces that there is
+        exactly one such account at any time.
+        """
+        return self.is_superuser or self.has_role(Role.SUPER_ADMIN)
+
+    def clean(self):
+        super().clean()
+        # Denormalized ``institution`` FK must agree with a real membership for
+        # non-Super-Admin users. Super Admin may hold a null institution (or
+        # many memberships) because they are not bound to one school.
+        if (
+            self.institution_id is not None
+            and not self.is_superadmin_expected()
+        ):
+            has_membership = self.memberships.filter(
+                institution_id=self.institution_id
+            ).exists()
+            if not has_membership:
+                raise ValidationError(
+                    {
+                        "institution": (
+                            "This user does not have a membership in the "
+                            "selected institution."
+                        )
+                    }
+                )
+
+    def is_superadmin_expected(self):
+        """Whether this user holds (or is being assigned) Super Admin powers.
+
+        Kept as a helper so it can be reused by the save-time guards without
+        triggering the full permission machinery.
+        """
+        if self.is_superuser or self.has_role(Role.SUPER_ADMIN):
+            return True
+        return RoleAssignment.objects.filter(
+            membership__user=self,
+            role=Role.SUPER_ADMIN,
+        ).exists()
+
     def __str__(self):
         return self.username
 
@@ -266,6 +340,80 @@ class InstitutionMembership(models.Model):
             f"{self.user.username} @ {self.institution.name}"
         )
 
+    def _user_is_super_admin(self):
+        user = self.user
+        return bool(
+            user.is_superuser
+            or user.has_role(Role.SUPER_ADMIN)
+            or RoleAssignment.objects.filter(
+                membership__user=user,
+                role=Role.SUPER_ADMIN,
+            ).exists()
+        )
+
+    def _assert_valid_for_user(self):
+        """Server-side membership integrity guard.
+
+        Rules enforced here:
+          * Normal users belong to exactly ONE school. A second *active*
+            membership in a different institution is rejected. (Several
+            inactive/suspended historical memberships are tolerated.)
+          * Super Admin is exempt: they may hold memberships in many schools in
+            order to switch context system-wide.
+          * Any linked profile (Staff / Teacher / Student) that carries a
+            school must agree with this membership, so "User = Lahore but
+            Profile = Sialkot" contradictions are impossible.
+        """
+        if self.user_id is None or self.institution_id is None:
+            return
+
+        if self._user_is_super_admin():
+            return
+
+        # Exactly one school for normal users.
+        other_active = (
+            InstitutionMembership.objects.filter(
+                user_id=self.user_id,
+                status="active",
+            )
+            .exclude(pk=self.pk)
+            .exclude(institution_id=self.institution_id)
+            .exists()
+        )
+        if other_active:
+            raise ValidationError(
+                "A normal user belongs to exactly one school. This user "
+                "already has an active membership in another institution."
+            )
+
+        # Profile institution must match the membership.
+        for related_attr in (
+            "staff_profile",
+            "teacher_profile",
+            "student_profile",
+        ):
+            try:
+                profile = getattr(self.user, related_attr, None)
+            except Exception:
+                profile = None
+            if (
+                profile is not None
+                and profile.institution_id is not None
+                and profile.institution_id != self.institution_id
+            ):
+                raise ValidationError(
+                    f"The linked {related_attr} belongs to a different school "
+                    "than this membership."
+                )
+
+    def clean(self):
+        super().clean()
+        self._assert_valid_for_user()
+
+    def save(self, *args, **kwargs):
+        self._assert_valid_for_user()
+        super().save(*args, **kwargs)
+
 
 class RoleAssignment(models.Model):
     membership = models.ForeignKey(
@@ -287,11 +435,75 @@ class RoleAssignment(models.Model):
             models.UniqueConstraint(
                 fields=["membership", "role"],
                 name="unique_role_per_membership",
-            )
+            ),
+            # At most ONE super_admin exists platform-wide. A partial unique
+            # index on a constant makes the whole table reject a second row.
+            models.UniqueConstraint(
+                fields=["role"],
+                name="unique_super_admin_role",
+                condition=models.Q(role="super_admin"),
+            ),
         ]
+
+    def clean(self):
+        super().clean()
+        if self.role != Role.SUPER_ADMIN:
+            return
+        existing = (
+            RoleAssignment.objects.filter(
+                role=Role.SUPER_ADMIN,
+            )
+            .exclude(pk=self.pk)
+            .first()
+        )
+        if existing is not None:
+            raise ValidationError(
+                "There is already exactly one platform Super Admin "
+                f"({existing.membership.user.username}). Duplicate Super Admin "
+                "accounts are not allowed."
+            )
 
     def __str__(self):
         return f"{self.membership} - {self.get_role_display()}"
+
+
+def assign_role_safely(membership, role):
+    """Create a ``RoleAssignment`` without ever violating the single-Super-Admin
+    invariant.
+
+    Returns ``(assignment, created, note)`` where ``note`` is a human-readable
+    string when the request was downgraded, else ``None``.
+
+    When ``role`` is ``super_admin`` and a *different* user already holds the
+    Super Admin role, the request is downgraded to ``admin`` (with a note)
+    instead of failing, keeping seeds and commands idempotent.
+    """
+    if role == Role.SUPER_ADMIN:
+        holder = (
+            RoleAssignment.objects.filter(role=Role.SUPER_ADMIN)
+            .select_related("membership__user")
+            .exclude(membership=membership)
+            .first()
+        )
+        if holder is not None and holder.membership.user_id != membership.user_id:
+            assignment, created = RoleAssignment.objects.get_or_create(
+                membership=membership,
+                role=Role.ADMIN,
+            )
+            return (
+                assignment,
+                created,
+                (
+                    f"super_admin already held by "
+                    f"{holder.membership.user.username}; assigned admin instead"
+                ),
+            )
+
+    assignment, created = RoleAssignment.objects.get_or_create(
+        membership=membership,
+        role=role,
+    )
+    return assignment, created, None
 
 
 class StaffProfile(SoftDeleteMixin):

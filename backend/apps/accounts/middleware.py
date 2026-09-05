@@ -61,12 +61,33 @@ class ActiveInstitutionMiddleware:
             membership = memberships.filter(
                 institution_id=selected_id
             ).first()
+
             if membership is None:
-                membership = memberships.first()
-                if membership is not None:
-                    request.session[self.session_key] = membership.institution_id
-                else:
-                    request.session.pop(self.session_key, None)
+                # The platform Super Admin can manage every school even without
+                # a membership row for it (they may self-provision memberships
+                # lazily). Honor their explicit context switch to any active
+                # school.
+                if selected_id is not None and (
+                    user.is_superuser or user.has_any_role(["super_admin"])
+                ):
+                    from apps.schools.models import School
+
+                    active_school = School.objects.filter(
+                        pk=selected_id, status="active"
+                    ).first()
+                    if active_school is not None:
+                        request.institution = active_school
+
+                if membership is None and request.institution is None:
+                    membership = memberships.first()
+                    if membership is not None:
+                        request.session[self.session_key] = membership.institution_id
+                    else:
+                        request.session.pop(self.session_key, None)
+
+                if request.institution is not None and membership is None:
+                    request.institution_membership = None
+                    request.session[self.session_key] = selected_id
 
             if membership is not None:
                 request.institution = membership.institution

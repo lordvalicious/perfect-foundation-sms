@@ -6,6 +6,7 @@ from apps.accounts.models import (
     Role,
     RoleAssignment,
     User,
+    assign_role_safely,
 )
 from apps.schools.models import School
 
@@ -141,10 +142,9 @@ class Command(BaseCommand):
             )
 
             for role in item["roles"]:
-                RoleAssignment.objects.get_or_create(
-                    membership=membership,
-                    role=role,
-                )
+                _, _, note = assign_role_safely(membership, role)
+                if note:
+                    self.stdout.write(self.style.WARNING(note))
 
             if item.get("link_teacher"):
                 from apps.teachers.models import Teacher
