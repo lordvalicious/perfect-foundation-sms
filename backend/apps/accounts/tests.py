@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
+from datetime import date
 from django.utils import timezone
 from rest_framework.test import APIClient
 
@@ -10,8 +11,10 @@ from apps.accounts.models import (
     Role,
     RoleAssignment,
     TwoFABackupCode,
+    assign_role_safely,
 )
-from apps.schools.models import Campus, School
+from apps.schools.models import Campus, School, AcademicUnit, Class, Section, AcademicYear
+from apps.finance.models import FeeCategory
 
 
 class AuthBaseTestCase(TestCase):
@@ -191,15 +194,29 @@ class InstitutionIsolationTests(AuthBaseTestCase):
         self.assertEqual(response.status_code, 404)
 
     def test_user_can_switch_only_to_an_active_membership(self):
-        membership = InstitutionMembership.objects.create(
-            user=self.user,
+        # Normal users belong to exactly one school; only the Super Admin may
+        # hold (and switch between) memberships in multiple schools.
+        super_admin = get_user_model().objects.create_superuser(
+            username="sa-switch",
+            email="sa-switch@test.edu",
+            password="TestPass123!",
+        )
+        InstitutionMembership.objects.create(
+            user=super_admin,
+            institution=self.school,
+            status="active",
+        )
+        InstitutionMembership.objects.create(
+            user=super_admin,
             institution=self.other_school,
+            status="active",
         )
-        RoleAssignment.objects.create(
-            membership=membership,
-            role=Role.ACCOUNTANT,
+        self.client.post("/api/auth/csrf/", {}, format="json")
+        self.client.post(
+            "/api/auth/login/",
+            {"username": "sa-switch", "password": "TestPass123!"},
+            format="json",
         )
-        self.login()
 
         response = self.client.post(
             "/api/auth/active-institution/",
@@ -741,3 +758,219 @@ class AdminUnlockTests(AuthBaseTestCase):
         # Login as teacher (already logged in)
         response = self.client.post(f"/api/auth/admin/unlock/{self.user.pk}/")
         self.assertEqual(response.status_code, 403)
+
+
+class SchoolSwitchingTests(TestCase):
+    """Test Super Admin school context switching and normal user isolation."""
+
+    def setUp(self):
+        # Create schools
+        self.school_lahore = School.objects.create(name="Lahore School")
+        self.school_sialkot = School.objects.create(name="Sialkot School")
+        self.school_islamabad = School.objects.create(name="Islamabad School")
+
+        # Create campuses
+        self.campus_lahore = Campus.objects.create(school=self.school_lahore, name="Lahore Campus")
+        self.campus_sialkot = Campus.objects.create(school=self.school_sialkot, name="Sialkot Campus")
+        self.campus_islamabad = Campus.objects.create(school=self.school_islamabad, name="Islamabad Campus")
+
+        # Create units, classes, sections
+        self.unit = AcademicUnit.objects.create(campus=self.campus_lahore, name="Primary")
+        self.class_obj = Class.objects.create(unit=self.unit, name="Grade 1")
+        self.section = Section.objects.create(class_obj=self.class_obj, name="A")
+        self.year = AcademicYear.objects.create(
+            school=self.school_lahore,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.category = FeeCategory.objects.create(name="Tuition")
+
+        # Create super admin and normal users
+        self.super_admin = get_user_model().objects.create_superuser(
+            username="super_admin",
+            email="sa@test.edu",
+            password="TestPass123!",
+        )
+        self.normal_admin = get_user_model().objects.create_user(
+            username="normal_admin",
+            email="admin@test.edu",
+            password="TestPass123!",
+        )
+        self.accountant = get_user_model().objects.create_user(
+            username="accountant",
+            email="acct@test.edu",
+            password="TestPass123!",
+        )
+        self.teacher = get_user_model().objects.create_user(
+            username="teacher",
+            email="teacher@test.edu",
+            password="TestPass123!",
+        )
+        self.student = get_user_model().objects.create_user(
+            username="student",
+            email="student@test.edu",
+            password="TestPass123!",
+        )
+
+        # Create institution memberships
+        # Super admin has multiple institutions
+        self.sa_mem_lahore = InstitutionMembership.objects.create(
+            user=self.super_admin, institution=self.school_lahore, status="active")
+        self.sa_mem_sialkot = InstitutionMembership.objects.create(
+            user=self.super_admin, institution=self.school_sialkot, status="active")
+        self.sa_mem_islamabad = InstitutionMembership.objects.create(
+            user=self.super_admin, institution=self.school_islamabad, status="active")
+        assign_role_safely(self.sa_mem_lahore, Role.SUPER_ADMIN)
+        assign_role_safely(self.sa_mem_sialkot, Role.SUPER_ADMIN)
+        assign_role_safely(self.sa_mem_islamabad, Role.SUPER_ADMIN)
+
+        # Normal admin has single membership
+        self.admin_mem = InstitutionMembership.objects.create(
+            user=self.normal_admin, institution=self.school_lahore, status="active")
+        RoleAssignment.objects.create(membership=self.admin_mem, role=Role.ADMIN)
+
+        # Accountant has single membership
+        self.acct_mem = InstitutionMembership.objects.create(
+            user=self.accountant, institution=self.school_lahore, status="active")
+        RoleAssignment.objects.create(membership=self.acct_mem, role=Role.ACCOUNTANT)
+
+        # Teacher has single membership
+        self.teacher_mem = InstitutionMembership.objects.create(
+            user=self.teacher, institution=self.school_lahore, status="active")
+        RoleAssignment.objects.create(membership=self.teacher_mem, role=Role.TEACHER)
+
+        # Student has single membership
+        self.student_mem = InstitutionMembership.objects.create(
+            user=self.student, institution=self.school_lahore, status="active")
+        RoleAssignment.objects.create(membership=self.student_mem, role=Role.STUDENT)
+
+        # Clients
+        self.super_client = APIClient()
+        self.super_client.force_authenticate(user=self.super_admin)
+        self.admin_client = APIClient()
+        self.admin_client.force_authenticate(user=self.normal_admin)
+        self.acct_client = APIClient()
+        self.acct_client.force_authenticate(user=self.accountant)
+        self.teacher_client = APIClient()
+        self.teacher_client.force_authenticate(user=self.teacher)
+        self.student_client = APIClient()
+        self.student_client.force_authenticate(user=self.student)
+
+        # Login helpers
+        self.super_client.post('/api/auth/csrf/', {}, format='json')
+        self.admin_client.post('/api/auth/csrf/', {}, format='json')
+        self.acct_client.post('/api/auth/csrf/', {}, format='json')
+        self.teacher_client.post('/api/auth/csrf/', {}, format='json')
+        self.student_client.post('/api/auth/csrf/', {}, format='json')
+
+        self.super_client.post('/api/auth/login/', {'username': 'sa-switch', 'password': 'TestPass123!'}, format='json')
+        self.admin_client.post('/api/auth/login/', {'username': 'admin', 'password': 'Admin123!'}, format='json')
+        self.acct_client.post('/api/auth/login/', {'username': 'accountant', 'password': 'TestPass123!'}, format='json')
+        self.teacher_client.post('/api/auth/login/', {'username': 'teacher', 'password': 'TestPass123!'}, format='json')
+        self.student_client.post('/api/auth/login/', {'username': 'student', 'password': 'TestPass123!'}, format='json')
+
+    def test_super_admin_can_switch_to_lahore(self):
+        """Super Admin can switch to Lahore."""
+        response = self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_lahore.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['institution']['id'], self.school_lahore.pk)
+
+    def test_super_admin_can_switch_to_sialkot(self):
+        """Super Admin can switch to Sialkot."""
+        response = self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['institution']['id'], self.school_sialkot.pk)
+
+    def test_super_admin_can_switch_to_islamabad(self):
+        """Super Admin can switch to Islamabad."""
+        response = self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_islamabad.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['institution']['id'], self.school_islamabad.pk)
+
+    def test_super_admin_can_switch_back_to_lahore(self):
+        """Super Admin can switch back to Lahore after switching to another school."""
+        # First switch to Sialkot
+        self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        # Now switch back to Lahore
+        response = self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_lahore.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['institution']['id'], self.school_lahore.pk)
+
+    def test_normal_admin_cannot_switch_school(self):
+        """Normal Admin cannot switch school context."""
+        response = self.admin_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_accountant_cannot_switch_school(self):
+        """Accountant cannot switch school context."""
+        response = self.acct_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_teacher_cannot_switch_school(self):
+        """Teacher cannot switch school context."""
+        response = self.teacher_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_student_cannot_switch_school(self):
+        """Student cannot switch school context."""
+        response = self.student_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_invalid_school_id_returns_404(self):
+        """Invalid school ID returns 404."""
+        response = self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': 99999},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_inactive_school_cannot_be_switched_to(self):
+        """Inactive school cannot be switched to."""
+        # Deactivate a school
+        self.school_sialkot.status = 'inactive'
+        self.school_sialkot.save()
+        # Try to switch to it
+        response = self.super_client.post(
+            '/api/auth/active-institution/',
+            {'institution_id': self.school_sialkot.pk},
+            format='json',
+        )
+        self.assertEqual(response.status_code, 404)

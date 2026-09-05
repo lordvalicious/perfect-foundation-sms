@@ -3,6 +3,7 @@ from django.contrib import admin  # type: ignore[reportMissingModuleSource]
 from django.http import JsonResponse
 from django.urls import include, path, re_path  # type: ignore[reportMissingModuleSource]
 from apps.core.views import home_view, run_migrations_view
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 
 def health_check(request):
@@ -12,6 +13,11 @@ def health_check(request):
 urlpatterns = [
     path("", home_view, name="home"),
     path("admin/", admin.site.urls),
+
+    # API Schema (OpenAPI)
+    path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+    path("api/docs/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
+    path("api/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
 
     path("api/health/", health_check, name="health-check"),
     path("api/admin/run-migrations/", run_migrations_view, name="run-migrations"),

@@ -1,9 +1,23 @@
+
+
+# API Contract for Developer B - School Switching
+# Endpoint: POST /api/auth/active-institution/
+# Permissions: IsAuthenticated, IsSuperAdmin
+# Responses:
+#   200: Successfully switched to institution
+#   400: institution_id is required
+#   403: Normal users forbidden (Admin/Accountant/Teacher/Student)
+#   404: School not found or inactive
+# Audit: Records 'institution_switched' action
+# Note: Switching does NOT modify school activation status
+
 from django.contrib.auth import login as django_login
 from django.contrib.auth import logout as django_logout
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sessions.models import Session
 from django.core.mail import send_mail
-from django.db import models
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import IntegrityError, models
 from django.db.models import Q
 from django.http import JsonResponse
 from django.utils import timezone
@@ -21,6 +35,7 @@ from apps.audit.models import record_audit
 from .access import (
     apply_campus_scope,
     assert_campus_allowed,
+    can_manage_role,
     restrict_to_allowed_campuses,
 )
 from apps.accounts.permissions import (
@@ -28,7 +43,10 @@ from apps.accounts.permissions import (
     IsAdminOrReadOnly,
     IsAdminRole,
     IsStaffRole,
+    IsSuperAdmin,
 )
+from apps.schools.serializers import SchoolSerializer
+from apps.schools.models import School
 
 from .models import (
     FailedLoginAttempt,
@@ -54,6 +72,7 @@ from .serializers import (
     PermissionSerializer,
     RolePermissionCreateSerializer,
     RolePermissionSerializer,
+    SchoolAdminProvisionSerializer,
     StaffAttendanceCorrectionSerializer,
     StaffAttendanceSerializer,
     StaffLeaveActionSerializer,
@@ -83,6 +102,41 @@ def get_client_ip(request):
     if forwarded:
         return forwarded.split(",")[0].strip()
     return request.META.get("REMOTE_ADDR")
+
+
+def _login_scope(request):
+    """Explicit school_code plus the host-resolved institution in effect."""
+    school_code = str(request.data.get("school_code") or "").strip().lower()
+    return school_code, getattr(request, "institution", None)
+
+
+def _scoped_user(request, identifier):
+    """First account matching ``identifier`` inside the request's login scope."""
+    from .services import scoped_user_queryset
+
+    school_code, institution = _login_scope(request)
+    return scoped_user_queryset(
+        identifier,
+        school_code=school_code,
+        institution=institution,
+    ).first()
+
+
+def _identifiable_in_scope(request, identifier):
+    """True when the attempt targets exactly one candidate account.
+
+    A declared ``school_code`` or a white-label host pins the attempt to one
+    school; without either, the identifier must be globally unique.
+    Ambiguous (shared) identifiers are never attributed to an arbitrary
+    account, otherwise one school's failed attempts could lock out another
+    school's account holding the same username.
+    """
+    from .services import login_candidate_count
+
+    school_code, institution = _login_scope(request)
+    if school_code or institution is not None:
+        return True
+    return login_candidate_count(identifier) == 1
 
 
 def record_failed_login(request, user, username_or_email):
@@ -179,6 +233,37 @@ class LoginView(APIView):
     throttle_scope = "login"
 
     def post(self, request):
+        # Lockout is surfaced explicitly (403) BEFORE credential validation,
+        # and only when the account can be identified unambiguously in the
+        # declared school scope. A locked duplicate username without a
+        # school_code stays ambiguous and is handled as a plain 400 below.
+        identifier = str(
+            request.data.get("username")
+            or request.data.get("email")
+            or ""
+        ).strip()
+
+        if identifier and _identifiable_in_scope(request, identifier):
+            candidate = _scoped_user(request, identifier)
+            if (
+                candidate is not None
+                and candidate.locked_until
+                and candidate.locked_until > timezone.now()
+            ):
+                lockout_remaining = int(
+                    (candidate.locked_until - timezone.now()).total_seconds() / 60
+                ) + 1
+                return Response(
+                    {
+                        "detail": (
+                            f"Account temporarily locked. Try again in "
+                            f"{lockout_remaining} minutes."
+                        ),
+                        "locked_until": candidate.locked_until.isoformat(),
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         serializer = LoginSerializer(
             data=request.data,
             context={"request": request},
@@ -193,11 +278,13 @@ class LoginView(APIView):
                 or ""
             ).strip()
 
-            if identifier:
-                user = User.objects.filter(
-                    Q(email__iexact=identifier)
-                    | Q(username=identifier)
-                ).first()
+            # Attribute the failure only when the account is unambiguous in the
+            # declared scope. Shared usernames without a school or host context
+            # are never recorded against an arbitrary account: doing so would
+            # let one school's login attempts lock out another school's account
+            # with the same username.
+            if identifier and _identifiable_in_scope(request, identifier):
+                user = _scoped_user(request, identifier)
 
                 if user is not None:
                     record_failed_login(request, user, identifier)
@@ -257,7 +344,7 @@ class LoginView(APIView):
         school_code = serializer.validated_data.get("school_code", "").strip().lower()
         memberships = user.get_active_memberships()
         membership = memberships.filter(
-            institution__code=school_code
+            institution__code__iexact=school_code
         ).first() if school_code else memberships.first()
         if membership is not None:
             request.session["active_institution_id"] = membership.institution_id
@@ -290,12 +377,12 @@ class LoginFailedView(APIView):
         username_or_email = request.data.get("username") or request.data.get("email", "")
         user = None
 
-        if username_or_email:
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-            user = User.objects.filter(
-                models.Q(email__iexact=username_or_email) | models.Q(username=username_or_email)
-            ).first()
+        # Attribute the failure only when unambiguous in the declared scope;
+        # shared usernames never lock out an arbitrary account.
+        if username_or_email and _identifiable_in_scope(
+            request, username_or_email
+        ):
+            user = _scoped_user(request, username_or_email)
 
         if user:
             record_failed_login(request, user, username_or_email)
@@ -361,9 +448,13 @@ class ActiveInstitutionView(APIView):
         if institution is None:
             return Response({"institution": None, "roles": []})
 
-        roles = request.institution_membership.role_assignments.values_list(
-            "role", flat=True
-        )
+        if request.institution_membership is not None:
+            roles = request.institution_membership.role_assignments.values_list(
+                "role", flat=True
+            )
+        else:
+            roles = request.user.get_roles(institution)
+
         return Response(
             {
                 "institution": {
@@ -1396,7 +1487,14 @@ class RolePermissionCreateView(APIView):
         
         serializer = RolePermissionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
+        # Escalation guard: you may only manage permissions for roles ranked
+        # strictly below your own (prevents granting your-own/higher powers).
+        if not can_manage_role(request.user, serializer.validated_data["role"]):
+            raise PermissionDenied(
+                "You cannot assign permissions to a role at or above your own level."
+            )
+
         # Set institution from request
         role_perm = serializer.save(institution=institution, granted_by=request.user)
         
@@ -1447,7 +1545,13 @@ class RolePermissionDeleteView(APIView):
                 {"detail": "Role permission not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
+
+        # Escalation guard: only a higher-ranked role manager may alter this.
+        if not can_manage_role(request.user, role_perm.role):
+            raise PermissionDenied(
+                "You cannot modify permissions for a role at or above your own level."
+            )
+
         # Prevent deleting system permissions
         if role_perm.permission.is_system:
             return Response(
@@ -1518,7 +1622,17 @@ class UserPermissionCreateView(APIView):
         
         serializer = UserPermissionCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
+
+        # Escalation guards: no self-granting and no managing equal/higher roles.
+        target_user = serializer.validated_data["user"]
+        if target_user.pk == request.user.pk:
+            raise PermissionDenied("You cannot grant or modify your own permissions.")
+        if not can_manage_role(request.user, target_user.primary_role or Role.STUDENT):
+            raise PermissionDenied(
+                "You cannot manage permissions for a user with a role at or "
+                "above your own level."
+            )
+
         user_perm = serializer.save(
             institution=institution,
             granted_by=request.user,
@@ -1572,7 +1686,19 @@ class UserPermissionDeleteView(APIView):
                 {"detail": "User permission not found."},
                 status=status.HTTP_404_NOT_FOUND,
             )
-        
+
+        # Escalation guard: you may only revoke permissions from lower-ranked users.
+        if (
+            user_perm.user_id != request.user.pk
+            and not can_manage_role(
+                request.user, user_perm.user.primary_role or Role.STUDENT
+            )
+        ):
+            raise PermissionDenied(
+                "You cannot manage permissions for a user with a role at or "
+                "above your own level."
+            )
+
         user_perm.delete()
         
         record_audit(
@@ -1691,3 +1817,197 @@ class UserPermissionsSummaryView(APIView):
             ],
             "effective_permissions": sorted(list(effective)),
         }).data)
+
+# =============================================================================
+# SUPER ADMIN SCHOOL MANAGEMENT
+# =============================================================================
+
+class SuperAdminSchoolCreateView(APIView):
+    """
+    Super Admin endpoint to create a new school with an admin user.
+    
+    POST /api/super-admin/schools/
+    {
+        "name": "Lahore School",
+        "code": "LHR-001",  // optional, auto-generated if not provided
+        "institution_type": "school",
+        "timezone": "Asia/Karachi",
+        "currency": "PKR",
+        "address": "123 Main St, Lahore",
+        "city": "Lahore",
+        "admin_username": "admin",  // optional, auto-generated if not provided
+        "admin_password": "TempPass123!",  // optional, auto-generated if not provided
+        "admin_email": "admin@lahoreschool.edu",
+        "admin_first_name": "John",
+        "admin_last_name": "Doe",
+        "admin_phone": "+923001234567"
+    }
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def post(self, request):
+        school_serializer = SchoolSerializer(data=request.data)
+        school_serializer.is_valid(raise_exception=True)
+
+        admin_serializer = SchoolAdminProvisionSerializer(
+            data={
+                "username": request.data.get("admin_username") or "",
+                "email": request.data.get("admin_email") or "",
+                "password": request.data.get("admin_password") or "",
+                "first_name": request.data.get("admin_first_name", ""),
+                "last_name": request.data.get("admin_last_name", ""),
+                "phone": request.data.get("admin_phone") or "",
+            }
+        )
+        admin_serializer.is_valid(raise_exception=True)
+
+        # Provision the school together with its admin inside one transaction
+        # (see provision_school_with_admin). Any failure below means the
+        # school was rolled back, so no partial provisioning can leak out.
+        from .services import provision_school_with_admin
+
+        try:
+            school, admin_user, admin_username, password = (
+                provision_school_with_admin(
+                    school_serializer.validated_data,
+                    admin_serializer.validated_data,
+                )
+            )
+        except (IntegrityError, RuntimeError):
+            record_audit(
+                request=request,
+                action="school_create_failed",
+                model_name="School",
+                object_repr=request.data.get("name", ""),
+                details={
+                    "reason": "Admin provisioning failed; school was rolled back.",
+                    "admin_username": admin_serializer.validated_data.get(
+                        "username", ""
+                    ),
+                    "admin_email": admin_serializer.validated_data.get("email", ""),
+                },
+            )
+            return Response(
+                {
+                    "detail": (
+                        "School creation rolled back: the admin account could "
+                        "not be provisioned. Check that the email/username is "
+                        "available and retry."
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        except DjangoValidationError as exc:
+            record_audit(
+                request=request,
+                action="school_create_failed",
+                model_name="School",
+                object_repr=request.data.get("name", ""),
+                details={
+                    "reason": "Membership validation failed; school rolled back.",
+                    "admin_username": admin_serializer.validated_data.get(
+                        "username", ""
+                    ),
+                },
+            )
+            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Credentials are returned exactly once. They are never persisted and
+        # never written to the audit log.
+        credentials = {
+            "username": admin_username,
+            "password": password,
+            "school_code": school.code,
+            "school_name": school.name,
+        }
+
+        record_audit(
+            request=request,
+            action="school_create",
+            model_name="School",
+            object_id=str(school.pk),
+            object_repr=school.name,
+            details={
+                "school_code": school.code,
+                "admin_username": admin_user.username,
+                "admin_must_change_password": admin_user.must_change_password,
+            },
+        )
+
+        return Response({
+            "school": SchoolSerializer(school).data,
+            "admin_credentials": credentials,
+            "message": "School and admin user created successfully. Save the credentials securely.", 
+        }, status=status.HTTP_201_CREATED)
+
+
+class SuperAdminSchoolListView(APIView):
+    """List all schools for Super Admin."""
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        schools = School.objects.all().order_by("-created_at")
+        return Response(SchoolSerializer(schools, many=True).data)
+
+
+class SuperAdminSchoolSwitchView(APIView):
+    """
+    Super Admin endpoint to switch active institution context.
+
+    POST /api/auth/active-institution/
+    {
+        "institution_id": 1
+    }
+
+    Switches the active school context for the Super Admin without requiring
+    a full login/logout cycle. The Super Admin can toggle between multiple
+    institution memberships (e.g., Lahore → Sialkot → Islamabad → Lahore).
+
+    Permissions:
+    - IsAuthenticated: Only authenticated users can access
+    - IsSuperAdmin: Only the platform Super Admin can switch institutions
+
+    Responses:
+    - 200: Successfully switched to the specified institution
+    - 400: institution_id is required
+    - 403: Normal users (Admin, Accountant, Teacher, Student) forbidden
+    - 404: School not found or inactive
+
+    Audit:
+    - Records 'institution_switched' action with institution details
+
+    Note: Switching does NOT modify the school's activation status.
+    """
+
+    def post(self, request):
+        institution_id = request.data.get("institution_id")
+        if not institution_id:
+            return Response(
+                {"detail": "institution_id is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        school = School.objects.filter(pk=institution_id, status="active").first()
+        if not school:
+            return Response(
+                {"detail": "School not found or inactive."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Update session
+        request.session["active_institution_id"] = school.id
+
+        record_audit(
+            request=request,
+            action="institution_switched",
+            details={"institution_id": school.id, "institution_name": school.name},
+        )
+
+        return Response({
+            "institution": {
+                "id": school.id,
+                "name": school.name,
+                "code": school.code,
+            },
+            "message": f"Switched to {school.name}",
+        })

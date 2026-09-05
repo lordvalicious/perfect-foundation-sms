@@ -82,7 +82,14 @@ class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
             if profile is None:
                 return queryset.none()
 
-            queryset = queryset.filter(pk=profile.pk)
+            queryset = queryset.filter(
+                institutionmembership__institution=self.request.institution,
+                pk=profile.pk,
+            )
+        else:
+            queryset = queryset.filter(
+                institutionmembership__institution=self.request.institution,
+            )
 
         return queryset
 

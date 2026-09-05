@@ -695,6 +695,13 @@ class SubjectOffering(models.Model):
         null=True,
         blank=True,
     )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.CASCADE,
+        related_name="subject_offerings",
+        null=True,
+        blank=True,
+    )
     academic_year = models.ForeignKey(
         AcademicYear,
         on_delete=models.PROTECT,

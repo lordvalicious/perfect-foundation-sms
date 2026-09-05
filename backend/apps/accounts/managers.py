@@ -11,13 +11,14 @@ Usage:
         objects = TenantManagerMixin().get_manager()
 """
 
+from contextvars import ContextVar
 from django.db import models
 
 
 class TenantManager(models.Manager):
-    """Manager that filters querysets by institution from thread-local request.
+    """Manager that filters querysets by institution from contextvar request.
 
-    The active institution is set by TenantMiddleware via thread-local storage.
+    The active institution is set by middleware via contextvars.
     Models using this manager automatically scope all queries to the current
     tenant unless .all_tenants() is called.
     """
@@ -52,42 +53,41 @@ class TenantManagerMixin:
 
 
 # ---------------------------------------------------------------------------
-# Thread-local storage for the current request / institution
+# Contextvar storage for the current request / institution (async-safe)
 # ---------------------------------------------------------------------------
 
-import threading
-
-_thread_locals = threading.local()
+_current_institution: ContextVar | None = ContextVar("_current_institution", default=None)
+_current_request: ContextVar | None = ContextVar("_current_request", default=None)
 
 
 def set_current_institution(institution):
-    """Set the current institution for this thread (called by middleware)."""
-    _thread_locals._current_institution = institution
+    """Set the current institution for this context (called by middleware)."""
+    _current_institution.set(institution)
 
 
 def get_current_institution():
-    """Get the current institution for this thread."""
-    return getattr(_thread_locals, "_current_institution", None)
+    """Get the current institution for this context."""
+    return _current_institution.get()
 
 
 def clear_current_institution():
     """Clear the current institution (called at end of request)."""
-    _thread_locals._current_institution = None
+    _current_institution.set(None)
 
 
 def set_current_request(request):
-    """Set the current request for this thread."""
-    _thread_locals._current_request = request
+    """Set the current request for this context."""
+    _current_request.set(request)
 
 
 def get_current_request():
-    """Get the current request for this thread."""
-    return getattr(_thread_locals, "_current_request", None)
+    """Get the current request for this context."""
+    return _current_request.get()
 
 
 def clear_current_request():
     """Clear the current request (called at end of request)."""
-    _thread_locals._current_request = None
+    _current_request.set(None)
 
 
 # =============================================================================

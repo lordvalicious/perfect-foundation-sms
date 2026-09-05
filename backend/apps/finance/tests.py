@@ -1806,3 +1806,180 @@ class FineWaiverTests(TestCase):
         fine.waiver_reason = ""
         fine.save()  # Model allows empty, view would reject
         self.assertEqual(fine.status, "waived")
+
+class AccountantIsolationTests(TestCase):
+    """Test that accountants cannot access financial records from other schools."""
+
+    def setUp(self):
+        # School A (Lahore)
+        self.school_a = School.objects.create(name="Lahore School")
+        self.campus_a = Campus.objects.create(school=self.school_a, name="Lahore Campus")
+        self.unit_a = AcademicUnit.objects.create(campus=self.campus_a, name="Primary")
+        self.class_a = Class.objects.create(unit=self.unit_a, name="Grade 1")
+        self.section_a = Section.objects.create(class_obj=self.class_a, name="A")
+        self.year_a = AcademicYear.objects.create(
+            school=self.school_a,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.category_a = FeeCategory.objects.create(name="Tuition")
+
+        # School B (Sialkot)
+        self.school_b = School.objects.create(name="Sialkot School")
+        self.campus_b = Campus.objects.create(school=self.school_b, name="Sialkot Campus")
+        self.unit_b = AcademicUnit.objects.create(campus=self.campus_b, name="Primary")
+        self.class_b = Class.objects.create(unit=self.unit_b, name="Grade 1")
+        self.section_b = Section.objects.create(class_obj=self.class_b, name="A")
+        self.year_b = AcademicYear.objects.create(
+            school=self.school_b,
+            name="2026-2027",
+            start_date=date(2026, 8, 1),
+            end_date=date(2027, 7, 31),
+        )
+        self.category_b = FeeCategory.objects.create(name="Tuition")
+
+        # Users
+        self.accountant_a = User.objects.create_user(
+            username="acct_lahore", email="la@test.edu", password="pass"
+        )
+        self.accountant_b = User.objects.create_user(
+            username="acct_sialkot", email="sk@test.edu", password="pass"
+        )
+
+        # Accountant A membership in School A
+        self.membership_a = InstitutionMembership.objects.create(
+            user=self.accountant_a, institution=self.school_a
+        )
+        RoleAssignment.objects.create(membership=self.membership_a, role=Role.ACCOUNTANT)
+
+        # Accountant B membership in School B
+        self.membership_b = InstitutionMembership.objects.create(
+            user=self.accountant_b, institution=self.school_b
+        )
+        RoleAssignment.objects.create(membership=self.membership_b, role=Role.ACCOUNTANT)
+
+        # Client for API calls
+        self.client_a = APIClient()
+        self.client_a.force_authenticate(user=self.accountant_a)
+        self.client_b = APIClient()
+        self.client_b.force_authenticate(user=self.accountant_b)
+
+        # Create student and fee structure for School A
+        self.student_a = Student.objects.create(
+            first_name="Ali", last_name="Ahmed", admission_number="ST-001"
+        )
+        self.enrollment_a = Enrollment.objects.create(
+            student=self.student_a,
+            class_obj=self.class_a,
+            section=self.section_a,
+            academic_year=self.year_a,
+            status="active",
+        )
+        self.fee_structure_a = FeeStructure.objects.create(
+            academic_year=self.year_a,
+            campus=self.campus_a,
+            class_obj=self.class_a,
+            category=self.category_a,
+            amount=Decimal("10000.00"),
+        )
+        self.invoice_a = Invoice.objects.create(
+            invoice_number="LA-001",
+            student=self.student_a,
+            enrollment=self.enrollment_a,
+            academic_year=self.year_a,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            institution=self.school_a,
+        )
+
+        # Create student and fee structure for School B
+        self.student_b = Student.objects.create(
+            first_name="Mohammad", last_name="Sadiq", admission_number="ST-002"
+        )
+        self.enrollment_b = Enrollment.objects.create(
+            student=self.student_b,
+            class_obj=self.class_b,
+            section=self.section_b,
+            academic_year=self.year_b,
+            status="active",
+        )
+        self.fee_structure_b = FeeStructure.objects.create(
+            academic_year=self.year_b,
+            campus=self.campus_b,
+            class_obj=self.class_b,
+            category=self.category_b,
+            amount=Decimal("12000.00"),
+        )
+        self.invoice_b = Invoice.objects.create(
+            invoice_number="SK-001",
+            student=self.student_b,
+            enrollment=self.enrollment_b,
+            academic_year=self.year_b,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            institution=self.school_b,
+        )
+
+    def test_accountant_cannot_access_other_school_invoices(self):
+        """Lahore accountant cannot list School B invoices."""
+        resp = self.client_a.get("/api/finance/invoices/")
+        self.assertEqual(resp.status_code, 200)
+        school_a_invoices = [i for i in resp.json()["results"] if i["institution"] == self.school_a.id]
+        self.assertEqual(len(school_a_invoices), 1)
+        school_b_invoices = [i for i in resp.json()["results"] if i["institution"] == self.school_b.id]
+        self.assertEqual(len(school_b_invoices), 0)
+
+    def test_accountant_cannot_view_other_school_invoice_detail(self):
+        """Lahore accountant cannot view School B invoice detail."""
+        resp = self.client_a.get(f"/api/finance/invoices/{self.invoice_b.pk}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_create_invoice_for_other_school(self):
+        """Lahore accountant cannot create invoice for School B."""
+        payload = {
+            "invoice_number": "SK-002",
+            "student": self.student_b.id,
+            "enrollment": self.enrollment_b.id,
+            "academic_year": self.year_b.id,
+            "issue_date": date.today(),
+            "due_date": date.today() + timedelta(days=30),
+        }
+        resp = self.client_a.post("/api/finance/invoices/create/", payload, format="json")
+        self.assertEqual(resp.status_code, 403)
+
+    def test_accountant_cannot_create_payment_for_other_school(self):
+        """Lahore accountant cannot create payment for School B invoice."""
+        resp = self.client_a.post(
+            "/api/finance/payments/create/",
+            {"invoice": self.invoice_b.pk, "amount": "1000.00", "payment_method": "cash"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_accountant_cannot_create_concession_for_other_school(self):
+        """Lahore accountant cannot create concession for School B invoice."""
+        resp = self.client_a.post(
+            "/api/finance/concessions/create/",
+            {"invoice": self.invoice_b.pk, "type": "discount", "amount": "1000.00", "reason": "scholarship"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_accountant_cannot_create_adjustment_for_other_school(self):
+        """Lahore accountant cannot create adjustment for School B invoice."""
+        resp = self.client_a.post(
+            "/api/finance/adjustments/create/",
+            {"invoice": self.invoice_b.pk, "type": "credit", "amount": "1000.00", "reason": "correction"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_accountant_cannot_create_fine_for_other_school(self):
+        """Lahore accountant cannot create fine for School B student."""
+        resp = self.client_a.post(
+            "/api/finance/fines/create/",
+            {"student": self.student_b.id, "academic_year": self.year_b.id, "type": "disciplinary", "amount": "500.00", "reason": "violation"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)

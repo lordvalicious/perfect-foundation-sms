@@ -1,5 +1,4 @@
 from django.db import IntegrityError
-from django.utils.crypto import get_random_string
 from rest_framework import serializers
 
 from .models import (
@@ -64,6 +63,13 @@ class UserSerializer(serializers.ModelSerializer):
     student_profile_id = serializers.SerializerMethodField()
     teacher_profile_id = serializers.SerializerMethodField()
 
+    # Role/power fields are never writable through this serializer.
+    is_superuser = serializers.BooleanField(read_only=True)
+
+    # Surfaced so the SPA can force a password change on first login with a
+    # system-generated temporary password.
+    must_change_password = serializers.BooleanField(read_only=True)
+
     class Meta:
         model = User
         fields = [
@@ -77,6 +83,7 @@ class UserSerializer(serializers.ModelSerializer):
             "photo_url",
             "is_staff",
             "is_superuser",
+            "must_change_password",
             "primary_role",
             "primary_institution",
             "student_profile_id",
@@ -243,7 +250,6 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
             "date_of_birth",
             "phone",
             "email",
-            "campus",
             "designation",
             "department",
             "joining_date",
@@ -274,35 +280,29 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
         return getattr(self, "_generated_password", None)
 
     def _build_user_account(self, staff, username, password):
-        from django.contrib.auth import get_user_model
-
+        from apps.accounts.services import create_user_with_username
         from apps.schools.models import School
 
-        User = get_user_model()
-        base = username or staff.employee_number
-        candidate = base
-        counter = 1
-        while User.objects.filter(username=candidate).exists():
-            candidate = f"{base}{counter}"
-            counter += 1
-
-        email = (staff.email or "").strip()
-        if not email:
-            email = f"{candidate}@perfectfoundation.local"
-
-        generated = password or get_random_string(length=12)
-
-        user = User.objects.create_user(
-            username=candidate,
-            email=email,
-            password=generated,
-            first_name=staff.first_name,
-            last_name=staff.last_name,
+        # Prefer the request's active institution (correct school scoping);
+        # fall back to the profile's own institution, then the first active
+        # school only when no context is available.
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
+        school = (
+            active_institution
+            or staff.institution
+            or School.objects.filter(status="active").order_by("id").first()
+            or School.objects.first()
         )
 
-        school = (
-            School.objects.filter(status="active").order_by("id").first()
-            or School.objects.first()
+        base = username or staff.employee_number
+        user, _candidate, generated = create_user_with_username(
+            base,
+            institution=(school if school is not None else None),
+            email=(staff.email or "").strip(),
+            password=password or None,
+            first_name=staff.first_name,
+            last_name=staff.last_name,
         )
 
         if school is not None:
@@ -625,6 +625,8 @@ class LoginSerializer(serializers.Serializer):
     def validate(self, attrs):
         from django.contrib.auth import authenticate
 
+        from .services import login_candidate_count
+
         username = attrs.get("username")
         email = attrs.get("email")
 
@@ -635,11 +637,41 @@ class LoginSerializer(serializers.Serializer):
                 "Username or email is required."
             )
 
-        user = authenticate(
-            request=self.context.get("request"),
-            username=identifier,
-            password=attrs.get("password"),
+        school_code = attrs.get("school_code", "").strip().lower()
+        request = self.context.get("request")
+        host_institution = (
+            getattr(request, "institution", None) if request else None
         )
+
+        if school_code or host_institution is not None:
+            # School-aware login: the lookup is scoped to the school, so the
+            # same username in different schools is never ambiguous.
+            auth_kwargs = dict(
+                request=request,
+                username=identifier,
+                password=attrs.get("password"),
+            )
+            if school_code:
+                auth_kwargs["school_code"] = school_code
+            user = authenticate(**auth_kwargs)
+        else:
+            # Unscoped login (platform root / localhost, no school_code): refuse
+            # ambiguity. A username shared by several schools must be logged in
+            # with its school_code.
+            candidate_count = login_candidate_count(identifier)
+            if candidate_count == 0:
+                user = None
+            elif candidate_count > 1:
+                raise serializers.ValidationError(
+                    "This username or email is shared by multiple accounts in "
+                    "different schools. Provide your school_code to log in."
+                )
+            else:
+                user = authenticate(
+                    request=request,
+                    username=identifier,
+                    password=attrs.get("password"),
+                )
 
         if user is None:
             raise serializers.ValidationError(
@@ -653,7 +685,7 @@ class LoginSerializer(serializers.Serializer):
 
         school_code = attrs.get("school_code", "").strip().lower()
         if school_code and not user.memberships.filter(
-            institution__code=school_code,
+            institution__code__iexact=school_code,
             status="active",
         ).exists():
             raise serializers.ValidationError(
@@ -863,3 +895,50 @@ class UserPermissionsSummarySerializer(serializers.Serializer):
         child=serializers.CharField(),
         help_text="All effective permission codenames"
     )
+
+
+class SchoolAdminProvisionSerializer(serializers.Serializer):
+    """Validates the School Admin block of the super-admin school-create API.
+
+    All fields are optional — the provisioning service derives a per-school
+    username, placeholder email and a secure temporary password when a field
+    is left blank. Passwords are write-only and validated against the Django
+    password validators before any account is created.
+    """
+    username = serializers.CharField(
+        required=False, allow_blank=True, max_length=150,
+        help_text="Admin username; unique within the new school.",
+    )
+    email = serializers.EmailField(
+        required=False, allow_blank=True,
+        help_text="Admin email; uniqueness is enforced school-wide.",
+    )
+    password = serializers.CharField(
+        required=False, allow_blank=True, write_only=True,
+        style={"input_type": "password"},
+        help_text="Optional explicit password. Omit to generate a secure "
+                  "temporary password (must-change).",
+    )
+    first_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=150,
+    )
+    last_name = serializers.CharField(
+        required=False, allow_blank=True, max_length=150,
+    )
+    phone = serializers.CharField(
+        required=False, allow_blank=True, max_length=20,
+    )
+
+    def validate_password(self, value):
+        if not value:
+            return value
+        from django.contrib.auth.password_validation import (
+            validate_password as django_validate_password,
+        )
+        from django.core.exceptions import ValidationError as DjangoValidationError
+
+        try:
+            django_validate_password(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
+        return value

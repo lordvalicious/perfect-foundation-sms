@@ -306,14 +306,12 @@ class GuardianCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
-        from django.utils.crypto import get_random_string
-
         from apps.accounts.models import (
             InstitutionMembership,
             Role,
             RoleAssignment,
-            User,
         )
+        from apps.accounts.services import create_user_with_username
         from apps.schools.models import School
 
         username = validated_data.pop("username", "")
@@ -321,30 +319,28 @@ class GuardianCreateSerializer(serializers.ModelSerializer):
         user = validated_data.get("user")
 
         if username or password:
-            base = username or validated_data.get("phone", "parent").strip()
-            candidate = base
-            counter = 1
-
-            while User.objects.filter(username=candidate).exists():
-                candidate = f"{base}{counter}"
-                counter += 1
-
-            email = validated_data.get("email", "").strip()
-            if not email:
-                email = f"{candidate}@perfectfoundation.local"
-
-            generated = password or get_random_string(length=12)
-
-            user = User.objects.create_user(
-                username=candidate,
-                email=email,
-                password=generated,
-                first_name=validated_data.get("name", ""),
+            request = self.context.get("request")
+            active_institution = (
+                getattr(request, "institution", None) if request else None
+            )
+            school = (
+                active_institution
+                or validated_data.get("institution")
+                or School.objects.filter(status="active").order_by("id").first()
+                or School.objects.first()
             )
 
-            school = (
-                School.objects.filter(status="active").order_by("id").first()
-                or School.objects.first()
+            base = username or validated_data.get("phone", "parent").strip()
+            user, _candidate, _generated = create_user_with_username(
+                base,
+                institution=(school if school is not None else None),
+                email=validated_data.get("email", "").strip(),
+                password=password or None,
+                first_name=validated_data.get("name", ""),
+                # Explicit username+password are mandatory for parents (see
+                # validate), so a freshly-chosen password never triggers the
+                # must-change flag. When only auto-generated credentials are
+                # involved the default forces a change on first login.
             )
 
             if school is not None:
@@ -904,6 +900,7 @@ class TransferCertificateSerializer(serializers.ModelSerializer):
             "final_percentage",
             "attendance_percentage",
             "conduct",
+            "conduct_display",
             "status",
             "status_display",
             "issued_by",

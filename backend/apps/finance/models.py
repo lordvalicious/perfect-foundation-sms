@@ -218,6 +218,13 @@ class Invoice(SoftDeleteMixin):
         null=True,
         blank=True,
     )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.CASCADE,
+        related_name="invoices",
+        null=True,
+        blank=True,
+    )
 
     STATUS_CHOICES = [
         ("draft", "Draft"),
@@ -498,6 +505,13 @@ class Payment(SoftDeleteMixin):
     objects = SoftDeleteManager()
     institution = models.ForeignKey(
         School,
+        on_delete=models.CASCADE,
+        related_name="payments",
+        null=True,
+        blank=True,
+    )
+    campus = models.ForeignKey(
+        Campus,
         on_delete=models.CASCADE,
         related_name="payments",
         null=True,
@@ -1365,6 +1379,13 @@ class Concession(SoftDeleteMixin):
         null=True,
         blank=True,
     )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.CASCADE,
+        related_name="concessions",
+        null=True,
+        blank=True,
+    )
 
     invoice = models.ForeignKey(Invoice, on_delete=models.PROTECT, related_name="concessions")
     type = models.CharField(max_length=20, choices=TYPE_CHOICES, default="discount")
@@ -1402,6 +1423,13 @@ class Fine(SoftDeleteMixin):
 
     institution = models.ForeignKey(
         School,
+        on_delete=models.CASCADE,
+        related_name="fines",
+        null=True,
+        blank=True,
+    )
+    campus = models.ForeignKey(
+        Campus,
         on_delete=models.CASCADE,
         related_name="fines",
         null=True,
@@ -1501,6 +1529,13 @@ class Adjustment(SoftDeleteMixin):
         null=True,
         blank=True,
     )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.CASCADE,
+        related_name="adjustments",
+        null=True,
+        blank=True,
+    )
 
     student = models.ForeignKey(
         "students.Student",
@@ -1580,6 +1615,13 @@ class PaymentRefund(SoftDeleteMixin):
         null=True,
         blank=True,
     )
+    campus = models.ForeignKey(
+        Campus,
+        on_delete=models.CASCADE,
+        related_name="payment_refunds",
+        null=True,
+        blank=True,
+    )
 
     payment = models.ForeignKey(Payment, on_delete=models.PROTECT, related_name="refunds")
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -1607,11 +1649,21 @@ class PaymentRefund(SoftDeleteMixin):
 
 
 class StudentFeeOverride(SoftDeleteMixin):
-    """Per-student fee amount override for a specific fee structure."""
+    """Per-student fee amount override for a specific fee structure.
+
+    The standard fee structure amount remains unchanged; this record only
+    controls the amount charged to this particular student.  The institution
+    field must always be set — never leave it null in production data.
+    """
     objects = SoftDeleteManager()
 
     institution = models.ForeignKey(
         School,
+        on_delete=models.CASCADE,
+        related_name="student_fee_overrides",
+    )
+    campus = models.ForeignKey(
+        Campus,
         on_delete=models.CASCADE,
         related_name="student_fee_overrides",
         null=True,
@@ -1674,6 +1726,10 @@ class StudentFeeOverride(SoftDeleteMixin):
             ).first()
             if not enrollment:
                 errors["student"] = "Student must be enrolled in the fee structure's class/campus/year."
+
+            # Ensure the enrollment belongs to the same institution
+            if enrollment and enrollment.academic_year.school_id != self.institution_id:
+                errors["student"] = "Student's enrollment is not in the same institution."
 
         if errors:
             raise ValidationError(errors)

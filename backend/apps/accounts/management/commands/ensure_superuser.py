@@ -87,6 +87,23 @@ class Command(BaseCommand):
             institution=school,
             defaults={"status": "active"},
         )
+
+        # The env-provisioned account is the singular platform Super Admin.
+        # If another account had (incorrectly) been granted the role, demote it
+        # to admin so exactly one Super Admin always exists.
+        other_super_admins = RoleAssignment.objects.filter(
+            role="super_admin",
+        ).exclude(membership=membership)
+        for ra in other_super_admins:
+            ra.role = "admin"
+            ra.save(update_fields=["role"])
+            self.stdout.write(
+                self.style.WARNING(
+                    f"Demoted '{ra.membership.user.username}' from super_admin "
+                    "to admin (platform allows exactly one Super Admin)."
+                )
+            )
+
         RoleAssignment.objects.get_or_create(
             membership=membership,
             role="super_admin",

@@ -497,7 +497,7 @@ class StudentFeeOverrideSerializer(serializers.ModelSerializer):
             "fee_structure_name", "amount", "reason", "status", "status_display",
             "created_at", "updated_at",
         ]
-        read_only_fields = ["id", "created_at", "updated_at"]
+        read_only_fields = ["id", "created_at", "updated_at", "institution"]
 
 
 class LateFeeApplySerializer(serializers.Serializer):
@@ -646,6 +646,7 @@ class BankAccountSerializer(serializers.ModelSerializer):
             "swift_code", "iban", "currency", "opening_balance", "opening_date",
             "current_balance", "is_active", "last_reconciled_date",
             "last_reconciled_balance", "created_by", "created_at", "updated_at",
+            "status_display",
         ]
         read_only_fields = ["id", "institution", "current_balance", "last_reconciled_date",
                            "last_reconciled_balance", "created_by", "created_at", "updated_at"]

@@ -61,18 +61,39 @@ class ActiveInstitutionMiddleware:
             membership = memberships.filter(
                 institution_id=selected_id
             ).first()
+
             if membership is None:
-                membership = memberships.first()
-                if membership is not None:
-                    request.session[self.session_key] = membership.institution_id
-                else:
-                    request.session.pop(self.session_key, None)
+                # The platform Super Admin can manage every school even without
+                # a membership row for it (they may self-provision memberships
+                # lazily). Honor their explicit context switch to any active
+                # school.
+                if selected_id is not None and (
+                    user.is_superuser or user.has_any_role(["super_admin"])
+                ):
+                    from apps.schools.models import School
+
+                    active_school = School.objects.filter(
+                        pk=selected_id, status="active"
+                    ).first()
+                    if active_school is not None:
+                        request.institution = active_school
+
+                if membership is None and request.institution is None:
+                    membership = memberships.first()
+                    if membership is not None:
+                        request.session[self.session_key] = membership.institution_id
+                    else:
+                        request.session.pop(self.session_key, None)
+
+                if request.institution is not None and membership is None:
+                    request.institution_membership = None
+                    request.session[self.session_key] = selected_id
 
             if membership is not None:
                 request.institution = membership.institution
                 request.institution_membership = membership
 
-        # Set thread-local state for TenantManager
+        # Set contextvar state for TenantManager (async-safe)
         set_current_institution(request.institution)
         set_current_request(request)
 
@@ -100,6 +121,11 @@ class ActiveInstitutionMiddleware:
             platform_host = "vercel.app"
 
         if not host or host in ("localhost", "127.0.0.1", "0.0.0.0", "testserver"):
+            return None
+
+        # Validate host against allowed platforms to prevent host header spoofing
+        allowed_hosts = os.environ.get("ALLOWED_HOSTS", "").split(",")
+        if allowed_hosts and host not in allowed_hosts and not host.endswith(f".{platform_host}"):
             return None
 
         from apps.schools.models import School

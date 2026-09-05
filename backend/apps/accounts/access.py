@@ -27,6 +27,8 @@ Role to campus-scope mapping:
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 
+from apps.accounts.models import Role, role_rank
+
 GLOBAL_ROLES = [
     "super_admin",
     "admin",
@@ -34,6 +36,31 @@ GLOBAL_ROLES = [
     "head_office",
     "academic",
 ]
+
+
+# ---------------------------------------------------------------------------
+# Role hierarchy / escalation guards
+# ---------------------------------------------------------------------------
+
+def user_role_rank(user, institution=None):
+    """Highest role rank for ``user`` (super admin overrides everything).
+
+    The Super Admin check is global (not institution-scoped) because the
+    platform Super Admin may be acting in any school context.
+    """
+    if user.is_superuser or user.has_role(Role.SUPER_ADMIN):
+        return role_rank(Role.SUPER_ADMIN) + 1
+    ranks = [role_rank(r) for r in user.get_roles(institution)]
+    return max(ranks) if ranks else 0
+
+
+def can_manage_role(actor, role, institution=None):
+    """True when ``actor`` outranks ``role`` (may administer it).
+
+    Equal/higher roles are off-limits, which makes self- and upward escalation
+    impossible (e.g. ADMIN can never manage the super_admin role).
+    """
+    return role_rank(role) < user_role_rank(actor, institution)
 
 
 # ---------------------------------------------------------------------------

@@ -1,6 +1,5 @@
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
-from django.utils.crypto import get_random_string
 from rest_framework import serializers
 
 from .models import Teacher, TeacherAssignment
@@ -102,34 +101,27 @@ class TeacherSerializer(serializers.ModelSerializer):
             InstitutionMembership,
             Role,
             RoleAssignment,
-            User,
         )
+        from apps.accounts.services import create_user_with_username
         from apps.schools.models import School
 
-        base = username or teacher.employee_number
-        candidate = base
-        counter = 1
-        while User.objects.filter(username=candidate).exists():
-            candidate = f"{base}{counter}"
-            counter += 1
-
-        email = (teacher.email or "").strip()
-        if not email:
-            email = f"{candidate}@perfectfoundation.local"
-
-        generated = password or get_random_string(length=12)
-
-        user = User.objects.create_user(
-            username=candidate,
-            email=email,
-            password=generated,
-            first_name=teacher.first_name,
-            last_name=teacher.last_name,
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
+        school = (
+            active_institution
+            or teacher.institution
+            or School.objects.filter(status="active").order_by("id").first()
+            or School.objects.first()
         )
 
-        school = (
-            School.objects.filter(status="active").order_by("id").first()
-            or School.objects.first()
+        base = username or teacher.employee_number
+        user, _candidate, generated = create_user_with_username(
+            base,
+            institution=(school if school is not None else None),
+            email=(teacher.email or "").strip(),
+            password=password or None,
+            first_name=teacher.first_name,
+            last_name=teacher.last_name,
         )
 
         if school is not None:
