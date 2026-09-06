@@ -184,6 +184,33 @@ function StudentsPage() {
 
   const [profileView, setProfileView] = useState(null);
 
+  const handleDelete = async (studentId) => {
+    if (!window.confirm("Are you sure you want to delete this student? This will soft-delete the record.")) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/students/${studentId}/`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: jsonHeaders(),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || "Failed to delete student.");
+      }
+      setError(data.detail || "Student soft-deleted successfully.");
+      // Refresh the student list
+      const campusId = getCampusIdFromUrl();
+      if (campusId) {
+        fetchCampusStudents(campusId);
+      } else {
+        fetchAllCampuses();
+      }
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
   const emptyForm = {
     admission_number: "",
     first_name: "",
@@ -1456,6 +1483,17 @@ function StudentsPage() {
                                   >
                                     {student.status || "—"}
                                   </span>
+                                </td>
+                                <td>
+                                  {canManage && (
+                                    <button
+                                      className="btn-delete"
+                                      onClick={() => handleDelete(student.id)}
+                                      title="Delete student"
+                                    >
+                                      Delete
+                                    </button>
+                                  )}
                                 </td>
 
                                 <td>
