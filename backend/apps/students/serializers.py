@@ -554,6 +554,31 @@ class StudentSerializer(serializers.ModelSerializer):
 
     current_enrollment = serializers.SerializerMethodField()
 
+    create_account = serializers.BooleanField(
+        write_only=True,
+        required=False,
+        default=True,
+    )
+
+    username = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
+    password = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        style={"input_type": "password"},
+    )
+
+    linked_username = serializers.SerializerMethodField()
+
+    generated_password = serializers.SerializerMethodField()
+
     guardian_name = serializers.CharField(
         write_only=True,
         required=False,
@@ -617,6 +642,11 @@ class StudentSerializer(serializers.ModelSerializer):
             "enrollments",
             "current_enrollment",
             "documents",
+            "linked_username",
+            "generated_password",
+            "create_account",
+            "username",
+            "password",
             "created_at",
             "updated_at",
         ]
@@ -706,16 +736,92 @@ class StudentSerializer(serializers.ModelSerializer):
             if value not in (None, "")
         }
 
+    def get_linked_username(self, obj):
+        return obj.user.username if obj.user_id else None
+
+    def get_generated_password(self, obj):
+        return getattr(self, "_generated_password", None)
+
+    def _build_user_account(self, student, username, password):
+        from apps.accounts.models import (
+            InstitutionMembership,
+            Role,
+            RoleAssignment,
+        )
+        from apps.accounts.services import create_user_with_username
+        from apps.schools.models import School
+
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
+        school = (
+            active_institution
+            or student.institution
+            or School.objects.filter(status="active").order_by("id").first()
+            or School.objects.first()
+        )
+
+        base = username or student.admission_number or student.first_name
+        user, _candidate, generated = create_user_with_username(
+            base,
+            institution=(school if school is not None else None),
+            email="",
+            password=password or None,
+            first_name=student.first_name,
+            last_name=student.last_name or student.middle_name,
+        )
+
+        if school is not None:
+            membership, _ = InstitutionMembership.objects.get_or_create(
+                user=user,
+                institution=school,
+                defaults={"status": "active"},
+            )
+            RoleAssignment.objects.get_or_create(
+                membership=membership,
+                role=Role.STUDENT,
+            )
+
+        return user, generated
+
     def create(self, validated_data):
+        create_account = bool(validated_data.pop("create_account", True))
+        username = validated_data.pop("username", "") or None
+        password = validated_data.pop("password", "") or None
+
         guardian_data = self._extract_guardian(validated_data)
 
         guardian = Guardian.objects.create(**guardian_data)
 
         validated_data["guardian"] = guardian
 
-        return super().create(validated_data)
+        student = super().create(validated_data)
+
+        if create_account:
+            try:
+                user, generated = self._build_user_account(student, username, password)
+            except IntegrityError:
+                student.delete()
+                guardian.delete()
+                raise serializers.ValidationError(
+                    {
+                        "non_field_errors": [
+                            "Could not create the login account: the username or "
+                            "email is already in use."
+                        ]
+                    }
+                )
+
+            student.user = user
+            student.save(update_fields=["user"])
+            self._generated_password = generated
+
+        return student
 
     def update(self, instance, validated_data):
+        create_account = bool(validated_data.pop("create_account", False))
+        username = validated_data.pop("username", "") or None
+        password = validated_data.pop("password", "") or None
+
         guardian_data = self._extract_guardian(validated_data)
 
         if guardian_data and instance.guardian_id:
@@ -724,7 +830,39 @@ class StudentSerializer(serializers.ModelSerializer):
 
             instance.guardian.save()
 
-        return super().update(instance, validated_data)
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+
+        instance.save()
+
+        if create_account:
+            if instance.user_id is None:
+                try:
+                    user, generated = self._build_user_account(
+                        instance, username, password
+                    )
+                except IntegrityError:
+                    raise serializers.ValidationError(
+                        {
+                            "non_field_errors": [
+                                "Could not create the login account: the username "
+                                "or email is already in use."
+                            ]
+                        }
+                    )
+
+                instance.user = user
+                instance.save(update_fields=["user"])
+                self._generated_password = generated
+            else:
+                user = instance.user
+                user.first_name = instance.first_name
+                user.last_name = instance.last_name or instance.middle_name
+                if password:
+                    user.set_password(password)
+                user.save()
+
+        return instance
 
 
 class InquirySerializer(serializers.ModelSerializer):

@@ -209,7 +209,7 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
     create_account = serializers.BooleanField(
         write_only=True,
         required=False,
-        default=False,
+        default=True,
     )
 
     username = serializers.CharField(
