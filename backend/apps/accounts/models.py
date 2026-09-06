@@ -835,6 +835,8 @@ class StaffAttendanceCorrection(SoftDeleteMixin):
         StaffProfile,
         on_delete=models.CASCADE,
         related_name="attendance_corrections",
+        null=True,
+        blank=True,
     )
 
     institution = models.ForeignKey(
@@ -924,6 +926,8 @@ class StaffLeave(SoftDeleteMixin):
         StaffProfile,
         on_delete=models.CASCADE,
         related_name="leave_requests",
+        null=True,
+        blank=True,
     )
 
     leave_type = models.CharField(
