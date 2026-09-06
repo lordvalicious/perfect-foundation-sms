@@ -55,7 +55,7 @@ function TeachersPage() {
     joining_date: "",
     designation: "Teacher",
     status: "active",
-    create_account: false,
+    create_account: true,
     username: "",
     password: "",
   };

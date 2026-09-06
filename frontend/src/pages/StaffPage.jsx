@@ -107,7 +107,7 @@ export default function StaffPage() {
     department: "",
     joining_date: "",
     status: "active",
-    create_account: false,
+    create_account: true,
     username: "",
     password: "",
   };

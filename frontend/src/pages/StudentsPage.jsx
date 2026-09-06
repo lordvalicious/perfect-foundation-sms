@@ -5,6 +5,7 @@ import { useSchool } from "../schoolContext";
 import { useLang } from "../i18n";
 import { StatusBadge, PageHeader } from "./ui";
 import ProfileModal from "./ProfileModal";
+import CredentialDisplay from "../components/CredentialDisplay";
 import { buildErrorMessage } from "../api";
 
 /* Basic theming & component styles */
@@ -204,10 +205,14 @@ function StudentsPage() {
     guardian_alternate_phone: "",
     guardian_email: "",
     guardian_address: "",
+    create_account: true,
+    username: "",
+    password: "",
   };
 
   const [form, setForm] = useState(emptyForm);
   const [photoFile, setPhotoFile] = useState(null);
+  const [accountCreated, setAccountCreated] = useState(null);
 
   const [classOptions, setClassOptions] = useState([]);
   const [yearOptions, setYearOptions] = useState([]);
@@ -635,6 +640,9 @@ function StudentsPage() {
         student.guardian_details?.email || "",
       guardian_address:
         student.guardian_details?.address || "",
+      create_account: false,
+      username: student.linked_username || "",
+      password: "",
     });
 
     setShowForm(true);
@@ -695,6 +703,14 @@ function StudentsPage() {
 
       if (photoFile) {
         body.append("photo", photoFile);
+      }
+
+      if (form.create_account) {
+        body.append("create_account", "true");
+        body.append("username", form.username || "");
+        body.append("password", form.password || "");
+      } else {
+        body.append("create_account", "false");
       }
 
       const response = await fetch(url, {
@@ -780,6 +796,16 @@ function StudentsPage() {
 
       closeForm();
       await fetchAllCampuses(1);
+
+      if (data.linked_username && data.generated_password) {
+        setAccountCreated({
+          username: data.linked_username,
+          password: data.generated_password,
+          name: data.full_name || data.first_name
+            ? [data.first_name, data.middle_name, data.last_name].filter(Boolean).join(" ")
+            : "",
+        });
+      }
 
       if (isStudentSelf) {
         fetch("/api/students/me/", {
@@ -1080,6 +1106,16 @@ function StudentsPage() {
           },
         ]}
       />
+
+      {accountCreated && (
+        <CredentialDisplay
+          username={accountCreated.username}
+          password={accountCreated.password}
+          name={accountCreated.name}
+          note="Share these credentials with the student and remind them to change their password after first login."
+          onDismiss={() => setAccountCreated(null)}
+        />
+      )}
 
       {/* Drag & drop upload zone */}
       <div
@@ -1960,6 +1996,69 @@ function StudentsPage() {
                     />
                   </label>
                 </div>
+              </div>
+
+              <div className="form-section">
+                <h4>Login Account</h4>
+
+                {editingStudent &&
+                  editingStudent.linked_username && (
+                    <p className="field-hint">
+                      This student is linked to username{" "}
+                      <strong>
+                        {editingStudent.linked_username}
+                      </strong>.
+                    </p>
+                  )}
+
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={Boolean(form.create_account)}
+                    onChange={(event) =>
+                      setForm((previous) => ({
+                        ...previous,
+                        create_account: event.target.checked,
+                      }))
+                    }
+                  />
+
+                  <span>
+                    {editingStudent &&
+                    editingStudent.linked_username
+                      ? "Reset this student's password"
+                      : "Create a login account for this student"}
+                  </span>
+                </label>
+
+                {form.create_account && (
+                  <div className="form-grid">
+                    {!(editingStudent &&
+                      editingStudent.linked_username) && (
+                      <label>
+                        Username
+                        <input
+                          name="username"
+                          value={form.username}
+                          onChange={handleChange}
+                          placeholder="Leave blank to auto-generate"
+                        />
+                      </label>
+                    )}
+
+                    <label>
+                      Password
+                      <input
+                        type="text"
+                        name="password"
+                        value={form.password}
+                        onChange={handleChange}
+                        placeholder="Leave blank to auto-generate"
+                        autoComplete="new-password"
+                      />
+                    </label>
+                  </div>
+                )}
               </div>
 
               <div className="modal-footer">
