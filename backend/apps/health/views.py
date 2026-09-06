@@ -1,6 +1,9 @@
 from rest_framework import generics
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import (
+    apply_campus_scope,
+    assert_campus_allowed,
+)
 from apps.accounts.permissions import IsStaffRole
 
 from .models import HealthRecord
@@ -32,6 +35,11 @@ class HealthRecordListCreateView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        campus = serializer.validated_data.get("campus")
+
+        if campus is not None:
+            assert_campus_allowed(self.request.user, campus.id)
+
         serializer.save(recorded_by=self.request.user)
 
 
@@ -46,3 +54,11 @@ class HealthRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
         )
 
         return apply_campus_scope(queryset, self.request)
+
+    def perform_update(self, serializer):
+        campus = serializer.validated_data.get("campus")
+
+        if campus is not None:
+            assert_campus_allowed(self.request.user, campus.id)
+
+        serializer.save()

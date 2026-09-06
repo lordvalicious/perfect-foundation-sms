@@ -19,6 +19,24 @@ import {
 
 import { StatusBadge } from "./ui";
 import { formatDate } from "./format";
+import { buildErrorMessage } from "../api";
+
+async function profileErrorMessage(res, fallback) {
+  try {
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : {};
+
+    return buildErrorMessage({
+      status: res.status,
+      detail: data.detail,
+      fieldErrors: data,
+      responseText: text,
+      fallback,
+    });
+  } catch {
+    return fallback;
+  }
+}
 
 const ROLE_LABELS = {
   super_admin: "Super Admin",
@@ -119,7 +137,9 @@ export default function ProfileModal({ type, id, onClose }) {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load teacher profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load teacher profile.")
+            );
           }
 
           const data = await res.json();
@@ -133,7 +153,9 @@ export default function ProfileModal({ type, id, onClose }) {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load student profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load student profile.")
+            );
           }
 
           const data = await res.json();
@@ -147,7 +169,9 @@ export default function ProfileModal({ type, id, onClose }) {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load staff profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load staff profile.")
+            );
           }
 
           const data = await res.json();
@@ -161,7 +185,9 @@ export default function ProfileModal({ type, id, onClose }) {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load profile.")
+            );
           }
 
           const data = await res.json();

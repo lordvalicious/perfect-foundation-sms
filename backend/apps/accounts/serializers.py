@@ -463,6 +463,15 @@ class OptionalTimeField(serializers.TimeField):
 
 
 class StaffAttendanceSerializer(serializers.ModelSerializer):
+    staff = serializers.PrimaryKeyRelatedField(
+        queryset=StaffProfile.objects.all(),
+        required=False,
+        allow_null=True,
+        error_messages={
+            "required": "Please select a staff member.",
+            "incorrect_type": "Please select a valid staff member.",
+        },
+    )
     staff_name = serializers.CharField(
         source="staff.full_name",
         read_only=True,
@@ -587,6 +596,15 @@ class StaffAttendanceCorrectionSerializer(serializers.ModelSerializer):
 
 
 class StaffLeaveSerializer(serializers.ModelSerializer):
+    staff = serializers.PrimaryKeyRelatedField(
+        queryset=StaffProfile.objects.all(),
+        required=False,
+        allow_null=True,
+        error_messages={
+            "required": "Please select a staff member.",
+            "incorrect_type": "Please select a valid staff member.",
+        },
+    )
     staff_name = serializers.CharField(
         source="staff.full_name",
         read_only=True,

@@ -133,9 +133,22 @@ function Dashboard() {
 
   useEffect(() => {
     fetch(API_URL, { credentials: "include" })
-      .then((response) => {
+      .then(async (response) => {
         if (!response.ok) {
-          throw new Error("Failed to load dashboard data.");
+          const text = await response.text();
+
+          const detail = (() => {
+            try {
+              return JSON.parse(text || "{}").detail;
+            } catch {
+              return null;
+            }
+          })();
+
+          throw new Error(
+            (typeof detail === "string" && detail.trim()) ||
+              "Failed to load dashboard data."
+          );
         }
 
         return response.json();
@@ -745,10 +758,7 @@ function Dashboard() {
       {error && (
         <div className="state-card error">
           <strong>Unable to load dashboard.</strong>
-          <span>
-            Make sure Django is running at 127.0.0.1:8000.
-          </span>
-          <code>{error}</code>
+          <span>{error}</span>
         </div>
       )}
 

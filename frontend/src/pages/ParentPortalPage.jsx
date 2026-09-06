@@ -17,29 +17,47 @@ import {
 import { PageHeader, StateArea, EmptyState, StatusBadge } from "./ui";
 import { formatDate, formatCurrency } from "./format";
 
-async function fetchJson(url, fallback) {
-  const response = await fetch(url, { credentials: "include" });
-
-  if (!response.ok) {
-    throw new Error(fallback);
-  }
-
-  const text = await response.text();
+async function fetchJson(url, fallback, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    return text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error(fallback);
+    const response = await fetch(url, {
+      credentials: "include",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(fallback);
+    }
+
+    const text = await response.text();
+
+    try {
+      return text ? JSON.parse(text) : {};
+    } catch {
+      throw new Error(fallback);
+    }
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      throw new Error(
+        "The portal took too long to respond. Please retry.",
+        { cause: err },
+      );
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
-async function fetchAllPages(url) {
+async function fetchAllPages(url, maxPages = 20) {
   const results = [];
 
   let page = 1;
   let next = true;
 
-  while (next) {
+  while (next && page <= maxPages) {
     const separator = url.includes("?") ? "&" : "?";
     const data = await fetchJson(
       `${url}${separator}page=${page}`,

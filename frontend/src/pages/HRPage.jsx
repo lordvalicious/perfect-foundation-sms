@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { BriefcaseBusiness, FileText, Search, Star, Users } from "lucide-react";
+import { BriefcaseBusiness, FileText, Plus, Search, Star, Users } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, StatusBadge } from "./ui";
+import { apiFetch, authHeaders } from "../api";
 
 const EMPLOYEES_URL = "/api/hr/employees/";
 
@@ -14,6 +15,17 @@ export default function HRPage() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState("");
+  const [profiles, setProfiles] = useState([]);
+  const [addForm, setAddForm] = useState({
+    profile_type: "staff",
+    profile_id: "",
+    employment_type: "permanent",
+    status: "active",
+  });
 
   const loadEmployees = () => {
     setLoading(true);
@@ -33,7 +45,7 @@ export default function HRPage() {
   };
 
   useEffect(() => {
-    loadEmployees();  
+    loadEmployees();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -60,6 +72,50 @@ export default function HRPage() {
     };
     loadRelated();
   }, [selected]);
+
+  const openAdd = () => {
+    setShowAdd((value) => !value);
+    setAddError("");
+  };
+
+  useEffect(() => {
+    if (!showAdd) return;
+    const url = addForm.profile_type === "teacher" ? "/api/teachers/" : "/api/staff/";
+    fetch(`${url}?page_size=1000`, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : { results: [] }))
+      .then((data) => {
+        setProfiles(Array.isArray(data) ? data : data.results || []);
+        setAddForm((form) => ({ ...form, profile_id: "" }));
+      })
+      .catch(() => setProfiles([]));
+  }, [showAdd, addForm.profile_type]);
+
+  const submitAdd = (event) => {
+    event.preventDefault();
+    setAdding(true);
+    setAddError("");
+
+    const isTeacher = addForm.profile_type === "teacher";
+    const payload = {
+      teacher: isTeacher ? Number(addForm.profile_id) : null,
+      staff_profile: isTeacher ? null : Number(addForm.profile_id),
+      employment_type: addForm.employment_type,
+      status: addForm.status,
+    };
+
+    apiFetch(EMPLOYEES_URL, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify(payload),
+    })
+      .then(() => {
+        setShowAdd(false);
+        setAddForm({ profile_type: "staff", profile_id: "", employment_type: "permanent", status: "active" });
+        loadEmployees();
+      })
+      .catch((err) => setAddError(err.message))
+      .finally(() => setAdding(false));
+  };
 
   const visibleEmployees = employees.filter((employee) =>
     `${employee.full_name} ${employee.employee_number}`.toLowerCase().includes(search.toLowerCase()),
@@ -98,6 +154,11 @@ export default function HRPage() {
             sub: "performance entries",
           },
         ]}
+        action={
+          <button type="button" className="primary-button" onClick={openAdd}>
+            <Plus size={15} /> Add Employee
+          </button>
+        }
       />
       <div className="panel students-filters">
         <form onSubmit={(event) => { event.preventDefault(); loadEmployees(); }}>
@@ -107,6 +168,58 @@ export default function HRPage() {
           </div>
         </form>
       </div>
+      {showAdd && (
+        <div className="panel">
+          <PanelHeader title="Add employee" subtitle="Link this employee to an existing staff or teacher profile." />
+          <form onSubmit={submitAdd} className="filter-row">
+            <select
+              value={addForm.profile_type}
+              onChange={(event) => setAddForm({ ...addForm, profile_type: event.target.value })}
+            >
+              <option value="staff">Staff profile</option>
+              <option value="teacher">Teacher profile</option>
+            </select>
+            <select
+              required
+              value={addForm.profile_id}
+              onChange={(event) => setAddForm({ ...addForm, profile_id: event.target.value })}
+            >
+              <option value="">Select profile...</option>
+              {profiles.map((profile) => (
+                <option key={profile.id} value={profile.id}>
+                  {profile.full_name || profile.first_name || profile.id}
+                  {profile.employee_number ? ` (${profile.employee_number})` : ""}
+                </option>
+              ))}
+            </select>
+            <select
+              value={addForm.employment_type}
+              onChange={(event) => setAddForm({ ...addForm, employment_type: event.target.value })}
+            >
+              <option value="permanent">Permanent</option>
+              <option value="contract">Contract</option>
+              <option value="temporary">Temporary</option>
+              <option value="part_time">Part-time</option>
+              <option value="intern">Intern</option>
+              <option value="probationary">Probationary</option>
+            </select>
+            <select
+              value={addForm.status}
+              onChange={(event) => setAddForm({ ...addForm, status: event.target.value })}
+            >
+              <option value="active">Active</option>
+              <option value="probation">Probation</option>
+              <option value="on_leave">On leave</option>
+              <option value="inactive">Inactive</option>
+            </select>
+            <button type="button" className="secondary-button" onClick={openAdd}>Cancel</button>
+            <button className="primary-button" disabled={adding}>
+              {adding ? "Adding..." : "Add"}
+            </button>
+          </form>
+          {addError && <div className="state-card error">{addError}</div>}
+        </div>
+      )}
       <div className="dashboard-grid">
         <div className="panel">
           <PanelHeader title="Employee directory" subtitle="employees" count={visibleEmployees.length} />

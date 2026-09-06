@@ -81,6 +81,7 @@ export default function StaffOperationsPage({ canReview }) {
 
   const loadAttendance = useCallback(() => {
     setLoading(true);
+    setError("");
 
     apiFetch(`${BASE}attendance/?date=${attDate}`)
       .then((data) => setAttendance(data.results || data))
@@ -96,6 +97,7 @@ export default function StaffOperationsPage({ canReview }) {
   const submitLeave = (event) => {
     event.preventDefault();
     setNotice("");
+    setError("");
 
     apiFetch(`${BASE}leave/`, {
       method: "POST",
@@ -132,6 +134,12 @@ export default function StaffOperationsPage({ canReview }) {
   const markAttendance = (event) => {
     event.preventDefault();
     setNotice("");
+    setError("");
+
+    if (!attForm.staff) {
+      setError("Please select a staff member first.");
+      return;
+    }
 
     apiFetch(`${BASE}attendance/`, {
       method: "POST",

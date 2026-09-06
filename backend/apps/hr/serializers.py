@@ -1,5 +1,8 @@
 from rest_framework import serializers
 
+from apps.accounts.models import StaffProfile
+from apps.teachers.models import Teacher
+
 from .models import (
     Employee,
     EmployeeDocument,
@@ -62,6 +65,21 @@ class DesignationSerializer(serializers.ModelSerializer):
 class EmployeeSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
     profile_type = serializers.SerializerMethodField()
+    employee_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+    teacher = serializers.PrimaryKeyRelatedField(
+        queryset=Teacher.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+    staff_profile = serializers.PrimaryKeyRelatedField(
+        queryset=StaffProfile.objects.all(),
+        required=False,
+        allow_null=True,
+    )
     department_name = serializers.CharField(source="department.name", read_only=True)
     designation_name = serializers.CharField(source="designation.name", read_only=True)
     manager_name = serializers.CharField(source="manager.full_name", read_only=True)
@@ -77,6 +95,22 @@ class EmployeeSerializer(serializers.ModelSerializer):
             "full_name", "profile_type", "created_at", "updated_at",
         ]
         read_only_fields = ["id", "institution", "full_name", "profile_type", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        teacher = attrs.get("teacher")
+        staff_profile = attrs.get("staff_profile")
+
+        if not teacher and not staff_profile:
+            raise serializers.ValidationError(
+                "Link this employee to an existing Teacher or Staff Profile."
+            )
+
+        if teacher and staff_profile:
+            raise serializers.ValidationError(
+                "An employee cannot link to both a teacher and staff profile."
+            )
+
+        return attrs
 
     def get_profile_type(self, obj):
         return "teacher" if obj.teacher_id else "staff"

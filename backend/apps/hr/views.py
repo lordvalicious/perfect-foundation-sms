@@ -1,5 +1,5 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -86,7 +86,7 @@ def owned_queryset(model, request):
 
 
 # Original Employee Views (from original implementation)
-class EmployeeListView(generics.ListAPIView):
+class EmployeeListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadOnly]
     serializer_class = EmployeeSerializer
 
@@ -105,6 +105,48 @@ class EmployeeListView(generics.ListAPIView):
         if status_value:
             queryset = queryset.filter(status=status_value)
         return queryset.distinct()
+
+    def perform_create(self, serializer):
+        institution = getattr(self.request, "institution", None)
+        if institution is None:
+            raise serializers.ValidationError(
+                {"institution": "Select a school before adding an employee."}
+            )
+
+        teacher = serializer.validated_data.get("teacher")
+        staff_profile = serializer.validated_data.get("staff_profile")
+
+        # Generate employee number if the client left it blank.
+        emp_number = serializer.validated_data.get("employee_number")
+        if not emp_number:
+            prefix = (
+                f"T-{institution.id:03d}"
+                if teacher
+                else f"S-{institution.id:03d}"
+            )
+            last = (
+                Employee.objects
+                .filter(
+                    institution=institution,
+                    employee_number__startswith=prefix,
+                )
+                .order_by("-employee_number")
+                .values_list("employee_number", flat=True)
+                .first()
+            )
+            seq = 1
+            if last:
+                try:
+                    seq = int(last.split("-")[-1]) + 1
+                except (ValueError, IndexError):
+                    pass
+            emp_number = f"{prefix}-{seq:04d}"
+
+        serializer.save(
+            institution=institution,
+            employee_number=emp_number,
+            status=serializer.validated_data.get("status", "active"),
+        )
 
 
 class EmployeeDetailView(generics.RetrieveAPIView):

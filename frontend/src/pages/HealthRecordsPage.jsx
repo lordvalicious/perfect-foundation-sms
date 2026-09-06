@@ -30,7 +30,6 @@ export default function HealthRecordsPage() {
   const [formError, setFormError] = useState("");
   const [form, setForm] = useState({
     student: "",
-    campus: "",
     record_type: "checkup",
     record_date: new Date().toISOString().slice(0, 10),
     notes: "",
@@ -70,7 +69,6 @@ export default function HealthRecordsPage() {
     setShowForm(true);
     setForm({
       student: row.student ?? "",
-      campus: row.campus ?? "",
       record_type: row.record_type ?? "checkup",
       record_date: row.record_date ?? new Date().toISOString().slice(0, 10),
       notes: row.notes ?? "",

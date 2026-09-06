@@ -12,9 +12,22 @@ export function useApiList(url) {
   const load = useCallback(
     (params) => {
       return fetch(`${url}?${params.toString()}`, { credentials: "include" })
-        .then((response) => {
+        .then(async (response) => {
           if (!response.ok) {
-            throw new Error("Failed to load data.");
+            const text = await response.text();
+
+            const detail = (() => {
+              try {
+                return JSON.parse(text || "{}").detail;
+              } catch {
+                return null;
+              }
+            })();
+
+            throw new Error(
+              (typeof detail === "string" && detail.trim()) ||
+                "Failed to load data."
+            );
           }
 
           return response.json();

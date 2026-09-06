@@ -31,7 +31,6 @@ class HRModelTests(TestCase):
         employee = Employee(
             institution=self.school,
             employee_number="EMP-001",
-            designation="Staff",
         )
         with self.assertRaises(ValidationError):
             employee.full_clean()

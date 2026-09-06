@@ -8,13 +8,22 @@ from django.utils import timezone
 from apps.finance.models import FeeCategory, Invoice, InvoiceItem
 
 
-def apply_late_fees(percent=None, flat=None, grace_days=5, dry_run=False):
+def apply_late_fees(
+    percent=None,
+    flat=None,
+    grace_days=5,
+    dry_run=False,
+    institution=None,
+):
     """Charge a one-time late fee to invoices past their due date.
 
     Each invoice is charged at most once (a "Late Fee" item must not
     already exist). Returns a summary dict:
 
         {"charged": n, "total": Decimal, "rows": [...], "dry_run": bool}
+
+    ``institution`` must be supplied by API callers so late fees are
+    applied only to that school's invoices.
     """
     if percent is None and flat is None:
         raise ValueError("Provide either percent or flat.")
@@ -27,13 +36,17 @@ def apply_late_fees(percent=None, flat=None, grace_days=5, dry_run=False):
 
     cutoff = timezone.localdate() - timezone.timedelta(days=grace_days)
 
+    queryset = Invoice.objects.filter(
+        status__in=["issued", "partial", "overdue"],
+        due_date__lt=cutoff,
+        late_fee_applied=False,  # Also exclude invoices that already had late fee applied
+    )
+
+    if institution is not None:
+        queryset = queryset.filter(institution=institution)
+
     overdue = (
-        Invoice.objects
-        .filter(
-            status__in=["issued", "partial", "overdue"],
-            due_date__lt=cutoff,
-            late_fee_applied=False,  # Also exclude invoices that already had late fee applied
-        )
+        queryset
         .exclude(items__category__name__iexact="Late Fee")
         .distinct()
         .prefetch_related(
@@ -72,8 +85,13 @@ def apply_late_fees(percent=None, flat=None, grace_days=5, dry_run=False):
         total_fees += fee
 
     if not dry_run:
+        fee_category_kwargs = {"name": "Late Fee"}
+
+        if institution is not None:
+            fee_category_kwargs["institution"] = institution
+
         fee_category, _ = FeeCategory.objects.get_or_create(
-            name="Late Fee",
+            **fee_category_kwargs,
             defaults={
                 "description": "Automated late payment surcharge."
             },

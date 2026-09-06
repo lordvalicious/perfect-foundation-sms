@@ -61,7 +61,7 @@ export function StateArea({
   error,
   loadingText = "Loading data...",
   errorTitle = "Unable to load data.",
-  errorText = "Make sure Django is running at 127.0.0.1:8000.",
+  errorText,
   onRetry,
   children,
 }) {
@@ -73,8 +73,7 @@ export function StateArea({
     return (
       <div className="state-card error">
         <strong>{errorTitle}</strong>
-        <span>{errorText}</span>
-        <code>{error}</code>
+        <span>{errorText || error}</span>
         {onRetry && (
           <button className="secondary-button" onClick={onRetry}>
             Try Again

@@ -1121,6 +1121,7 @@ class LateFeeApplyView(APIView):
             flat=serializer.validated_data.get("flat"),
             grace_days=serializer.validated_data.get("grace_days", 5),
             dry_run=serializer.validated_data.get("dry_run", False),
+            institution=request.institution,
         )
 
         if not serializer.validated_data.get("dry_run", False) and result["charged"] > 0:
@@ -1164,6 +1165,7 @@ class LateFeePreviewView(APIView):
             flat=flat,
             grace_days=grace_days,
             dry_run=True,
+            institution=request.institution,
         )
 
         return Response(LateFeeResultSerializer(result).data)

@@ -24,6 +24,12 @@ class TeacherListCreateView(generics.ListCreateAPIView):
 
         user = self.request.user
 
+        if self.request.institution is not None:
+            queryset = queryset.filter(
+                Q(institution=self.request.institution)
+                | Q(membership__institution=self.request.institution)
+            )
+
         if not is_manager(user):
             profile = get_teacher_profile(user)
 
@@ -76,6 +82,10 @@ class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         user = self.request.user
 
+        institution_filter = Q(institution=self.request.institution) | Q(
+            membership__institution=self.request.institution
+        )
+
         if not is_manager(user):
             profile = get_teacher_profile(user)
 
@@ -83,13 +93,11 @@ class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
                 return queryset.none()
 
             queryset = queryset.filter(
-                institutionmembership__institution=self.request.institution,
+                institution_filter,
                 pk=profile.pk,
             )
         else:
-            queryset = queryset.filter(
-                institutionmembership__institution=self.request.institution,
-            )
+            queryset = queryset.filter(institution_filter)
 
         return queryset
 

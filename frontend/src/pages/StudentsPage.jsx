@@ -1344,12 +1344,7 @@ function StudentsPage() {
                       Unable to load students.
                     </strong>
 
-                    <span>
-                      Make sure Django is running at
-                      127.0.0.1:8000.
-                    </span>
-
-                    <code>{data.error}</code>
+                    <span>{data.error}</span>
                   </div>
                 )}
 

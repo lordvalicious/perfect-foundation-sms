@@ -44,18 +44,29 @@ export function buildErrorMessage({
     return detail;
   }
 
-  const generic = statusMessage(status);
-
-  if (generic) {
-    return generic;
-  }
-
+  // Field-level validation errors from the backend take precedence over the
+  // generic status copy — otherwise a 400 body like
+  // `{"phone": ["Enter a valid phone"]}` would be hidden behind
+  // "The information you entered could not be saved."
   if (fieldErrors && typeof fieldErrors === "object") {
+    const first = fieldErrors[Object.keys(fieldErrors)[0]];
+    const value = Array.isArray(first) ? first[0] : first;
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+
     const fields = Object.keys(fieldErrors);
     if (fields.length > 0) {
       const label = fields.length === 1 ? fields[0] : "some fields";
       return `Please check ${label} in the form.`;
     }
+  }
+
+  const generic = statusMessage(status);
+
+  if (generic) {
+    return generic;
   }
 
   if (responseText && typeof responseText === "string" && responseText.trim()) {

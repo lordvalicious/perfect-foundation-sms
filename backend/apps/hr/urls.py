@@ -8,7 +8,7 @@ from .views import (
     EmployeeContractListCreateView,
     EmployeeDetailView,
     EmployeeDocumentListCreateView,
-    EmployeeListView,
+    EmployeeListCreateView,
     EmployeeReviewListCreateView,
     EmployeeWorkloadListCreateView,
     EmploymentEventCreateView,
@@ -54,7 +54,7 @@ from .views import (
     InterviewListCreateView,
     InterviewDetailView,
     InterviewActionView,
-    EmployeeListView,
+    EmployeeListCreateView,
     EmployeeDetailView,
     EmployeeContractListCreateView,
     EmployeeDocumentListCreateView,
@@ -72,8 +72,8 @@ urlpatterns = [
     path("designations/<int:pk>/", DesignationDetailView.as_view(), name="designation-detail"),
 
     # Employees
-    path("employees/", EmployeeListView.as_view(), name="employee-list"),
-    path("employees/<int:pk>/", EmployeeDetailView.as_view(), name="employee-detail"),
+path("employees/", EmployeeListCreateView.as_view(), name="employee-list"),
+path("employees/<int:pk>/", EmployeeDetailView.as_view(), name="employee-detail"),
     path("employees/<int:employee_id>/contracts/", EmployeeContractListCreateView.as_view(), name="employee-contract-list"),
     path("employees/<int:employee_id>/documents/", EmployeeDocumentListCreateView.as_view(), name="employee-document-list"),
     path("employees/<int:employee_id>/workload/", EmployeeWorkloadListCreateView.as_view(), name="employee-workload-list"),

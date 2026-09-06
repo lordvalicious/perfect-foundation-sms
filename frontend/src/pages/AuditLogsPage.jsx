@@ -99,8 +99,8 @@ export default function AuditLogsPage() {
       if (dateFrom) params.append("date_from", dateFrom);
       if (dateTo) params.append("date_to", dateTo);
       await apiDownload(`${AUDIT_URL}?${params}`, "audit_logs.csv");
-    } catch {
-      // ignore
+    } catch (err) {
+      setError(err && err.message ? err.message : "Could not export audit logs.");
     } finally {
       setExporting(false);
     }

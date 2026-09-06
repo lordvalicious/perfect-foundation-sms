@@ -1219,10 +1219,35 @@ class StaffAttendanceListCreateView(generics.ListCreateAPIView):
         institution = getattr(self.request, "institution", None)
         staff = serializer.validated_data.get("staff")
 
-        if staff is not None and staff.primary_campus_id:
+        if staff is None:
+            staff = getattr(self.request.user, "staff_profile", None)
+
+        if staff is None:
+            raise serializers.ValidationError(
+                {
+                    "staff": (
+                        "Please select a staff member, or link a staff "
+                        "profile to your account."
+                    )
+                }
+            )
+
+        if institution is not None and staff.institution is not None:
+            if staff.institution_id != institution.id:
+                raise serializers.ValidationError(
+                    {
+                        "staff": (
+                            "This staff member does not belong to the "
+                            "active school."
+                        )
+                    }
+                )
+
+        if staff.primary_campus_id:
             assert_campus_allowed(self.request.user, staff.primary_campus_id)
 
         serializer.save(
+            staff=staff,
             marked_by=self.request.user,
             institution=institution,
         )
@@ -1421,6 +1446,13 @@ class StaffLeaveListCreateView(generics.ListCreateAPIView):
             else:
                 return queryset.none()
 
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="staff__primary_campus_id",
+            institution_field="institution_id",
+        )
+
         staff = self.request.query_params.get("staff")
 
         if staff:
@@ -1439,15 +1471,36 @@ class StaffLeaveListCreateView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
+        institution = getattr(self.request, "institution", None)
         user = self.request.user
-        staff = getattr(user, "staff_profile", None)
+
+        can_create_for_others = user.has_any_role(
+            ["super_admin", "admin", "principal", "hr"]
+        )
+
+        staff = serializer.validated_data.get("staff")
+
+        if staff is None or not can_create_for_others:
+            staff = getattr(user, "staff_profile", None)
 
         if staff is None:
             raise NotFound(
-                "No staff profile is linked to this account."
+                "No staff profile is linked to this account, and no staff "
+                "member was selected."
             )
 
-        serializer.save(staff=staff)
+        if institution is not None and staff.institution is not None:
+            if staff.institution_id != institution.id:
+                raise serializers.ValidationError(
+                    {
+                        "staff": (
+                            "This staff member does not belong to the "
+                            "active school."
+                        )
+                    }
+                )
+
+        serializer.save(staff=staff, institution=institution)
 
 
 class StaffLeaveDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -1471,6 +1524,13 @@ class StaffLeaveDetailView(generics.RetrieveUpdateDestroyAPIView):
                 queryset = queryset.filter(staff=profile)
             else:
                 return queryset.none()
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="staff__primary_campus_id",
+            institution_field="institution_id",
+        )
 
         return queryset
 

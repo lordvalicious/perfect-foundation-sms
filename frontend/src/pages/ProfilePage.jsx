@@ -21,7 +21,24 @@ import {
 
 import { StatusBadge } from "./ui";
 import { formatDate } from "./format";
-import { apiDownload } from "../api";
+import { buildErrorMessage, apiDownload } from "../api";
+
+async function profileErrorMessage(res, fallback) {
+  try {
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : {};
+
+    return buildErrorMessage({
+      status: res.status,
+      detail: data.detail,
+      fieldErrors: data,
+      responseText: text,
+      fallback,
+    });
+  } catch {
+    return fallback;
+  }
+}
 
 const CERTIFICATE_TYPES = [
   ["bonafide", "Bonafide"],
@@ -162,7 +179,9 @@ export default function ProfilePage() {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load teacher profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load teacher profile.")
+            );
           }
 
           const data = await res.json();
@@ -176,7 +195,9 @@ export default function ProfilePage() {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load student profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load student profile.")
+            );
           }
 
           const data = await res.json();
@@ -190,7 +211,9 @@ export default function ProfilePage() {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load staff profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load staff profile.")
+            );
           }
 
           const data = await res.json();
@@ -204,7 +227,9 @@ export default function ProfilePage() {
           });
 
           if (!res.ok) {
-            throw new Error("Could not load your profile.");
+            throw new Error(
+              await profileErrorMessage(res, "Could not load your profile.")
+            );
           }
 
           const user = await res.json();
