@@ -377,12 +377,7 @@ h1, h2, h3, h4,
   gap: 2px;
   flex: 1 1 auto;
   min-width: 0;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.topbar-nav::-webkit-scrollbar {
-  display: none;
+  overflow: visible;
 }
 
 .topbar-link {
@@ -416,6 +411,8 @@ h1, h2, h3, h4,
 
 .nav-group {
   position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .nav-group-trigger {
@@ -3794,6 +3791,17 @@ select {
 
 @media (min-width: 961px) and (max-width: 1280px) {
   .topbar-left { gap: 10px; }
+  .topbar-nav { gap: 0; }
+  .topbar-nav .nav-group { flex: 0 1 auto; min-width: 0; }
+  .topbar-nav .nav-group-trigger,
+  .topbar-nav .topbar-link {
+    padding: 6px 8px;
+    min-width: 0;
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .school-switcher-label { display: none; }
   .school-switcher-name { max-width: 120px; }
   .school-name-readonly { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
