@@ -285,10 +285,18 @@ def assign_roles(ctx, user, roles, school=None):
 
 def role_user(ctx, username, email, first_name, last_name, role, *,
               designation=None, campus=None, department="", gender="female",
-              joining_date=None):
+              joining_date=None, is_superuser=False):
     """Create a user with a single role, plus a staff profile when
-    ``designation`` is supplied (staff-scoped roles need ``primary_campus``)."""
-    user, created = make_user(ctx, username, email, first_name, last_name)
+    ``designation`` is supplied (staff-scoped roles need ``primary_campus``).
+
+    ``is_superuser`` defaults to False but MUST be True for the platform
+    ``super_admin`` account — the ``super_admin`` role is hard-coupled to a
+    Django superuser (see ``User.clean``), so seeding it otherwise produces an
+    invalid account that is silently demoted to ``admin`` in practice.
+    """
+    user, created = make_user(
+        ctx, username, email, first_name, last_name, is_superuser=is_superuser
+    )
     assign_roles(ctx, user, [role])
     if designation:
         staff_profile(ctx, user, first_name, last_name, designation=designation,
@@ -323,7 +331,6 @@ def staff_profile(ctx, user, first_name, last_name, *, designation,
         "gender": gender,
         "phone": "",
         "email": user.email,
-        "campus": campus_obj.name if campus_obj else "",
         "designation": designation,
         "department": department,
         "joining_date": joining_date or date(2019, 8, 1),
@@ -389,6 +396,10 @@ def base_users(ctx):
             ctx, username, email, first, last, role,
             designation=designation,
             campus=code_for_username(username),
+            # The platform Super Admin must be a Django superuser (User.clean
+            # hard-couples the role to is_superuser). Without this the account
+            # is invalid and drifts to `admin` in practice.
+            is_superuser=(role == Role.SUPER_ADMIN),
         )
     ctx._base_users_done = True
     return True

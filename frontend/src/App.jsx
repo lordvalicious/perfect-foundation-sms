@@ -413,19 +413,24 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [schoolDropdownOpen, setSchoolDropdownOpen] = useState(false);
   const schoolSwitcherRef = useRef(null);
+  const campusSwitcherRef = useRef(null);
+  const [campusDropdownOpen, setCampusDropdownOpen] = useState(false);
   const { t } = useLang();
-  const { currentSchool, availableSchools, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole } = useSchool();
+  const { currentSchool, availableSchools, activeCampus, campusList, setActiveCampusId, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole } = useSchool();
 
   useEffect(() => {
-    if (!schoolDropdownOpen) return;
+    if (!schoolDropdownOpen && !campusDropdownOpen) return;
     const handleClickOutside = (e) => {
-      if (schoolSwitcherRef.current && !schoolSwitcherRef.current.contains(e.target)) {
+      if (schoolDropdownOpen && schoolSwitcherRef.current && !schoolSwitcherRef.current.contains(e.target)) {
         setSchoolDropdownOpen(false);
+      }
+      if (campusDropdownOpen && campusSwitcherRef.current && !campusSwitcherRef.current.contains(e.target)) {
+        setCampusDropdownOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [schoolDropdownOpen]);
+  }, [schoolDropdownOpen, campusDropdownOpen]);
 
   const moduleAllows = (item) => {
     if (!item.module) return true;
@@ -506,6 +511,49 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
                   <Building2 size={14} />
                   {currentSchool.name}
                 </span>
+              )}
+              {campusList.length > 1 && (
+                <div className="school-switcher-wrap campus-switcher-wrap" ref={campusSwitcherRef}>
+                  <button
+                    className="school-switcher-trigger"
+                    onClick={() => setCampusDropdownOpen((v) => !v)}
+                    disabled={isSwitching || schoolLoading}
+                  >
+                    <Building2 size={14} />
+                    <span className="school-switcher-label">Campus:</span>
+                    <span className="school-switcher-name">
+                      {activeCampus ? activeCampus.name : "All Campuses"}
+                    </span>
+                    <ChevronDown size={12} />
+                  </button>
+                  {campusDropdownOpen && (
+                    <div className="school-switcher-dropdown">
+                      <button
+                        type="button"
+                        className={`school-switcher-item ${!activeCampus ? "active" : ""}`}
+                        onClick={() => {
+                          setCampusDropdownOpen(false);
+                          if (activeCampus) setActiveCampusId(null);
+                        }}
+                      >
+                        All Campuses
+                      </button>
+                      {campusList.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          className={`school-switcher-item ${activeCampus?.id === c.id ? "active" : ""}`}
+                          onClick={() => {
+                            setCampusDropdownOpen(false);
+                            if (activeCampus?.id !== c.id) setActiveCampusId(c.id);
+                          }}
+                        >
+                          {c.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}

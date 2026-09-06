@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "apps.helpdesk",
     "apps.visitors",
     "apps.digital_ids",
+    "apps.core",
     # "django_ratelimit",  # Temporarily disabled - requires Redis for production
 
     "corsheaders",

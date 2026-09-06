@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Banknote, BadgePoundSterling, ReceiptText } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatCurrency, formatDate } from "./format";
@@ -25,26 +25,37 @@ export default function PayrollPage() {
   const [message, setMessage] = useState("");
   const [processing, setProcessing] = useState(null);
 
-  const load = (key) => {
-    const config = ENDPOINTS[key];
+  const load = useCallback(
+    (key) => {
+      const config = ENDPOINTS[key];
 
-    setLoading(true);
-    setError("");
+      setLoading(true);
+      setError("");
 
-    fetch(`${BASE}${config.url}`, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : { results: [] }))
-      .then((json) => {
-        setData((previous) => ({
-          ...previous,
-          [key]: json.results || json,
-        }));
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  };
+      fetch(`${BASE}${config.url}`, { credentials: "include" })
+        .then((response) => (response.ok ? response.json() : { results: [] }))
+        .then((json) => {
+          setData((previous) => ({
+            ...previous,
+            [key]: json.results || json,
+          }));
+          setLoading(false);
+        })
+        .catch((err) => {
+          setError(err.message);
+          setLoading(false);
+        });
+    },
+    []
+  );
+
+  const initialLoadDone = useRef(false);
+
+  useEffect(() => {
+    if (initialLoadDone.current) return;
+    initialLoadDone.current = true;
+    load(tab);
+  }, [load, tab]);
 
   const switchTab = (key) => {
     setTab(key);

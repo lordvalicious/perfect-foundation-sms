@@ -7,7 +7,7 @@ import zlib
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
-from rest_framework.test import APIRequestFactory
+from rest_framework.test import APIClient, APIRequestFactory
 
 from apps.accounts.access import apply_campus_scope
 from apps.accounts.models import (
@@ -1852,28 +1852,53 @@ class AccountantIsolationTests(TestCase):
             user=self.accountant_a, institution=self.school_a
         )
         RoleAssignment.objects.create(membership=self.membership_a, role=Role.ACCOUNTANT)
+        StaffProfile.objects.create(
+            user=self.accountant_a,
+            membership=self.membership_a,
+            institution=self.school_a,
+            primary_campus=self.campus_a,
+            employee_number="EMP-A-001",
+            first_name="Lahore",
+            last_name="Accountant",
+            gender="male",
+        )
 
         # Accountant B membership in School B
         self.membership_b = InstitutionMembership.objects.create(
             user=self.accountant_b, institution=self.school_b
         )
         RoleAssignment.objects.create(membership=self.membership_b, role=Role.ACCOUNTANT)
+        StaffProfile.objects.create(
+            user=self.accountant_b,
+            membership=self.membership_b,
+            institution=self.school_b,
+            primary_campus=self.campus_b,
+            employee_number="EMP-B-001",
+            first_name="Sialkot",
+            last_name="Accountant",
+            gender="female",
+        )
 
         # Client for API calls
         self.client_a = APIClient()
-        self.client_a.force_authenticate(user=self.accountant_a)
+        self.client_a.force_login(self.accountant_a)
         self.client_b = APIClient()
-        self.client_b.force_authenticate(user=self.accountant_b)
+        self.client_b.force_login(self.accountant_b)
 
         # Create student and fee structure for School A
+        self.guardian_a = Guardian.objects.create(
+            name="Parent A", relationship="Father", phone="03000000000"
+        )
         self.student_a = Student.objects.create(
-            first_name="Ali", last_name="Ahmed", admission_number="ST-001"
+            first_name="Ali", last_name="Ahmed", admission_number="ST-001",
+            guardian=self.guardian_a,
         )
         self.enrollment_a = Enrollment.objects.create(
             student=self.student_a,
             class_obj=self.class_a,
             section=self.section_a,
             academic_year=self.year_a,
+            campus=self.campus_a,
             status="active",
         )
         self.fee_structure_a = FeeStructure.objects.create(
@@ -1892,16 +1917,27 @@ class AccountantIsolationTests(TestCase):
             due_date=date.today() + timedelta(days=30),
             institution=self.school_a,
         )
+        InvoiceItem.objects.create(
+            invoice=self.invoice_a,
+            category=self.category_a,
+            description="Tuition",
+            amount=Decimal("10000.00"),
+        )
 
         # Create student and fee structure for School B
+        self.guardian_b = Guardian.objects.create(
+            name="Parent B", relationship="Mother", phone="03000000001"
+        )
         self.student_b = Student.objects.create(
-            first_name="Mohammad", last_name="Sadiq", admission_number="ST-002"
+            first_name="Mohammad", last_name="Sadiq", admission_number="ST-002",
+            guardian=self.guardian_b,
         )
         self.enrollment_b = Enrollment.objects.create(
             student=self.student_b,
             class_obj=self.class_b,
             section=self.section_b,
             academic_year=self.year_b,
+            campus=self.campus_b,
             status="active",
         )
         self.fee_structure_b = FeeStructure.objects.create(
@@ -1920,14 +1956,20 @@ class AccountantIsolationTests(TestCase):
             due_date=date.today() + timedelta(days=30),
             institution=self.school_b,
         )
+        InvoiceItem.objects.create(
+            invoice=self.invoice_b,
+            category=self.category_b,
+            description="Tuition",
+            amount=Decimal("12000.00"),
+        )
 
     def test_accountant_cannot_access_other_school_invoices(self):
         """Lahore accountant cannot list School B invoices."""
         resp = self.client_a.get("/api/finance/invoices/")
         self.assertEqual(resp.status_code, 200)
-        school_a_invoices = [i for i in resp.json()["results"] if i["institution"] == self.school_a.id]
+        school_a_invoices = [i for i in resp.json()["results"] if i["student"] == self.student_a.id]
         self.assertEqual(len(school_a_invoices), 1)
-        school_b_invoices = [i for i in resp.json()["results"] if i["institution"] == self.school_b.id]
+        school_b_invoices = [i for i in resp.json()["results"] if i["student"] == self.student_b.id]
         self.assertEqual(len(school_b_invoices), 0)
 
     def test_accountant_cannot_view_other_school_invoice_detail(self):
@@ -1944,6 +1986,13 @@ class AccountantIsolationTests(TestCase):
             "academic_year": self.year_b.id,
             "issue_date": date.today(),
             "due_date": date.today() + timedelta(days=30),
+            "items": [
+                {
+                    "description": "Tuition School B",
+                    "category": self.category_b.id,
+                    "amount": "10000.00",
+                }
+            ],
         }
         resp = self.client_a.post("/api/finance/invoices/create/", payload, format="json")
         self.assertEqual(resp.status_code, 403)
@@ -1952,7 +2001,12 @@ class AccountantIsolationTests(TestCase):
         """Lahore accountant cannot create payment for School B invoice."""
         resp = self.client_a.post(
             "/api/finance/payments/create/",
-            {"invoice": self.invoice_b.pk, "amount": "1000.00", "payment_method": "cash"},
+            {
+                "invoice": self.invoice_b.pk,
+                "amount": "1000.00",
+                "payment_method": "cash",
+                "payment_date": date.today(),
+            },
             format="json",
         )
         self.assertEqual(resp.status_code, 403)
@@ -1960,7 +2014,7 @@ class AccountantIsolationTests(TestCase):
     def test_accountant_cannot_create_concession_for_other_school(self):
         """Lahore accountant cannot create concession for School B invoice."""
         resp = self.client_a.post(
-            "/api/finance/concessions/create/",
+            "/api/finance/concessions/",
             {"invoice": self.invoice_b.pk, "type": "discount", "amount": "1000.00", "reason": "scholarship"},
             format="json",
         )
@@ -1969,7 +2023,7 @@ class AccountantIsolationTests(TestCase):
     def test_accountant_cannot_create_adjustment_for_other_school(self):
         """Lahore accountant cannot create adjustment for School B invoice."""
         resp = self.client_a.post(
-            "/api/finance/adjustments/create/",
+            "/api/finance/adjustments/",
             {"invoice": self.invoice_b.pk, "type": "credit", "amount": "1000.00", "reason": "correction"},
             format="json",
         )
@@ -1978,7 +2032,7 @@ class AccountantIsolationTests(TestCase):
     def test_accountant_cannot_create_fine_for_other_school(self):
         """Lahore accountant cannot create fine for School B student."""
         resp = self.client_a.post(
-            "/api/finance/fines/create/",
+            "/api/finance/fines/",
             {"student": self.student_b.id, "academic_year": self.year_b.id, "type": "disciplinary", "amount": "500.00", "reason": "violation"},
             format="json",
         )
