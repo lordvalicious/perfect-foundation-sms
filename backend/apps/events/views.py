@@ -109,11 +109,17 @@ class EventDetailView(generics.RetrieveUpdateDestroyAPIView):
         return super().get_permissions()
 
     def get_queryset(self):
-        return Event.objects.select_related(
-            "school",
-            "campus",
-            "created_by",
-        ).prefetch_related("audiences", "rsvps")
+        queryset = apply_campus_scope(
+            Event.objects.select_related(
+                "school",
+                "campus",
+                "created_by",
+            ).prefetch_related("audiences", "rsvps"),
+            self.request,
+            "campus_id",
+            institution_field="school_id",
+        )
+        return queryset
 
     def perform_update(self, serializer):
         event = serializer.save()
@@ -165,7 +171,16 @@ class EventRSVPView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         try:
-            event = Event.objects.get(pk=kwargs["pk"])
+            event = (
+                Event.objects
+                .select_related("school", "campus", "created_by")
+                .filter(pk=kwargs["pk"])
+                .filter(
+                    Q(institution_id=get_institution(request))
+                    | Q(institution__isnull=True)
+                )
+                .first()
+            )
         except Event.DoesNotExist:
             return Response(
                 {"detail": "Event not found."},

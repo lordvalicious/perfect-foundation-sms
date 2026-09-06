@@ -161,6 +161,11 @@ class TeacherAssignmentListCreateView(generics.ListCreateAPIView):
                 academic_year_id=academic_year
             )
 
+        # Scope to the active institution via the teacher's institution.
+        institution = getattr(self.request, "institution", None)
+        if institution is not None:
+            queryset = queryset.filter(teacher__institution=institution)
+
         return queryset
 
 
@@ -169,7 +174,7 @@ class TeacherAssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = TeacherAssignmentSerializer
 
     def get_queryset(self):
-        return (
+        queryset = (
             TeacherAssignment.objects
             .select_related(
                 "teacher",
@@ -180,3 +185,12 @@ class TeacherAssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
                 "academic_year",
             )
         )
+
+        # Scope to the active institution via the teacher's institution.
+        institution = getattr(self.request, "institution", None)
+        if institution is not None:
+            queryset = queryset.filter(teacher__institution=institution)
+        else:
+            queryset = queryset.none()
+
+        return queryset
