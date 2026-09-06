@@ -1123,52 +1123,65 @@ class Student360View(APIView):
         from apps.accounts.scopes import (
             get_student_profile, get_guardian_profile,
             is_manager, is_parent, is_student,
-            parent_student_ids, parent_scope_filter,
-            teacher_scope_filter,
+            parent_student_ids, is_parent_of,
         )
         from apps.students.serializers import Student360Serializer
         
+        # Get the current user's institution
+        institution = getattr(request, 'institution', None)
+        
+        # Build student queryset with institution scoping
+        student_qs = Student.objects.select_related(
+            "guardian", "primary_campus", "user", "membership", "institution"
+        ).prefetch_related(
+            "enrollments__campus",
+            "enrollments__class_obj",
+            "enrollments__section",
+            "enrollments__academic_year",
+            "guardian_links__guardian",
+            "documents",
+        )
+        
+        # If institution is available, scope the query; otherwise allow global search
+        # but only for authenticated users (admins can see all)
+        if institution is not None:
+            student_qs = student_qs.filter(institution=institution)
+        
         # Get the student
         student = get_object_or_404(
-            Student.objects.select_related(
-                "guardian", "primary_campus", "user", "membership", "institution"
-            ).prefetch_related(
-                "enrollments__campus",
-                "enrollments__class_obj",
-                "enrollments__section",
-                "enrollments__academic_year",
-                "guardian_links__guardian",
-                "documents",
-            ),
+            student_qs,
             pk=student_id,
-            institution=request.institution,
         )
         
         # Check authorization
         user = request.user
+        user_id = user.id if user and user.is_authenticated else None
         
-        # Allow if user is the student themselves
-        if student.user_id == user.id:
+        # Allow if user is the student themselves (by user ID)
+        if user_id == student.user_id:
             pass  # Allow
         # Allow if user is a parent of the student
-        elif is_parent(user) and student.id in parent_student_ids(user):
+        elif is_parent(user) and is_parent_of(user, student):
             pass  # Allow
-        # Allow if user is the student themselves
-        elif is_student(user) and get_student_profile(user) == student:
+        # Allow if user is a student viewing their own profile
+        elif is_student(user) and user_id == student.user_id:
             pass  # Allow
         # Allow if user is a teacher of the student
-        elif not is_manager(user) and hasattr(user, 'teacher_profile'):
+        elif hasattr(user, 'teacher_profile'):
             teacher = user.teacher_profile
             active_enrollment = student.enrollments.filter(status="active").first()
             if active_enrollment and teacher_can_access_student(teacher, active_enrollment):
                 pass  # Allow
-        # Otherwise require admin/manager role
-        elif not is_manager(user):
+        # Otherwise require admin/manager role within the institution
+        elif is_manager(user):
+            pass  # Allow - managers can view any student
+        # Deny with a clear message
+        else:
             raise PermissionDenied("You do not have permission to view this student's profile.")
         
-        # Campus access check
+        # Campus access check (only if institution and enrollment are available)
         active_enrollment = student.enrollments.filter(status="active").first()
-        if active_enrollment:
+        if active_enrollment and institution:
             try:
                 assert_campus_allowed(user, active_enrollment.campus_id)
             except PermissionDenied:

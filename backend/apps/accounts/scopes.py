@@ -53,6 +53,32 @@ def is_parent(user):
     return user.has_any_role([PARENT_ROLE]) and not is_manager(user)
 
 
+def is_parent_of(parent, student):
+    """Check if a parent is linked to a specific student."""
+    from apps.students.models import StudentGuardian
+    
+    guardian = get_guardian_profile(parent)
+    if guardian is None:
+        return False
+    
+    # Check direct StudentGuardian link
+    linked = StudentGuardian.objects.filter(
+        guardian=guardian,
+        student=student,
+    ).exists()
+    
+    if linked:
+        return True
+    
+    # Also check if student has this guardian as primary
+    student_guardian = StudentGuardian.objects.filter(
+        student=student,
+        is_primary=True,
+    ).first()
+    
+    return student_guardian is not None and student_guardian.guardian_id == guardian.id
+
+
 def get_teacher_profile(user):
     return getattr(user, "teacher_profile", None)
 
