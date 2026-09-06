@@ -744,6 +744,8 @@ class StaffAttendance(SoftDeleteMixin):
         StaffProfile,
         on_delete=models.CASCADE,
         related_name="attendance_records",
+        null=True,
+        blank=True,
     )
 
     date = models.DateField()
