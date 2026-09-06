@@ -505,6 +505,35 @@ h1, h2, h3, h4,
   margin: 4px 8px;
 }
 
+.nav-dropdown-section {
+  padding: 6px 10px 2px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.nav-dropdown-more {
+  left: auto;
+  right: 0;
+  max-height: min(70vh, 520px);
+  overflow-y: auto;
+}
+
+.topbar-nav-measure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: -1;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: max-content;
+}
+
 /* Mobile nav trigger */
 .mobile-nav-toggle {
   display: none;
@@ -3791,17 +3820,6 @@ select {
 
 @media (min-width: 961px) and (max-width: 1280px) {
   .topbar-left { gap: 10px; }
-  .topbar-nav { gap: 0; }
-  .topbar-nav .nav-group { flex: 0 1 auto; min-width: 0; }
-  .topbar-nav .nav-group-trigger,
-  .topbar-nav .topbar-link {
-    padding: 6px 8px;
-    min-width: 0;
-    max-width: 200px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
   .school-switcher-label { display: none; }
   .school-switcher-name { max-width: 120px; }
   .school-name-readonly { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }

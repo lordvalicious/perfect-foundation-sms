@@ -1,5 +1,6 @@
 ﻿import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from "react";
@@ -415,6 +416,9 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
   const schoolSwitcherRef = useRef(null);
   const campusSwitcherRef = useRef(null);
   const [campusDropdownOpen, setCampusDropdownOpen] = useState(false);
+  const navRef = useRef(null);
+  const navMeasureRef = useRef(null);
+  const [hiddenGroupsCount, setHiddenGroupsCount] = useState(0);
   const { t } = useLang();
   const { currentSchool, availableSchools, activeCampus, campusList, setActiveCampusId, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole } = useSchool();
 
@@ -465,6 +469,55 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
   }
 
   const dashItem = findNav("/");
+
+  const navEntries = [
+    ...(dashItem ? [{ key: "__dash__", dash: true, label: "Dashboard", path: dashItem.path, icon: dashItem.icon }] : []),
+    ...visibleNavGroups
+      .filter((g) => g.label !== "System")
+      .map((g) => ({ key: g.label, group: g })),
+    ...(visibleSystemGroup && visibleSystemGroup.items.length > 0
+      ? [{ key: "System", group: visibleSystemGroup }]
+      : []),
+  ];
+  const navEntriesKey = navEntries.map((n) => n.key).join("|");
+  const visibleNavEntries = navEntries.slice(0, navEntries.length - hiddenGroupsCount);
+  const overflowNavEntries = navEntries.slice(navEntries.length - hiddenGroupsCount);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      const nav = navRef.current;
+      const meas = navMeasureRef.current;
+      if (!nav || !meas) return;
+      const available = nav.clientWidth;
+      if (!available) return;
+      let total = 0;
+      const widths = Array.from(meas.children).map((c) => {
+        const w = c.offsetWidth;
+        total += w;
+        return w;
+      });
+      const MORE_WIDTH = 86;
+      let k = 0;
+      if (total > available) {
+        let t = total;
+        for (let i = widths.length - 1; i > 0; i--) {
+          t -= widths[i];
+          k += 1;
+          if (t + MORE_WIDTH <= available) break;
+        }
+      }
+      setHiddenGroupsCount((prev) => (prev === k ? prev : k));
+    };
+    measure();
+    if (document.fonts?.ready) document.fonts.ready.then(measure).catch(() => {});
+    window.addEventListener("resize", measure);
+    const ro = new ResizeObserver(measure);
+    if (navRef.current) ro.observe(navRef.current);
+    return () => {
+      window.removeEventListener("resize", measure);
+      ro.disconnect();
+    };
+  }, [navEntriesKey]);
 
   return (
     <div className="app">
@@ -557,59 +610,95 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
               )}
             </div>
           )}
-          <nav className="topbar-nav">
-            {dashItem && (
-              <NavLink
-                to={dashItem.path}
-                end={dashItem.path === "/"}
-                className={({ isActive }) => `topbar-link ${isActive ? "active" : ""}`}
-              >
-                <dashItem.icon size={15} />
-                <span>{t("Dashboard")}</span>
-              </NavLink>
-            )}
-            {visibleNavGroups.filter((g) => g.label !== "System").map((group) => (
-              <div className="nav-group" key={group.label}>
-                <button className="nav-group-trigger">
-                  {group.label}
-                  <ChevronDown className="chevron" size={14} />
-                </button>
-                <div className="nav-dropdown">
-                  {group.items.map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      end={item.path === "/"}
-                      className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
-                    >
-                      <item.icon size={14} />
-                      {t(item.label)}
-                    </NavLink>
-                  ))}
+          <nav className="topbar-nav" ref={navRef}>
+            {visibleNavEntries.map((entry) =>
+              entry.dash ? (
+                <NavLink
+                  key={entry.key}
+                  to={entry.path}
+                  end={entry.path === "/"}
+                  className={({ isActive }) => `topbar-link ${isActive ? "active" : ""}`}
+                >
+                  <entry.icon size={15} />
+                  <span>{t("Dashboard")}</span>
+                </NavLink>
+              ) : (
+                <div className="nav-group" key={entry.key}>
+                  <button className="nav-group-trigger">
+                    {entry.group.label}
+                    <ChevronDown className="chevron" size={14} />
+                  </button>
+                  <div className="nav-dropdown">
+                    {entry.group.items.map((item) => (
+                      <NavLink
+                        key={item.path}
+                        to={item.path}
+                        end={item.path === "/"}
+                        className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
+                      >
+                        <item.icon size={14} />
+                        {t(item.label)}
+                      </NavLink>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-            {visibleSystemGroup && visibleSystemGroup.items.length > 0 && (
+              )
+            )}
+            {overflowNavEntries.length > 0 && (
               <div className="nav-group">
                 <button className="nav-group-trigger">
-                  System
+                  <Menu size={13} />
+                  More
                   <ChevronDown className="chevron" size={14} />
                 </button>
-                <div className="nav-dropdown">
-                  {visibleSystemGroup.items.map((item) => (
-                    <NavLink
-                      key={item.path}
-                      to={item.path}
-                      className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
-                    >
-                      <item.icon size={14} />
-                      {t(item.label)}
-                    </NavLink>
+                <div className="nav-dropdown nav-dropdown-more">
+                  {overflowNavEntries.map((entry, idx) => (
+                    <div key={entry.key}>
+                      {idx > 0 && <div className="nav-dropdown-divider" />}
+                      <div className="nav-dropdown-section">{entry.group.label}</div>
+                      {entry.group.items.map((item) => (
+                        <NavLink
+                          key={item.path}
+                          to={item.path}
+                          end={item.path === "/"}
+                          className={({ isActive }) => `nav-dropdown-item ${isActive ? "active" : ""}`}
+                        >
+                          <item.icon size={14} />
+                          {t(item.label)}
+                        </NavLink>
+                      ))}
+                    </div>
                   ))}
                 </div>
               </div>
             )}
           </nav>
+
+          <div className="topbar-nav-measure" ref={navMeasureRef} aria-hidden="true">
+            {navEntries.map((entry) =>
+              entry.dash ? (
+                <NavLink key={entry.key} to={entry.path} end={entry.path === "/"} className="topbar-link">
+                  <entry.icon size={15} />
+                  <span>{t("Dashboard")}</span>
+                </NavLink>
+              ) : (
+                <div className="nav-group" key={entry.key}>
+                  <button className="nav-group-trigger">
+                    {entry.group.label}
+                    <ChevronDown className="chevron" size={14} />
+                  </button>
+                  <div className="nav-dropdown">
+                    {entry.group.items.map((item) => (
+                      <NavLink key={item.path} to={item.path} className="nav-dropdown-item">
+                        <item.icon size={14} />
+                        {t(item.label)}
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              )
+            )}
+          </div>
         </div>
 
         <div className="topbar-right">
