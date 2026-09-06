@@ -47,6 +47,15 @@ class TenantListCreateView(APIView):
                 "name": school.name,
                 "code": school.code,
                 "status": school.status,
+                "is_paused": school.is_paused,
+                "paused_at": (
+                    school.paused_at.isoformat()
+                    if school.paused_at else None
+                ),
+                "paused_by": (
+                    school.paused_by.username
+                    if school.paused_by_id else None
+                ),
                 "city": school.city,
                 "enabled_modules": school.enabled_modules or [],
                 "stats": stats,
@@ -137,6 +146,15 @@ class TenantDetailView(APIView):
             if value is not None:
                 setattr(school, field, str(value).strip())
                 changes[field] = True
+
+        if "is_paused" in request.data:
+            paused = bool(request.data.get("is_paused"))
+
+            if paused:
+                school.pause(request.user)
+            else:
+                school.activate()
+            changes["is_paused"] = True
 
         if "code" in request.data:
             school.code = (

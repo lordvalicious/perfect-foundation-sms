@@ -1585,6 +1585,17 @@ body.nav-open .mobile-nav {
   color: var(--text-on-primary);
 }
 
+.table-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.table-action:disabled:hover {
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--primary);
+}
+
 .table-action.danger {
   color: var(--danger);
 }

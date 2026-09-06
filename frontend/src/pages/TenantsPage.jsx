@@ -9,6 +9,8 @@ import {
   X,
   LogIn,
   Check,
+  Pause,
+  Play,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
@@ -299,6 +301,21 @@ export default function TenantsPage() {
       .catch((err) => setError(err.message));
   };
 
+  const togglePause = (tenant) => {
+    const next = !tenant.is_paused;
+
+    apiFetch(`${BASE}${tenant.id}/`, {
+      method: "PATCH",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ is_paused: next }),
+    })
+      .then(() => {
+        setNotice(`${tenant.name} ${next ? "paused." : "resumed."}`);
+        load();
+      })
+      .catch((err) => setError(err.message));
+  };
+
   const saveModules = (tenant) => {
     apiFetch(`${BASE}${tenant.id}/`, {
       method: "PATCH",
@@ -523,6 +540,11 @@ export default function TenantsPage() {
                         <span className={`status-badge ${tenant.status === "active" ? "active" : tenant.status === "inactive" ? "inactive" : "warn"}`}>
                           {labelFor(tenant.status)}
                         </span>
+                        {tenant.is_paused && (
+                          <span className="status-badge warn">
+                            Paused
+                          </span>
+                        )}
                       </td>
                       <td>{tenant.stats?.campuses ?? 0}</td>
                       <td>{tenant.stats?.students ?? 0}</td>
@@ -612,6 +634,29 @@ export default function TenantsPage() {
                           ) : (
                             <span>Modules</span>
                           )}
+                        </button>{" "}
+                        <button
+                          type="button"
+                          className="table-action"
+                          title={
+                            tenant.is_paused
+                              ? "Resume school operations"
+                              : tenant.status === "active"
+                              ? "Pause school operations"
+                              : "Only active schools can be paused"
+                          }
+                          onClick={() => togglePause(tenant)}
+                          disabled={
+                            !tenant.is_paused &&
+                            tenant.status !== "active"
+                          }
+                        >
+                          {tenant.is_paused ? (
+                            <Play size={13} />
+                          ) : (
+                            <Pause size={13} />
+                          )}
+                          {tenant.is_paused ? "Resume" : "Pause"}
                         </button>{" "}
                         <button
                           type="button"
