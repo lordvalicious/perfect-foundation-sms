@@ -40,15 +40,30 @@ class HasRole(BasePermission):
 
 
 class HasActiveInstitution(BasePermission):
-    """Require a verified active membership in the selected institution."""
+    """Require a verified active membership in the selected institution.
+
+    Platform super admins are exempt: they may operate in any active school
+    they switch into, even without a membership row (mirrors
+    ActiveInstitutionMiddleware's super-admin switch handling).
+    """
 
     message = "Select an active institution before accessing this resource."
 
     def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+
+        if getattr(request, "institution_membership", None):
+            return True
+
+        user = request.user
+        is_platform_admin = bool(
+            user.is_superuser or user.has_any_role(["super_admin"])
+        )
+
         return bool(
-            request.user
-            and request.user.is_authenticated
-            and getattr(request, "institution_membership", None)
+            is_platform_admin
+            and getattr(request, "institution", None)
         )
 
 
