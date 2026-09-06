@@ -779,9 +779,9 @@ function TeachersPage() {
                       name="employee_number"
                       value={form.employee_number}
                       onChange={handleChange}
-                      placeholder="PF-T-0001"
-                      required
+                      placeholder="PF-EMP-0001 (auto)"
                     />
+                    <small className="form-hint">Leave blank to auto-generate from the school name.</small>
                   </label>
 
                   <label>

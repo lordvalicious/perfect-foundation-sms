@@ -1600,9 +1600,9 @@ function StudentsPage() {
                       name="admission_number"
                       value={form.admission_number}
                       onChange={handleChange}
-                      placeholder="PF-ST-0001"
-                      required
+                      placeholder="PF-ST-0001 (auto)"
                     />
+                    <small className="form-hint">Leave blank to auto-generate from the school name.</small>
                   </label>
 
                   <label>

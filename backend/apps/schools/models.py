@@ -133,7 +133,9 @@ class School(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.code:
-            self.code = self.generate_random_code()
+            from .services import school_code_for_name
+
+            self.code = school_code_for_name(self.name, exclude_pk=self.pk)
 
         return super().save(*args, **kwargs)
 

@@ -530,6 +530,12 @@ class EnrollmentCreateSerializer(serializers.ModelSerializer):
 class StudentSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField()
 
+    admission_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
     photo_url = serializers.SerializerMethodField()
 
     guardian_details = GuardianSerializer(
@@ -783,6 +789,29 @@ class StudentSerializer(serializers.ModelSerializer):
 
         return user, generated
 
+    def _resolve_school(self, student=None):
+        from apps.schools.models import School
+
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
+        return (
+            active_institution
+            or (student.institution if student is not None else None)
+            or School.objects.filter(status="active").order_by("id").first()
+            or School.objects.first()
+        )
+
+    def _ensure_admission_number(self, validated_data, student=None):
+        from apps.schools.services import next_entity_code
+        from .models import Student
+
+        current = (validated_data.get("admission_number") or "").strip()
+        if current or (student is not None and student.admission_number):
+            return current or student.admission_number
+
+        school = self._resolve_school(student)
+        return next_entity_code(school, "ST", Student, "admission_number")
+
     def create(self, validated_data):
         create_account = bool(validated_data.pop("create_account", True))
         username = validated_data.pop("username", "") or None
@@ -793,6 +822,9 @@ class StudentSerializer(serializers.ModelSerializer):
         guardian = Guardian.objects.create(**guardian_data)
 
         validated_data["guardian"] = guardian
+        validated_data["admission_number"] = self._ensure_admission_number(
+            validated_data
+        )
 
         student = super().create(validated_data)
 
@@ -829,6 +861,10 @@ class StudentSerializer(serializers.ModelSerializer):
                 setattr(instance.guardian, field, value)
 
             instance.guardian.save()
+
+        validated_data["admission_number"] = self._ensure_admission_number(
+            validated_data, instance
+        )
 
         for field, value in validated_data.items():
             setattr(instance, field, value)
@@ -1325,30 +1361,22 @@ class Student360Serializer(serializers.ModelSerializer):
         ]
 
     def get_exam_results(self, obj):
-        """Get exam results for current academic year."""
+        """Get exam results across all academic years."""
         from apps.exams.models import StudentResult
-        from apps.schools.models import AcademicYear
-        
-        current_year = AcademicYear.objects.filter(
-            school=obj.institution,
-            status="active"
-        ).first()
-        
-        if not current_year:
-            return []
-        
+
         results = StudentResult.objects.filter(
             student=obj,
-            exam__academic_year=current_year,
         ).select_related(
-            "exam", "exam_subject__subject"
-        ).order_by("-exam__start_date")
-        
+            "exam", "exam_subject__subject", "exam__academic_year"
+        ).order_by("-exam__academic_year__start_date", "-exam__start_date")
+
         return [
             {
                 "exam_id": r.exam_id,
                 "exam_name": r.exam.name,
                 "exam_type": r.exam.exam_type,
+                "academic_year_name": r.exam.academic_year.name,
+                "term_name": r.exam.term.name if r.exam.term_id else None,
                 "subject_id": r.exam_subject.subject_id,
                 "subject_name": r.exam_subject.subject.name,
                 "subject_code": r.exam_subject.subject.code,
@@ -1365,29 +1393,21 @@ class Student360Serializer(serializers.ModelSerializer):
         ]
 
     def get_practical_results(self, obj):
-        """Get practical exam results for current academic year."""
+        """Get practical exam results across all academic years."""
         from apps.exams.models import PracticalResult
-        from apps.schools.models import AcademicYear
-        
-        current_year = AcademicYear.objects.filter(
-            school=obj.institution,
-            status="active"
-        ).first()
-        
-        if not current_year:
-            return []
-        
+
         results = PracticalResult.objects.filter(
             student=obj,
-            exam__academic_year=current_year,
         ).select_related(
-            "exam", "exam_subject__subject"
-        ).order_by("-exam__start_date")
-        
+            "exam", "exam_subject__subject", "exam__academic_year"
+        ).order_by("-exam__academic_year__start_date", "-exam__start_date")
+
         return [
             {
                 "exam_id": r.exam_id,
                 "exam_name": r.exam.name,
+                "academic_year_name": r.exam.academic_year.name,
+                "term_name": r.exam.term.name if r.exam.term_id else None,
                 "subject_id": r.exam_subject.subject_id,
                 "subject_name": r.exam_subject.subject.name,
                 "obtained_marks": float(r.obtained_marks),

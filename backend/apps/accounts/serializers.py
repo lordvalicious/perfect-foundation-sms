@@ -204,6 +204,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
 class StaffProfileCRUDSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
 
+    employee_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
     photo_url = serializers.SerializerMethodField()
 
     create_account = serializers.BooleanField(
@@ -279,6 +285,29 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
     def get_generated_password(self, obj):
         return getattr(self, "_generated_password", None)
 
+    def _resolve_school(self, staff=None):
+        from apps.schools.models import School
+
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
+        return (
+            active_institution
+            or (staff.institution if staff is not None else None)
+            or School.objects.filter(status="active").order_by("id").first()
+            or School.objects.first()
+        )
+
+    def _ensure_employee_number(self, validated_data, staff=None):
+        from apps.schools.services import next_entity_code
+        from .models import StaffProfile
+
+        current = (validated_data.get("employee_number") or "").strip()
+        if current or (staff is not None and staff.employee_number):
+            return current or staff.employee_number
+
+        school = self._resolve_school(staff)
+        return next_entity_code(school, "EMP", StaffProfile, "employee_number")
+
     def _build_user_account(self, staff, username, password):
         from apps.accounts.services import create_user_with_username
         from apps.schools.models import School
@@ -323,6 +352,10 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
         username = validated_data.pop("username", "") or None
         password = validated_data.pop("password", "") or None
 
+        validated_data["employee_number"] = self._ensure_employee_number(
+            validated_data
+        )
+
         staff = StaffProfile(**validated_data)
         try:
             staff.save()
@@ -359,6 +392,10 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
         create_account = bool(validated_data.pop("create_account", False))
         username = validated_data.pop("username", "") or None
         password = validated_data.pop("password", "") or None
+
+        validated_data["employee_number"] = self._ensure_employee_number(
+            validated_data, instance
+        )
 
         for field, value in validated_data.items():
             setattr(instance, field, value)

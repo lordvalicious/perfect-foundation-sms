@@ -1728,6 +1728,13 @@ body.nav-open .mobile-nav {
   gap: 12px;
 }
 
+.form-hint {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
 .form-section { margin-bottom: 20px; }
 
 .form-section > h4 {

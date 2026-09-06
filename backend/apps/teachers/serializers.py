@@ -8,6 +8,12 @@ from .models import Teacher, TeacherAssignment
 class TeacherSerializer(serializers.ModelSerializer):
     full_name = serializers.SerializerMethodField()
 
+    employee_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+    )
+
     photo_url = serializers.SerializerMethodField()
 
     primary_campus_name = serializers.CharField(
@@ -96,6 +102,28 @@ class TeacherSerializer(serializers.ModelSerializer):
     def get_generated_password(self, obj):
         return getattr(self, "_generated_password", None)
 
+    def _resolve_school(self, teacher=None):
+        from apps.schools.models import School
+
+        request = self.context.get("request")
+        active_institution = getattr(request, "institution", None) if request else None
+        return (
+            active_institution
+            or (teacher.institution if teacher is not None else None)
+            or School.objects.filter(status="active").order_by("id").first()
+            or School.objects.first()
+        )
+
+    def _ensure_employee_number(self, validated_data, teacher=None):
+        from apps.schools.services import next_entity_code
+
+        current = (validated_data.get("employee_number") or "").strip()
+        if current or (teacher is not None and teacher.employee_number):
+            return current or teacher.employee_number
+
+        school = self._resolve_school(teacher)
+        return next_entity_code(school, "EMP", Teacher, "employee_number")
+
     def _build_user_account(self, teacher, username, password):
         from apps.accounts.models import (
             InstitutionMembership,
@@ -142,6 +170,10 @@ class TeacherSerializer(serializers.ModelSerializer):
         username = validated_data.pop("username", "") or None
         password = validated_data.pop("password", "") or None
 
+        validated_data["employee_number"] = self._ensure_employee_number(
+            validated_data
+        )
+
         teacher = Teacher(**validated_data)
         try:
             teacher.save()
@@ -178,6 +210,10 @@ class TeacherSerializer(serializers.ModelSerializer):
         create_account = bool(validated_data.pop("create_account", False))
         username = validated_data.pop("username", "") or None
         password = validated_data.pop("password", "") or None
+
+        validated_data["employee_number"] = self._ensure_employee_number(
+            validated_data, instance
+        )
 
         for field, value in validated_data.items():
             setattr(instance, field, value)

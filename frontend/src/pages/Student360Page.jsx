@@ -231,7 +231,7 @@ export default function Student360Page() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>YEAR</th><th>CAMPUS</th><th>CLASS</th><th>SECTION</th><th>FINAL STATUS</th><th>RESULT</th>
+                <th>YEAR</th><th>CAMPUS</th><th>CLASS</th><th>SECTION</th><th>FINAL GRADE</th><th>FINAL %</th><th>FINAL STATUS</th><th>RESULT</th>
               </tr>
             </thead>
             <tbody>
@@ -241,6 +241,8 @@ export default function Student360Page() {
                   <td>{h.campus_name || "—"}</td>
                   <td>{h.class_name || "—"}</td>
                   <td>{h.section_name || "—"}</td>
+                  <td>{h.final_grade || "—"}</td>
+                  <td>{h.final_percentage != null ? `${h.final_percentage}%` : "—"}</td>
                   <td><StatusBadge status={h.final_status} label={h.final_status_display} /></td>
                   <td>{h.promotion_status_display || "—"}</td>
                 </tr>
@@ -248,6 +250,44 @@ export default function Student360Page() {
             </tbody>
           </table>
         </div>
+      )}
+
+      <PanelHeader title="Past exam results" count={`${records(s.exam_results).length} results`} />
+      {records(s.exam_results).length === 0 ? (
+        <div className="state-card">No exam results for any academic year.</div>
+      ) : (
+        Object.entries(
+          records(s.exam_results).reduce((groups, r) => {
+            const year = r.academic_year_name || "Other";
+            (groups[year] = groups[year] || []).push(r);
+            return groups;
+          }, {})
+        ).map(([year, results]) => (
+          <div key={year}>
+            <h4 style={{ margin: "14px 0 6px", color: "var(--text-muted)" }}>{year}</h4>
+            <div className="table-wrapper">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>EXAM</th><th>SUBJECT</th><th>MARKS</th><th>%</th><th>GRADE</th><th>RESULT</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {results.map((r, index) => (
+                    <tr key={`${year}-${index}`}>
+                      <td>{r.exam_name}</td>
+                      <td>{r.subject_name}</td>
+                      <td>{r.obtained_marks} / {r.maximum_marks}</td>
+                      <td>{r.percentage}</td>
+                      <td>{r.grade || "—"}</td>
+                      <td><StatusBadge status={r.is_pass ? "pass" : "fail"} label={r.is_pass ? "Pass" : "Fail"} /></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
@@ -293,18 +333,19 @@ export default function Student360Page() {
     <div className="panel">
       <PanelHeader title="Exam results" />
       {records(s.exam_results).length === 0 ? (
-        <div className="state-card">No exam results in the current academic year.</div>
+        <div className="state-card">No exam results for any academic year.</div>
       ) : (
         <div className="table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
-                <th>EXAM</th><th>SUBJECT</th><th>MARKS</th><th>%</th><th>GRADE</th><th>RESULT</th>
+                <th>YEAR</th><th>EXAM</th><th>SUBJECT</th><th>MARKS</th><th>%</th><th>GRADE</th><th>RESULT</th>
               </tr>
             </thead>
             <tbody>
               {records(s.exam_results).map((r, index) => (
                 <tr key={index}>
+                  <td>{r.academic_year_name || "—"}</td>
                   <td>{r.exam_name}</td>
                   <td>{r.subject_name}</td>
                   <td>{r.obtained_marks} / {r.maximum_marks}</td>
@@ -320,18 +361,19 @@ export default function Student360Page() {
 
       <PanelHeader title="Practical results" />
       {records(s.practical_results).length === 0 ? (
-        <div className="state-card">No practical results.</div>
+        <div className="state-card">No practical results for any academic year.</div>
       ) : (
         <div className="table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
-                <th>EXAM</th><th>SUBJECT</th><th>MARKS</th><th>%</th><th>GRADE</th><th>RESULT</th>
+                <th>YEAR</th><th>EXAM</th><th>SUBJECT</th><th>MARKS</th><th>%</th><th>GRADE</th><th>RESULT</th>
               </tr>
             </thead>
             <tbody>
               {records(s.practical_results).map((r, index) => (
                 <tr key={index}>
+                  <td>{r.academic_year_name || "—"}</td>
                   <td>{r.exam_name}</td>
                   <td>{r.subject_name}</td>
                   <td>{r.obtained_marks} / {r.maximum_marks}</td>
