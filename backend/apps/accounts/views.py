@@ -1109,7 +1109,12 @@ class StaffListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
-        queryset = StaffProfile.objects.all()
+        queryset = apply_campus_scope(
+            StaffProfile.objects.all(),
+            self.request,
+            campus_field="primary_campus_id",
+            institution_field="institution_id",
+        )
 
         search = self.request.query_params.get("search")
 
@@ -1148,19 +1153,20 @@ class StaffListCreateView(generics.ListCreateAPIView):
         if campus:
             queryset = queryset.filter(campus__iexact=campus)
 
-        queryset = restrict_to_allowed_campuses(
-            queryset,
-            self.request.user,
-            "primary_campus_id",
-        )
-
         return queryset
 
 
 class StaffDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StaffProfileCRUDSerializer
     permission_classes = [IsAdminOrReadOnly]
-    queryset = StaffProfile.objects.all()
+
+    def get_queryset(self):
+        return apply_campus_scope(
+            StaffProfile.objects.all(),
+            self.request,
+            campus_field="primary_campus_id",
+            institution_field="institution_id",
+        )
 
 
 class StaffMyView(generics.RetrieveAPIView):
@@ -1556,12 +1562,23 @@ class StaffLeaveActionView(generics.GenericAPIView):
                 "Only HR / administrators can review leave requests."
             )
 
-        leave = (
-            StaffLeave.objects
-            .select_related("staff")
-            .filter(pk=pk)
-            .first()
-        )
+        institution = getattr(request, "institution", None)
+
+        leave_qs = StaffLeave.objects.select_related("staff").filter(pk=pk)
+
+        if institution is not None:
+            leave_qs = leave_qs.filter(
+                Q(institution=institution) | Q(institution__isnull=True)
+            )
+
+        if not is_global(request.user):
+            allowed = user_allowed_campus_ids(request.user)
+            leave_qs = leave_qs.filter(
+                Q(staff__primary_campus_id__in=allowed)
+                | Q(staff__primary_campus__isnull=True)
+            )
+
+        leave = leave_qs.first()
 
         if leave is None:
             return Response(

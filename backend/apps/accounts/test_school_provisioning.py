@@ -25,6 +25,7 @@ from apps.accounts.models import (
 )
 from apps.audit.models import AuditLog
 from apps.schools.models import School, SchoolSettings
+from apps.schools.services import school_code_for_name
 
 User = get_user_model()
 
@@ -133,7 +134,11 @@ class SchoolCreationTests(ProvisioningBase):
 
         data = resp.json()
         school = School.objects.get(name="Multan School")
-        self.assertTrue(school.code.startswith("PF-"))
+        # Code is now name-derived (first letters of the meaningful words),
+        # not a fixed PF- prefix. A numeric suffix is appended if the bare
+        # prefix is already taken by another school in the DB.
+        self.assertTrue(school.code)
+        self.assertTrue(school.code.startswith("MS"))
         self.assertEqual(
             data["admin_credentials"]["username"],
             f"admin-{school.code.lower()}",
