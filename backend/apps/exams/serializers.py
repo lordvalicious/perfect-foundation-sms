@@ -5,6 +5,7 @@ from .models import (
     ExamSchedule,
     ExamSeating,
     ExamSubject,
+    GradeAmendment,
     PracticalResult,
     StudentResult,
 )
@@ -618,3 +619,74 @@ class ExamSeatingBulkSerializer(serializers.Serializer):
             )
 
         return ExamSeating.objects.bulk_create(created)
+
+
+class GradeAmendmentSerializer(serializers.ModelSerializer):
+    student_result_id = serializers.IntegerField(source="student_result.id", read_only=True)
+    student_name = serializers.CharField(source="student_result.student.full_name", read_only=True)
+    exam_name = serializers.CharField(source="student_result.exam.name", read_only=True)
+    subject_name = serializers.CharField(source="student_result.exam_subject.subject.name", read_only=True)
+    requested_by_name = serializers.CharField(source="requested_by.get_full_name", read_only=True)
+    reviewed_by_name = serializers.CharField(source="reviewed_by.get_full_name", read_only=True)
+
+    class Meta:
+        model = GradeAmendment
+        fields = [
+            "id",
+            "student_result_id",
+            "student_name",
+            "exam_name",
+            "subject_name",
+            "original_grade",
+            "original_marks",
+            "original_is_pass",
+            "requested_grade",
+            "requested_marks",
+            "requested_is_pass",
+            "reason",
+            "rejection_reason",
+            "status",
+            "requested_by",
+            "requested_by_name",
+            "reviewed_by",
+            "reviewed_by_name",
+            "requested_at",
+            "reviewed_at",
+        ]
+        read_only_fields = [
+            "id", "student_result_id", "student_name", "exam_name", "subject_name",
+            "original_grade", "original_marks", "original_is_pass",
+            "requested_by", "requested_by_name", "reviewed_by", "reviewed_by_name",
+            "requested_at", "reviewed_at",
+        ]
+
+
+class GradeAmendmentCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GradeAmendment
+        fields = [
+            "student_result",
+            "requested_grade",
+            "requested_marks",
+            "requested_is_pass",
+            "reason",
+        ]
+
+    def validate(self, attrs):
+        student_result = attrs.get("student_result")
+        if student_result and student_result.is_locked:
+            raise serializers.ValidationError(
+                {"student_result": "Cannot amend a locked result."}
+            )
+        return attrs
+
+    def create(self, validated_data):
+        student_result = validated_data["student_result"]
+        validated_data.update({
+            "original_grade": student_result.grade,
+            "original_marks": student_result.obtained_marks,
+            "original_is_pass": student_result.is_pass,
+            "requested_by": self.context["request"].user,
+            "status": "pending",
+        })
+        return super().create(validated_data)

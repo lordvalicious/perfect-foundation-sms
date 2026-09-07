@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   BarChart3,
   Copy,
+  Download,
   FileText,
   Play,
   Plus,
@@ -65,8 +66,8 @@ const REPORT_TYPE_SLUGS = {
   staff: "staff",
   subjects: "subjects",
   payments: "payments",
-  student_status: "student-status",
-  fee_categories: "fee-categories",
+  student_status: "student_status",
+  fee_categories: "fee_categories",
 };
 
 function TemplateFormModal({ template, onClose, onSaved }) {
@@ -219,6 +220,12 @@ function ReportPreviewModal({ reportType, filters, onClose }) {
     window.open(`/api/reports/${slug}/?${params}&format=csv`, "_blank");
   };
 
+  const handleExportPDF = () => {
+    const params = new URLSearchParams(filters);
+    const slug = REPORT_TYPE_SLUGS[reportType] || reportType;
+    window.open(`/api/reports/pdf/${slug}/?${params}`, "_blank");
+  };
+
   return (
     <div className="modal-overlay" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="teacher-modal event-modal" style={{ maxWidth: 900, maxHeight: "80vh", overflow: "auto" }}>
@@ -235,6 +242,9 @@ function ReportPreviewModal({ reportType, filters, onClose }) {
               <div className="filter-row" style={{ marginBottom: 12 }}>
                 <button className="secondary-button" onClick={handleExportCSV}>
                   <FileText size={14} /> Export CSV
+                </button>
+                <button className="secondary-button" onClick={handleExportPDF}>
+                  <Download size={14} /> Download PDF
                 </button>
               </div>
 

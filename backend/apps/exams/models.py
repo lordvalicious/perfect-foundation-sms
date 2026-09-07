@@ -1,7 +1,8 @@
 from decimal import Decimal
 
+from django.db import models, transaction
+from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.db import models
 
 from apps.core.campus_validation import CampusValidationMixin
 from apps.schools.models import AcademicYear, Campus, Class, Section, Term
@@ -805,3 +806,93 @@ class ExamSeating(models.Model):
             f"{self.exam.name} - "
             f"Seat {self.seat_number}"
         )
+
+
+class GradeAmendment(models.Model):
+    """Track grade change requests with approval workflow."""
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("approved", "Approved"),
+        ("rejected", "Rejected"),
+        ("cancelled", "Cancelled"),
+    ]
+
+    student_result = models.ForeignKey(
+        "StudentResult",
+        on_delete=models.CASCADE,
+        related_name="amendments",
+    )
+
+    requested_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="requested_amendments",
+    )
+
+    reviewed_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="reviewed_amendments",
+    )
+
+    original_grade = models.CharField(max_length=3)
+    original_marks = models.DecimalField(max_digits=6, decimal_places=2)
+    original_is_pass = models.BooleanField()
+
+    requested_grade = models.CharField(max_length=3)
+    requested_marks = models.DecimalField(max_digits=6, decimal_places=2)
+    requested_is_pass = models.BooleanField()
+
+    reason = models.TextField()
+    rejection_reason = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default="pending",
+    )
+
+    requested_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        verbose_name = "Grade Amendment"
+        verbose_name_plural = "Grade Amendments"
+
+    def __str__(self):
+        return (
+            f"Amendment #{self.id} for {self.student_result.student.full_name} "
+            f"({self.original_grade} → {self.requested_grade}) [{self.status}]"
+        )
+
+    def approve(self, reviewer, rejection_reason=""):
+        """Approve the amendment and update the student result."""
+        if self.status != "pending":
+            raise ValueError("Only pending amendments can be approved.")
+
+        with transaction.atomic():
+            self.student_result.obtained_marks = self.requested_marks
+            self.student_result.grade = self.requested_grade
+            self.student_result.is_pass = self.requested_is_pass
+            self.student_result.save(update_fields=["obtained_marks", "grade", "is_pass", "updated_at"])
+
+            self.status = "approved"
+            self.reviewed_by = reviewer
+            self.reviewed_at = timezone.now()
+            self.save()
+
+    def reject(self, reviewer, rejection_reason):
+        """Reject the amendment."""
+        if self.status != "pending":
+            raise ValueError("Only pending amendments can be rejected.")
+
+        self.status = "rejected"
+        self.reviewed_by = reviewer
+        self.reviewed_at = timezone.now()
+        self.rejection_reason = rejection_reason
+        self.save()

@@ -8,7 +8,9 @@ Accounts are NOT auto-created — an administrator must add the person
 first, so only pre-provisioned staff can use SSO.
 
 Env:
-    GOOGLE_CLIENT_ID   enables the flow when set
+    GOOGLE_CLIENT_ID       enables the flow when set
+    GOOGLE_ALLOWED_DOMAINS optional comma-separated whitelist; when set, only
+                            accounts whose email domain is listed may sign in
 """
 
 import logging
@@ -25,6 +27,13 @@ from apps.audit.models import record_audit
 logger = logging.getLogger(__name__)
 
 TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+
+
+def _allowed_domains():
+    import os
+
+    raw = os.environ.get("GOOGLE_ALLOWED_DOMAINS", "")
+    return [d.strip().lower() for d in raw.split(",") if d.strip()]
 
 
 def google_enabled():
@@ -99,6 +108,19 @@ class GoogleLoginView(APIView):
             )
 
         email = (payload.get("email") or "").strip().lower()
+
+        allowed = _allowed_domains()
+        if allowed and email.split("@")[-1] not in allowed:
+            return JsonResponse(
+                {
+                    "detail": (
+                        "Google sign-in is restricted to allowed school "
+                        "domains only."
+                    )
+                },
+                status=403,
+            )
+
         user = User.objects.filter(
             email__iexact=email, is_active=True
         ).first()

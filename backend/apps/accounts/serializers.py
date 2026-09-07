@@ -70,6 +70,10 @@ class UserSerializer(serializers.ModelSerializer):
     # system-generated temporary password.
     must_change_password = serializers.BooleanField(read_only=True)
 
+    # Surfaced so the SPA can prompt for email verification on first login.
+    email_verified = serializers.BooleanField(read_only=True)
+    email_verified_at = serializers.DateTimeField(read_only=True)
+
     class Meta:
         model = User
         fields = [
@@ -84,6 +88,8 @@ class UserSerializer(serializers.ModelSerializer):
             "is_staff",
             "is_superuser",
             "must_change_password",
+            "email_verified",
+            "email_verified_at",
             "primary_role",
             "primary_institution",
             "student_profile_id",

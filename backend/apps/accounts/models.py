@@ -96,6 +96,10 @@ class User(AbstractUser):
 
     twofa_enabled = models.BooleanField(default=False)
 
+    # Email verification (verify on register / first login)
+    email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+
     # Account security fields
     failed_login_attempts = models.PositiveIntegerField(default=0)
     locked_until = models.DateTimeField(null=True, blank=True)
@@ -312,6 +316,33 @@ class User(AbstractUser):
         """Check if user has all of the given permissions."""
         perms = self.get_permissions(institution)
         return all(c in perms for c in codenames)
+
+
+class EmailVerification(models.Model):
+    """A single-use, expiring email-verification token for a user."""
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="email_verifications",
+    )
+
+    token = models.CharField(max_length=64, unique=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    used = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    @property
+    def is_valid(self):
+        return not self.used and self.expires_at > timezone.now()
+
+    def __str__(self):
+        return f"Email verification for {self.user.username}"
 
 
 class InstitutionMembership(models.Model):

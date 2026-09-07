@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from .models import Book, BookCopy, BookIssue
+from .models import Book, BookCopy, BookIssue, BookReservation
 
 
 class BookCopySerializer(serializers.ModelSerializer):
@@ -112,3 +112,86 @@ class BookIssueSerializer(serializers.ModelSerializer):
             "status",
         ]
         read_only_fields = ["issue_date", "status"]
+
+
+class BookReservationSerializer(serializers.ModelSerializer):
+    book_title = serializers.CharField(source="book.title", read_only=True)
+    borrower_name = serializers.SerializerMethodField()
+    borrower_type = serializers.SerializerMethodField()
+    queue_position = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = BookReservation
+        fields = [
+            "id",
+            "book",
+            "book_title",
+            "student",
+            "teacher",
+            "borrower_name",
+            "borrower_type",
+            "status",
+            "requested_at",
+            "fulfilled_at",
+            "expires_at",
+            "queue_position",
+            "pickup_deadline",
+        ]
+        read_only_fields = ["id", "status", "requested_at", "fulfilled_at", "queue_position"]
+
+    def get_borrower_name(self, obj):
+        if obj.student_id:
+            return obj.student.full_name
+        if obj.teacher_id:
+            return obj.teacher.full_name
+        return ""
+
+    def get_borrower_type(self, obj):
+        if obj.student_id:
+            return "student"
+        if obj.teacher_id:
+            return "teacher"
+        return ""
+
+
+class BookReservationCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BookReservation
+        fields = ["book", "student", "teacher"]
+
+    def validate(self, attrs):
+        student = attrs.get("student")
+        teacher = attrs.get("teacher")
+
+        if student and teacher:
+            raise serializers.ValidationError(
+                "Reservation must be for either a student or a teacher, not both."
+            )
+        if not student and not teacher:
+            raise serializers.ValidationError(
+                "Reservation must be for a student or a teacher."
+            )
+        return attrs
+
+    def create(self, validated_data):
+        # Check if there's already a pending reservation for this user/book
+        book = validated_data["book"]
+        student = validated_data.get("student")
+        teacher = validated_data.get("teacher")
+
+        existing = BookReservation.objects.filter(
+            book=book,
+            status="pending",
+        )
+        if student:
+            existing = existing.filter(student=student)
+        elif teacher:
+            existing = existing.filter(teacher=teacher)
+
+        if existing.exists():
+            raise serializers.ValidationError(
+                "You already have a pending reservation for this book."
+            )
+
+        validated_data["status"] = "pending"
+        return super().create(validated_data)

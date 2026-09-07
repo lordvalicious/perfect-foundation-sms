@@ -11,6 +11,9 @@ from .views import (
     ExamSeatingListView,
     ExamSubjectDetailView,
     ExamSubjectListView,
+    GradeAmendmentApproveView,
+    GradeAmendmentListCreateView,
+    GradeAmendmentRejectView,
     PracticalResultDetailView,
     PracticalResultListCreateView,
     StudentResultDetailView,
@@ -47,6 +50,21 @@ urlpatterns = [
         "practical/<int:pk>/",
         PracticalResultDetailView.as_view(),
         name="practical-result-detail",
+    ),
+    path(
+        "amendments/",
+        GradeAmendmentListCreateView.as_view(),
+        name="grade-amendment-list",
+    ),
+    path(
+        "amendments/<int:pk>/approve/",
+        GradeAmendmentApproveView.as_view(),
+        name="grade-amendment-approve",
+    ),
+    path(
+        "amendments/<int:pk>/reject/",
+        GradeAmendmentRejectView.as_view(),
+        name="grade-amendment-reject",
     ),
     path(
         "gradebook/",

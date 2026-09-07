@@ -36,6 +36,11 @@ from .export_views import (
     DataExportListView,
     DataExportView,
 )
+from .pdf_views import (
+    PDFExportView,
+    PrintView,
+    ReportTemplatePreviewView,
+)
 from .cron_views import WeeklyReportEmailCronView
 from .at_risk_views import AtRiskReportView
 from .import_views import (
@@ -405,6 +410,11 @@ urlpatterns = [
     path("import/templates/<str:import_key>/", ImportTemplateView.as_view(), name="import-template"),
     path("import/preview/", ImportPreviewView.as_view(), name="import-preview"),
     path("import/commit/", ImportCommitView.as_view(), name="import-commit"),
+
+    # PDF Export
+    path("pdf/<str:report_key>/", PDFExportView.as_view(), name="report-pdf"),
+    path("print/<str:report_key>/", PrintView.as_view(), name="report-print"),
+    path("templates/<int:pk>/preview/", ReportTemplatePreviewView.as_view(), name="report-template-preview"),
 
     # Cron and health
     path("cron/email-weekly/", WeeklyReportEmailCronView.as_view(), name="email-weekly-cron"),

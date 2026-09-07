@@ -131,6 +131,104 @@ EXPORT_CONFIGS = {
         ],
         "filename": "enrollments_export",
     },
+    "results": {
+        "label": "Exam Results",
+        "model_path": "apps.exams.models.StudentResult",
+        "fields": [
+            "id", "marks_obtained", "max_marks", "percentage", "grade",
+        ],
+        "related_fields": {
+            "student_name": "enrollment__student__first_name",
+            "admission_number": "enrollment__student__admission_number",
+            "exam_name": "exam__name",
+            "subject_name": "subject__name",
+            "class_name": "enrollment__class_obj__name",
+        },
+        "select_related": [
+            "enrollment",
+            "enrollment__student",
+            "exam",
+            "subject",
+            "enrollment__class_obj",
+        ],
+        "filename": "results_export",
+    },
+    "fees": {
+        "label": "Fee Collection",
+        "model_path": "apps.finance.models.Invoice",
+        "fields": [
+            "id", "invoice_number", "issue_date", "due_date", "total_amount", "paid_amount", "discount", "status",
+        ],
+        "related_fields": {
+            "student_name": "enrollment__student__first_name",
+            "admission_number": "enrollment__student__admission_number",
+            "class_name": "enrollment__class_obj__name",
+            "campus": "enrollment__campus__name",
+        },
+        "select_related": [
+            "enrollment",
+            "enrollment__student",
+            "enrollment__class_obj",
+            "enrollment__campus",
+            "academic_year",
+        ],
+        "prefetch_related": [
+            "items",
+            "payments",
+        ],
+        "filename": "fees_export",
+    },
+    "staff": {
+        "label": "Staff Directory",
+        "model_path": "apps.hr.models.StaffProfile",
+        "fields": [
+            "id", "employee_number", "first_name", "last_name", "gender", "status", "designation", "department",
+        ],
+        "related_fields": {
+            "email": "user__email",
+            "phone": "user__phone",
+            "campus": "primary_campus__name",
+        },
+        "select_related": ["user", "primary_campus"],
+        "filename": "staff_export",
+    },
+    "subjects": {
+        "label": "Subject Performance",
+        "model_path": "apps.schools.models.Subject",
+        "fields": [
+            "id", "name", "code", "description",
+        ],
+        "related_fields": {
+            "class_name": "class_obj__name",
+        },
+        "select_related": ["class_obj"],
+        "filename": "subjects_export",
+    },
+    "student_status": {
+        "label": "Student Status",
+        "model_path": "apps.students.models.Student",
+        "fields": [
+            "id", "admission_number", "first_name", "last_name", "gender", "status", "date_of_birth",
+        ],
+        "related_fields": {
+            "campus": "primary_campus__name",
+            "class_name": "enrollments__class_obj__name",
+        },
+        "select_related": ["primary_campus"],
+        "filename": "student_status_export",
+    },
+    "fee_categories": {
+        "label": "Fee Categories",
+        "model_path": "apps.finance.models.FeeCategory",
+        "fields": [
+            "id", "name", "code", "description", "amount", "frequency",
+        ],
+        "related_fields": {
+            "campus": "campus__name",
+        },
+        "select_related": ["campus"],
+        "filename": "fee_categories_export",
+    },
 }
 
 

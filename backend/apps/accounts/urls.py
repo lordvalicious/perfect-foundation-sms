@@ -1,6 +1,10 @@
 from django.urls import path
 
 from .google_sso import GoogleConfigView, GoogleLoginView
+from .email_verify_views import (
+    EmailVerificationConfirmView,
+    EmailVerificationSendView,
+)
 from .twofa_views import (
     TwoFAActivateView,
     TwoFABackupCodesView,
@@ -122,6 +126,18 @@ urlpatterns = [
         "google/login/",
         GoogleLoginView.as_view(),
         name="google-login",
+    ),
+
+    # Email verification
+    path(
+        "email-verify/send/",
+        EmailVerificationSendView.as_view(),
+        name="email-verify-send",
+    ),
+    path(
+        "email-verify/confirm/",
+        EmailVerificationConfirmView.as_view(),
+        name="email-verify-confirm",
     ),
 
     # Super Admin School Management

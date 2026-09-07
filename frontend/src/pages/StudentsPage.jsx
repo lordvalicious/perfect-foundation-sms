@@ -184,7 +184,7 @@ function StudentsPage() {
 
   const [profileView, setProfileView] = useState(null);
 
-  const handleDelete = async (studentId) => {
+  const handleStudentDelete = async (studentId) => {
     if (!window.confirm("Are you sure you want to delete this student? This will soft-delete the record.")) {
       return;
     }
@@ -1488,7 +1488,7 @@ function StudentsPage() {
                                   {canManage && (
                                     <button
                                       className="btn-delete"
-                                      onClick={() => handleDelete(student.id)}
+                                      onClick={() => handleStudentDelete(student.id)}
                                       title="Delete student"
                                     >
                                       Delete

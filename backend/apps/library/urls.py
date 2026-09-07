@@ -5,6 +5,10 @@ from .views import (
     BookIssueDetailView,
     BookIssueListView,
     BookListView,
+    BookReservationCancelView,
+    BookReservationDetailView,
+    BookReservationFulfillView,
+    BookReservationListCreateView,
     BookReturnView,
 )
 
@@ -23,4 +27,8 @@ urlpatterns = [
         BookReturnView.as_view(),
         name="book-return",
     ),
+    path("reservations/", BookReservationListCreateView.as_view(), name="book-reservation-list"),
+    path("reservations/<int:pk>/", BookReservationDetailView.as_view(), name="book-reservation-detail"),
+    path("reservations/<int:pk>/fulfill/", BookReservationFulfillView.as_view(), name="book-reservation-fulfill"),
+    path("reservations/<int:pk>/cancel/", BookReservationCancelView.as_view(), name="book-reservation-cancel"),
 ]

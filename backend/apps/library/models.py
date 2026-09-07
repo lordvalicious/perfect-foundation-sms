@@ -190,3 +190,106 @@ class BookIssue(models.Model):
 
     def __str__(self):
         return f"{self.book_copy} -> {self.borrower}"
+
+
+class BookReservation(models.Model):
+    """Queue of patrons waiting for a book."""
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("available", "Available for Pickup"),
+        ("fulfilled", "Fulfilled"),
+        ("cancelled", "Cancelled"),
+        ("expired", "Expired"),
+    ]
+
+    book = models.ForeignKey(
+        Book,
+        on_delete=models.CASCADE,
+        related_name="reservations",
+    )
+    student = models.ForeignKey(
+        "students.Student",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="book_reservations",
+    )
+    teacher = models.ForeignKey(
+        "teachers.Teacher",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="book_reservations",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=STATUS_CHOICES,
+        default="pending",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    fulfilled_by = models.ForeignKey(
+        "accounts.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fulfilled_reservations",
+    )
+    pickup_deadline = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["requested_at"]
+        indexes = [
+            models.Index(fields=["book", "status"]),
+            models.Index(fields=["student", "status"]),
+            models.Index(fields=["teacher", "status"]),
+        ]
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.student_id and self.teacher_id:
+            raise ValidationError("Reservation must be for either a student or a teacher, not both.")
+        if not self.student_id and not self.teacher_id:
+            raise ValidationError("Reservation must be for a student or a teacher.")
+
+    def __str__(self):
+        borrower = ""
+        if self.student_id:
+            borrower = self.student.full_name
+        elif self.teacher_id:
+            borrower = self.teacher.full_name
+        return f"{borrower} waiting for {self.book.title} [{self.status}]"
+
+    @property
+    def queue_position(self):
+        """Return the position in queue (1-indexed)."""
+        if self.status != "pending":
+            return None
+        return BookReservation.objects.filter(
+            book=self.book,
+            status="pending",
+            requested_at__lt=self.requested_at,
+        ).count() + 1
+
+    def fulfill(self, user, pickup_hours=48):
+        """Mark reservation as available for pickup."""
+        from django.utils import timezone
+        from datetime import timedelta
+
+        self.status = "available"
+        self.fulfilled_at = timezone.now()
+        self.fulfilled_by = user
+        self.pickup_deadline = timezone.now() + timedelta(hours=pickup_hours)
+        self.save(update_fields=["status", "fulfilled_at", "fulfilled_by", "pickup_deadline"])
+
+    def cancel(self):
+        """Cancel the reservation."""
+        self.status = "cancelled"
+        self.save(update_fields=["status"])
+
+    def expire(self):
+        """Mark reservation as expired (pickup deadline passed)."""
+        self.status = "expired"
+        self.save(update_fields=["status"])

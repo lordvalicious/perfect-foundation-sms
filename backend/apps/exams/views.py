@@ -1,5 +1,6 @@
 from django.db.models import Q
 from rest_framework import generics, status
+from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
@@ -21,7 +22,7 @@ from apps.accounts.scopes import (
 )
 from apps.audit.models import record_audit
 
-from .models import Exam, ExamSchedule, ExamSeating, ExamSubject, PracticalResult, StudentResult
+from .models import Exam, ExamSchedule, ExamSeating, ExamSubject, GradeAmendment, PracticalResult, StudentResult
 from .serializers import (
     ExamScheduleSerializer,
     ExamSeatingBulkSerializer,
@@ -29,6 +30,8 @@ from .serializers import (
     ExamSerializer,
     ExamSubjectSerializer,
     ExamWriteSerializer,
+    GradeAmendmentCreateSerializer,
+    GradeAmendmentSerializer,
     PracticalResultSerializer,
     StudentResultSerializer,
     StudentResultWriteSerializer,
@@ -1147,4 +1150,89 @@ class ExamSeatingBulkView(generics.GenericAPIView):
         return Response(
             {"detail": f"{len(created)} seats assigned.", "count": len(created)},
             status=status.HTTP_201_CREATED,
+        )
+
+
+class GradeAmendmentListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsTeacherRole]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return GradeAmendmentCreateSerializer
+        return GradeAmendmentSerializer
+
+    def get_queryset(self):
+        queryset = GradeAmendment.objects.select_related(
+            "student_result__student",
+            "student_result__exam",
+            "student_result__exam_subject__subject",
+            "requested_by",
+            "reviewed_by",
+        )
+
+        # Filter by status if provided
+        status = self.request.query_params.get("status")
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Teachers can only see amendments for their exams/subjects
+        teacher = getattr(self.request.user, "teacher_profile", None)
+        if teacher:
+            queryset = queryset.filter(
+                student_result__exam_subject__teacher=teacher
+            )
+
+        return queryset.order_by("-requested_at")
+
+
+class GradeAmendmentApproveView(APIView):
+    permission_classes = [IsTeacherRole]
+
+    def post(self, request, pk):
+        try:
+            amendment = GradeAmendment.objects.get(pk=pk, status="pending")
+        except GradeAmendment.DoesNotExist:
+            return Response({"detail": "Amendment not found or not pending."}, status=404)
+
+        # Check if user has permission (admin or principal)
+        user = request.user
+        if not (user.is_superuser or user.has_any_role(["principal", "vice_principal", "admin", "super_admin"])):
+            return Response({"detail": "Insufficient permissions to approve amendments."}, status=403)
+
+        try:
+            amendment.approve(request.user)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=400)
+
+        return Response(
+            {"detail": "Amendment approved and result updated.", "status": "approved"},
+            status=status.HTTP_200_OK,
+        )
+
+
+class GradeAmendmentRejectView(APIView):
+    permission_classes = [IsTeacherRole]
+
+    def post(self, request, pk):
+        try:
+            amendment = GradeAmendment.objects.get(pk=pk, status="pending")
+        except GradeAmendment.DoesNotExist:
+            return Response({"detail": "Amendment not found or not pending."}, status=404)
+
+        user = request.user
+        if not (user.is_superuser or user.has_any_role(["principal", "vice_principal", "admin", "super_admin"])):
+            return Response({"detail": "Insufficient permissions to reject amendments."}, status=403)
+
+        rejection_reason = request.data.get("rejection_reason", "").strip()
+        if not rejection_reason:
+            return Response({"detail": "Rejection reason is required."}, status=400)
+
+        try:
+            amendment.reject(request.user, rejection_reason)
+        except ValueError as e:
+            return Response({"detail": str(e)}, status=400)
+
+        return Response(
+            {"detail": "Amendment rejected.", "status": "rejected"},
+            status=status.HTTP_200_OK,
         )

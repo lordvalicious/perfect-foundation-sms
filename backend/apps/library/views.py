@@ -7,8 +7,8 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import IsAccountantRole, IsLibrarianRole
 from apps.accounts.access import apply_campus_scope
 
-from .models import Book, BookIssue
-from .serializers import BookIssueSerializer, BookSerializer
+from .models import Book, BookIssue, BookReservation
+from .serializers import BookIssueSerializer, BookSerializer, BookReservationSerializer, BookReservationCreateSerializer
 
 
 class BookListView(generics.ListCreateAPIView):
@@ -139,4 +139,109 @@ class BookReturnView(APIView):
 
         return Response(
             BookIssueSerializer(issue).data
+        )
+
+
+class BookReservationListCreateView(generics.ListCreateAPIView):
+    permission_classes = [IsLibrarianRole]
+
+    def get_serializer_class(self):
+        if self.request.method == "POST":
+            return BookReservationCreateSerializer
+        return BookReservationSerializer
+
+    def get_queryset(self):
+        queryset = apply_campus_scope(
+            BookReservation.objects.select_related("book", "student", "teacher"),
+            self.request,
+            "book__campus_id",
+        )
+
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        book_id = self.request.query_params.get("book")
+        if book_id:
+            queryset = queryset.filter(book_id=book_id)
+
+        return queryset.order_by("-requested_at")
+
+
+class BookReservationDetailView(generics.RetrieveDestroyAPIView):
+    serializer_class = BookReservationSerializer
+    permission_classes = [IsLibrarianRole]
+
+    def get_queryset(self):
+        return apply_campus_scope(
+            BookReservation.objects.select_related("book", "student", "teacher"),
+            self.request,
+            "book__campus_id",
+        )
+
+
+class BookReservationFulfillView(APIView):
+    permission_classes = [IsLibrarianRole]
+
+    def post(self, request, pk):
+        reservation = apply_campus_scope(
+            BookReservation.objects.filter(pk=pk),
+            request,
+            "book__campus_id",
+        ).first()
+
+        if reservation is None:
+            return Response(
+                {"detail": "Reservation not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if reservation.status != "pending":
+            return Response(
+                {"detail": "Only pending reservations can be fulfilled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Check if a copy is available
+        available_copy = reservation.book.copies.filter(status="available").first()
+        if not available_copy:
+            return Response(
+                {"detail": "No available copies to fulfill this reservation."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Fulfill the reservation
+        reservation.fulfill(request.user)
+
+        return Response(
+            BookReservationSerializer(reservation).data
+        )
+
+
+class BookReservationCancelView(APIView):
+    permission_classes = [IsLibrarianRole]
+
+    def post(self, request, pk):
+        reservation = apply_campus_scope(
+            BookReservation.objects.filter(pk=pk),
+            request,
+            "book__campus_id",
+        ).first()
+
+        if reservation is None:
+            return Response(
+                {"detail": "Reservation not found."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if reservation.status not in ["pending", "available"]:
+            return Response(
+                {"detail": "Only pending or available reservations can be cancelled."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        reservation.cancel()
+
+        return Response(
+            {"detail": "Reservation cancelled."}
         )

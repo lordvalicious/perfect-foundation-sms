@@ -1142,10 +1142,12 @@ class Student360View(APIView):
             "documents",
         )
         
-        # If institution is available, scope the query; otherwise allow global search
-        # but only for authenticated users (admins can see all)
+        # Always scope to institution; if not set, return empty queryset
+        # to prevent cross-school data access without institution context.
         if institution is not None:
             student_qs = student_qs.filter(institution=institution)
+        else:
+            student_qs = student_qs.none()
         
         # Get the student
         student = get_object_or_404(

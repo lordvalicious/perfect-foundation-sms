@@ -19,6 +19,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "login": "1000000/hour",
     "password_reset": "1000000/hour",
     "public_apply": "1000000/hour",
+    "email_verify": "1000000/hour",
 }
 
 PASSWORD_HASHERS = [

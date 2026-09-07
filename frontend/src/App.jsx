@@ -113,6 +113,7 @@ import StaffOperationsPage from "./pages/StaffOperationsPage";
 import HomeworkPage from "./pages/HomeworkPage";
 import HealthRecordsPage from "./pages/HealthRecordsPage";
 import AdmissionsApplyPage from "./pages/AdmissionsApplyPage";
+import VerifyEmailPage from "./pages/VerifyEmailPage";
 import AlumniPage from "./pages/AlumniPage";
 import HostelPage from "./pages/HostelPage";
 import LMSPage from "./pages/LMSPage";
@@ -719,6 +720,8 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
         </div>
       </header>
 
+      <EmailVerifyBanner />
+
       <main className="main">{children}</main>
 
       {mobileNavOpen && (
@@ -768,6 +771,51 @@ function TopbarProfile() {
         <LogOut size={16} />
       </button>
     </>
+  );
+}
+
+function EmailVerifyBanner() {
+  const { user } = useAuth();
+  const [sending, setSending] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  if (!user || user.email_verified) return null;
+
+  const sendLink = async () => {
+    setSending(true);
+    setMessage("");
+    setError("");
+    try {
+      const res = await fetch("/api/auth/email-verify/send/", {
+        method: "POST",
+        credentials: "include",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data.detail || "Could not send the verification link.");
+      } else {
+        setMessage(data.detail || "Verification link sent. Check your inbox.");
+      }
+    } catch (err) {
+      setError("Could not reach the server.");
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <div className="email-verify-banner">
+      <Mail size={16} />
+      <span>
+        <strong>Verify your email.</strong> Confirm the address on your account so you never miss important notices.
+      </span>
+      <button type="button" className="email-verify-action" onClick={sendLink} disabled={sending}>
+        {sending ? "Sending…" : message ? message : "Send verification link"}
+      </button>
+      {error && <span className="email-verify-error">{error}</span>}
+    </div>
   );
 }
 
@@ -840,6 +888,10 @@ function Shell() {
   // Public, unauthenticated pages.
   if (location.pathname === "/apply") {
     return <AdmissionsApplyPage />;
+  }
+
+  if (location.pathname === "/verify-email") {
+    return <VerifyEmailPage />;
   }
 
   if (!user) return <LoginPage />;

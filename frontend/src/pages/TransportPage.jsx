@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Bus, Car, MapPin, UsersRound, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Bus, Car, MapPin, UsersRound, Plus, Pencil, Trash2, X, Map, Satellite, RefreshCw, Truck, MapPinCheck } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, EmptyState, StatusBadge } from "./ui";
 import { formatDate } from "./format";
 import { apiFetch, jsonHeaders } from "../api";
@@ -12,6 +12,7 @@ const ENDPOINTS = {
   drivers: { url: "drivers/", icon: UsersRound, title: "Drivers" },
   routes: { url: "routes/", icon: MapPin, title: "Routes" },
   assignments: { url: "assignments/", icon: Bus, title: "Assignments" },
+  live: { url: "gps/live/", icon: Satellite, title: "Live Tracking" },
 };
 
 const VEHICLE_STATUS_CHOICES = [
@@ -27,6 +28,161 @@ const EMPTY_VEHICLE_FORM = {
   capacity: 30,
   status: "operational",
   notes: "",
+};
+
+const LiveTrackingMap = ({
+  vehicles,
+  autoRefresh,
+  setAutoRefresh,
+  refreshInterval,
+  setRefreshInterval,
+  onRefresh,
+}) => {
+  const [map, setMap] = useState(null);
+  const [markers, setMarkers] = useState({});
+  const mapContainerRef = useRef(null);
+
+  // Simple map using a static image with overlay markers (no Leaflet dependency)
+  // In production, you would use Leaflet or Mapbox GL JS
+  const renderMarkers = () => {
+    if (!vehicles.length) return null;
+
+    return vehicles.map((v) => {
+      if (v.lat == null || v.lng == null) return null;
+
+      // Simple coordinate to pixel conversion for a static map container
+      // In production, use Leaflet with proper coordinate projection
+      const containerWidth = 800;
+      const containerHeight = 500;
+      // Approximate conversion - in production use proper projection
+      const lngRange = 0.5; // degrees
+      const latRange = 0.4;
+      const centerLng = 74.3; // Example: Lahore center
+      const centerLat = 31.5;
+
+      const x = ((v.lng - (centerLng - lngRange / 2)) / lngRange) * containerWidth;
+      const y = ((centerLat + latRange / 2 - v.lat) / latRange) * containerHeight;
+
+      const isRecent = v.last_seen && (Date.now() - new Date(v.last_seen).getTime()) < 60000;
+
+      return (
+        <div
+          key={v.vehicle}
+          className="vehicle-marker"
+          style={{
+            left: `${Math.max(0, Math.min(100, (x / containerWidth) * 100))}%`,
+            top: `${Math.max(0, Math.min(100, (y / containerHeight) * 100))}%`,
+          }}
+        >
+          <div
+            className={`marker-pin ${isRecent ? "active" : "stale"}`}
+            title={
+              `${v.vehicle} (${v.route}) - ${v.speed_kmh || 0} km/h\n` +
+              `Last seen: ${v.last_seen ? new Date(v.last_seen).toLocaleTimeString() : "Unknown"}`
+            }
+          >
+            <Truck size={16} />
+            {isRecent && <span className="pulse-ring" />}
+          </div>
+          <div className="marker-label">
+            <strong>{v.vehicle}</strong>
+            <span>{v.route}</span>
+            <span>{v.campus}</span>
+            {v.speed_kmh && <span>{v.speed_kmh} km/h</span>}
+          </div>
+        </div>
+      );
+    });
+  };
+
+  return (
+    <div className="live-tracking-map">
+      <div className="live-map-header">
+        <div className="live-controls">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+            />
+            <span>Auto-refresh ({refreshInterval / 1000}s)</span>
+          </label>
+          <select
+            value={refreshInterval}
+            onChange={(e) => setRefreshInterval(Number(e.target.value))}
+            style={{ marginLeft: 16 }}
+          >
+            <option value={5000}>5s</option>
+            <option value={10000}>10s</option>
+            <option value={30000}>30s</option>
+            <option value={60000}>60s</option>
+          </select>
+          <button
+            className="secondary-button"
+            onClick={onRefresh}
+            disabled={false}
+          >
+            <RefreshCw size={14} /> Refresh Now
+          </button>
+        </div>
+        <div className="live-legend">
+          <span className="legend-item active"><span className="dot"></span> Active (&lt; 1 min)</span>
+          <span className="legend-item stale"><span className="dot"></span> Stale (&gt; 1 min)</span>
+          <span className="legend-item"><span className="dot empty"></span> No GPS</span>
+        </div>
+      </div>
+
+      <div className="live-map-container" ref={mapContainerRef}>
+        {/* Static map background - in production use Leaflet/Mapbox */}
+        <div className="static-map-bg" style={{ backgroundImage: "url('https://tile.openstreetmap.org/13/6432/4096.png')" }}>
+          {renderMarkers()}
+        </div>
+
+        {vehicles.length === 0 && (
+          <div className="no-vehicles">
+            <MapPin size={48} />
+            <p>No vehicles with GPS data</p>
+            <small>Ensure GPS devices are configured and sending pings to /api/transport/gps/ping/</small>
+          </div>
+        )}
+      </div>
+
+      <div className="vehicle-list">
+        <h4>Live Vehicle List ({vehicles.length})</h4>
+        <div className="vehicle-list-table">
+          <div className="list-header">
+            <span>Vehicle</span>
+            <span>Route</span>
+            <span>Campus</span>
+            <span>Speed</span>
+            <span>Last Seen</span>
+            <span>Status</span>
+          </div>
+{vehicles.map((v) => {
+            const hasGps = v.lat != null && v.lng != null;
+            const isRecent = v.last_seen && (Date.now() - new Date(v.last_seen).getTime()) < 60000;
+            const rowClass = `list-row${hasGps ? "" : " no-gps"}${isRecent ? " active" : " stale"}`;
+            return (
+              <div key={v.vehicle} className={rowClass}>
+                <span><Truck size={14} /> {v.vehicle}</span>
+                <span>{v.route}</span>
+                <span>{v.campus}</span>
+                <span>{v.speed_kmh ? `${v.speed_kmh} km/h` : "—"}</span>
+                <span>{v.last_seen ? new Date(v.last_seen).toLocaleTimeString() : "—"}</span>
+                <span>
+                  {hasGps && isRecent ? (
+                    <span className="status-dot active" title="Active" />
+                  ) : (
+                    <span className="status-dot stale" title="Stale / No GPS" />
+                  )}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default function TransportPage() {
@@ -82,6 +238,43 @@ export default function TransportPage() {
       load(key);
     }
   };
+
+  // Live tracking state
+  const [liveVehicles, setLiveVehicles] = useState([]);
+  const [liveLoading, setLiveLoading] = useState(false);
+  const [liveError, setLiveError] = useState("");
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [refreshInterval, setRefreshInterval] = useState(10000); // 10 seconds
+
+  // Load live vehicle data from GPS
+  const loadLive = useCallback(() => {
+    setLiveLoading(true);
+    setLiveError("");
+
+    fetch(`${BASE}gps/live/`, { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((json) => {
+        setLiveVehicles(Array.isArray(json) ? json : []);
+        setLiveLoading(false);
+      })
+      .catch((err) => {
+        setLiveError(err.message);
+        setLiveLoading(false);
+      });
+  }, []);
+
+  // Auto-refresh live data
+  useEffect(() => {
+    if (tab !== "live") return;
+    if (!autoRefresh) return;
+
+    const interval = setInterval(() => {
+      loadLive();
+    }, refreshInterval);
+
+    loadLive(); // Initial load
+    return () => clearInterval(interval);
+  }, [tab, autoRefresh, refreshInterval, loadLive]);
 
   const rows = data[tab] || [];
 
@@ -210,11 +403,20 @@ export default function TransportPage() {
         />
 
         <StateArea
-          loading={loading}
-          error={error}
-          onRetry={() => load(tab)}
+          loading={tab === "live" ? liveLoading : loading}
+          error={tab === "live" ? liveError : error}
+          onRetry={() => tab === "live" ? loadLive() : load(tab)}
         >
-          {rows.length === 0 ? (
+          {tab === "live" ? (
+            <LiveTrackingMap
+              vehicles={liveVehicles}
+              autoRefresh={autoRefresh}
+              setAutoRefresh={setAutoRefresh}
+              refreshInterval={refreshInterval}
+              setRefreshInterval={setRefreshInterval}
+              onRefresh={loadLive}
+            />
+          ) : rows.length === 0 ? (
             <EmptyState
               icon={ENDPOINTS[tab].icon}
               title={`No ${ENDPOINTS[tab].title.toLowerCase()} found`}
@@ -478,5 +680,6 @@ export default function TransportPage() {
         </div>
       )}
     </section>
+  
   );
 }

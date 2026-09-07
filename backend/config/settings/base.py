@@ -234,6 +234,7 @@ REST_FRAMEWORK = {
         "user": "2000/day",
         "login": "60/hour",
         "password_reset": "10/hour",
+        "email_verify": "10/hour",
         "public_apply": "20/hour",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
