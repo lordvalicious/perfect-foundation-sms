@@ -130,6 +130,14 @@ function TeachersPage() {
     loadCampuses();
   }, [loadCampuses]);
 
+  // Cleanup modal on unmount to prevent stuck overlays
+  useEffect(() => {
+    return () => {
+      setShowForm(false);
+      setEditingTeacher(null);
+    };
+  }, []);
+
   /* =========================
      FORM HANDLING
   ========================= */
@@ -234,7 +242,7 @@ function TeachersPage() {
     );
     body.append("phone", form.phone || "");
     body.append("email", form.email || "");
-    body.append("campus", form.campus || "");
+    body.append("primary_campus", form.primary_campus || "");
     body.append(
       "joining_date",
       form.joining_date || ""
