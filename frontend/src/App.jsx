@@ -456,6 +456,16 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [schoolDropdownOpen, campusDropdownOpen]);
 
+  // Global cleanup on route change: remove any stuck modal overlays, backdrops, and body classes
+  const location = useLocation();
+  useEffect(() => {
+    // Remove any stuck modal overlays/backdrops and body classes on route change
+    document.body.classList.remove("nav-open", "modal-open");
+    document.body.style.overflow = "";
+    const overlays = document.querySelectorAll(".modal-overlay, .modal-backdrop, .mobile-nav-backdrop");
+    overlays.forEach((el) => el.remove());
+  }, [location.pathname]);
+
   const moduleAllows = (item) => {
     if (!item.module) return true;
     if (!modules.loaded) return true;
