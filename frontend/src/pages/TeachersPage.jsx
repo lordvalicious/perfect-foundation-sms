@@ -6,6 +6,7 @@ import CredentialDisplay from "../components/CredentialDisplay";
 import { buildErrorMessage } from "../api";
 
 const TEACHERS_API_URL = "/api/teachers/";
+const CAMPUSES_API_URL = "/api/schools/campuses/";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -51,7 +52,7 @@ function TeachersPage() {
     date_of_birth: "",
     phone: "",
     email: "",
-    campus: "",
+    primary_campus: "",
     joining_date: "",
     designation: "Teacher",
     status: "active",
@@ -63,6 +64,7 @@ function TeachersPage() {
   const [form, setForm] = useState(emptyForm);
   const [photoFile, setPhotoFile] = useState(null);
   const [accountCreated, setAccountCreated] = useState(null);
+  const [campuses, setCampuses] = useState([]);
 
   /* =========================
      LOAD TEACHERS
@@ -104,6 +106,29 @@ function TeachersPage() {
   useEffect(() => {
     loadTeachersData();
   }, [loadTeachersData]);
+
+  const loadCampuses = useCallback(() => {
+    return fetch(CAMPUSES_API_URL, {
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load campuses.");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        const campusData = Array.isArray(data) ? data : data.results || [];
+        setCampuses(campusData);
+      })
+      .catch((err) => {
+        console.error("Failed to load campuses:", err);
+      });
+  }, []);
+
+  useEffect(() => {
+    loadCampuses();
+  }, [loadCampuses]);
 
   /* =========================
      FORM HANDLING
@@ -147,7 +172,8 @@ function TeachersPage() {
       date_of_birth: teacher.date_of_birth || "",
       phone: teacher.phone || "",
       email: teacher.email || "",
-      campus:
+      primary_campus:
+        teacher.primary_campus?.id ||
         teacher.campus?.id ||
         teacher.campus ||
         "",
@@ -372,19 +398,11 @@ function TeachersPage() {
   });
 
   /* =========================
-     UNIQUE CAMPUSES
+     CAMPUS OPTIONS
   ========================= */
 
   const campusOptions = [
-    ...new Set(
-      teachers
-        .map((teacher) =>
-          typeof teacher.campus === "object"
-            ? teacher.campus?.name
-            : teacher.campus_name || teacher.campus
-        )
-        .filter(Boolean)
-    ),
+    ...campuses.filter((c) => c.name).map((c) => ({ id: c.id, name: c.name })),
   ];
 
   /* =========================
@@ -897,20 +915,17 @@ function TeachersPage() {
                   <label>
                     Campus
                     <select
-                      name="campus"
-                      value={form.campus}
+                      name="primary_campus"
+                      value={form.primary_campus}
                       onChange={handleChange}
                     >
                       <option value="">
                         Select campus
                       </option>
 
-                      {campusOptions.map((item) => (
-                        <option
-                          key={item}
-                          value={item}
-                        >
-                          {item}
+                      {campusOptions.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.name}
                         </option>
                       ))}
                     </select>
