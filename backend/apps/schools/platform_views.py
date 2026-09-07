@@ -251,14 +251,32 @@ class TenantDetailView(APIView):
             school.enabled_modules = enabled
             changes["enabled_modules"] = True
 
+        # Create admin user if admin data provided
+        admin_data = request.data.get("admin")
+        admin_created = None
+        if admin_data:
+            admin_user = self._create_school_admin(school, admin_data)
+            if admin_user:
+                admin_created = {
+                    "id": admin_user.id,
+                    "username": admin_user.username,
+                    "email": admin_user.email,
+                }
+                changes["admin_created"] = True
+
         school.save()
 
-        return Response({
+        response = {
             "id": school.id,
             "status": school.status,
             "enabled_modules": school.enabled_modules or [],
             "updated": sorted(changes.keys()),
-        })
+        }
+
+        if admin_created:
+            response["admin"] = admin_created
+
+        return Response(response)
 
 
 class CurrentModulesView(APIView):

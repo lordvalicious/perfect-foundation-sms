@@ -279,11 +279,21 @@ export default function TenantsPage() {
     setEditSaving(true);
     setEditError("");
 
+    const hasAdminData = editForm.admin_username || editForm.admin_email || editForm.admin_password;
+
     const payload = {
       name: editForm.name,
       code: editForm.code,
       city: editForm.city,
       status: editForm.status,
+      admin: hasAdminData ? {
+        username: editForm.admin_username,
+        email: editForm.admin_email,
+        password: editForm.admin_password,
+        first_name: editForm.admin_first_name,
+        last_name: editForm.admin_last_name,
+        phone: editForm.admin_phone,
+      } : undefined,
     };
 
     apiFetch(`${BASE}${editForm.id}/`, {
@@ -291,11 +301,14 @@ export default function TenantsPage() {
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     })
-      .then(() => {
+      .then((data) => {
         setEditForm(null);
         setEditError("");
         setDetail(null);
         setNotice(`"${payload.name}" updated.`);
+        if (data.admin) {
+          setNotice(`"${payload.name}" updated. Admin user created: ${data.admin.username}`);
+        }
         load();
       })
       .catch((err) => setEditError(extractError(err)))
@@ -362,6 +375,12 @@ export default function TenantsPage() {
       code: tenant.code || "",
       city: tenant.city || "",
       status: tenant.status,
+      admin_username: "",
+      admin_email: "",
+      admin_password: "",
+      admin_first_name: "",
+      admin_last_name: "",
+      admin_phone: "",
     });
     setEditError("");
   };
@@ -543,6 +562,62 @@ export default function TenantsPage() {
               ))}
             </select>
           </label>
+          <fieldset style={{ border: 0, padding: 0, marginTop: 16, borderTop: "1px solid var(--border)" }}>
+            <legend style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12 }}>Add School Administrator (optional)</legend>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+              Create an additional admin user for this school. They will have full admin access.
+            </p>
+            <label>
+              Username *
+              <input
+                placeholder="e.g. admin_springfield"
+                value={editForm.admin_username || ""}
+                onChange={(e) => setEditForm({ ...editForm, admin_username: e.target.value })}
+              />
+            </label>
+            <label>
+              Email *
+              <input
+                type="email"
+                placeholder="e.g. admin@springfield.edu"
+                value={editForm.admin_email || ""}
+                onChange={(e) => setEditForm({ ...editForm, admin_email: e.target.value })}
+              />
+            </label>
+            <label>
+              Password *
+              <input
+                type="password"
+                placeholder="Minimum 8 characters"
+                value={editForm.admin_password || ""}
+                onChange={(e) => setEditForm({ ...editForm, admin_password: e.target.value })}
+              />
+            </label>
+            <label>
+              First name
+              <input
+                placeholder="e.g. John"
+                value={editForm.admin_first_name || ""}
+                onChange={(e) => setEditForm({ ...editForm, admin_first_name: e.target.value })}
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                placeholder="e.g. Doe"
+                value={editForm.admin_last_name || ""}
+                onChange={(e) => setEditForm({ ...editForm, admin_last_name: e.target.value })}
+              />
+            </label>
+            <label>
+              Phone
+              <input
+                placeholder="e.g. +92 300 1234567"
+                value={editForm.admin_phone || ""}
+                onChange={(e) => setEditForm({ ...editForm, admin_phone: e.target.value })}
+              />
+            </label>
+          </fieldset>
         </SchoolModal>
       )}
 
