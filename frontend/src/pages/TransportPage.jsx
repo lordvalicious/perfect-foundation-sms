@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Bus, Car, MapPin, UsersRound, Plus, Pencil, Trash2, X, Map, Satellite, RefreshCw, Truck, MapPinCheck } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Bus, Car, MapPin, UsersRound, Plus, Pencil, Trash2, X, Satellite, RefreshCw, Truck } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, EmptyState, StatusBadge } from "./ui";
 import { formatDate } from "./format";
 import { apiFetch, jsonHeaders } from "../api";
@@ -38,9 +38,14 @@ const LiveTrackingMap = ({
   setRefreshInterval,
   onRefresh,
 }) => {
-  const [map, setMap] = useState(null);
-  const [markers, setMarkers] = useState({});
   const mapContainerRef = useRef(null);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => setNow(Date.now()), refreshInterval);
+    return () => clearInterval(interval);
+  }, [autoRefresh, refreshInterval]);
 
   // Simple map using a static image with overlay markers (no Leaflet dependency)
   // In production, you would use Leaflet or Mapbox GL JS
@@ -160,7 +165,7 @@ const LiveTrackingMap = ({
           </div>
 {vehicles.map((v) => {
             const hasGps = v.lat != null && v.lng != null;
-            const isRecent = v.last_seen && (Date.now() - new Date(v.last_seen).getTime()) < 60000;
+const isRecent = v.last_seen && (now - new Date(v.last_seen).getTime()) < 60000;
             const rowClass = `list-row${hasGps ? "" : " no-gps"}${isRecent ? " active" : " stale"}`;
             return (
               <div key={v.vehicle} className={rowClass}>

@@ -120,21 +120,18 @@ function SearchPicker({ query, setQuery, options, getLabel, onSelect, placeholde
 function StudentDetailReport() {
   const [query, setQuery] = useState("");
   const [students, setStudents] = useState([]);
-  const [loading, setLoading] = useState(false);
   const [profile, setProfile] = useState(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [error, setError] = useState("");
 
   const loadStudents = useCallback((search) => {
-    setLoading(true);
     setError("");
     const params = new URLSearchParams({ page_size: "500" });
     if (search.trim()) params.append("search", search.trim());
     fetch(`/api/students/?${params.toString()}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : Promise.reject("Could not load students.")))
       .then((json) => setStudents(json.results || []))
-      .catch((err) => setError(String(err)))
-      .finally(() => setLoading(false));
+      .catch((err) => setError(String(err)));
   }, []);
 
   useEffect(() => {

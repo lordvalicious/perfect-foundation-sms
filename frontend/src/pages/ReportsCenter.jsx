@@ -6,21 +6,12 @@ import {
   Search,
   Star,
   Clock,
-  Download,
-  Filter,
-  Settings,
   Plus,
-  Grid,
   List,
+  Grid,
   ChevronRight,
-  ExternalLink,
-  Printer,
-  Mail,
-  X,
-  ChevronDown,
-  ChevronLeft,
 } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea, StatCard, Button, TabButton, Badge } from "./ui";
+import { PageHeader, StateArea, StatCard, Button, TabButton } from "./ui";
 import { apiFetch } from "../api";
 import { formatCurrency } from "./format";
 import { REPORT_CATEGORIES } from "../config/reports";

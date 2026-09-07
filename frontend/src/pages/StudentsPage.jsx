@@ -39,6 +39,14 @@ function jsonHeaders(extra = {}) {
   });
 }
 
+function getCampusIdFromUrl() {
+  const path = window.location.pathname;
+  const match = path.match(/\/students\/([^/]+)/);
+  if (match) return match[1];
+  const params = new URLSearchParams(window.location.search);
+  return params.get("campus") || "";
+}
+
 function StudentsPage() {
   const { t } = useLang();
   const { scopedHasRole } = useSchool();

@@ -41,8 +41,7 @@ export default function StudentLifecyclePanel({
   currentCampusId = null,
   runId,
   hasRole,
-  onChanged,
-}) {
+  }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [history, setHistory] = useState([]);
@@ -301,18 +300,10 @@ export default function StudentLifecyclePanel({
     [reference]
   );
 
-  const sectionsForClass = (classId) =>
-    reference.sections.filter((s) => Number(s.class_obj) === Number(classId));
-
   const currentCampusOptions = useMemo(
     () => reference.campuses.filter((c) => (currentCampusId ? Number(c.id) !== Number(currentCampusId) : true)),
     [reference.campuses, currentCampusId]
   );
-
-  const currentSectionOptions = useMemo(() => {
-    if (currentCampusId) return [];
-    return reference.sections.filter((s) => { const c = s.class_obj; return true; });
-  }, [reference.sections, currentCampusId]);
 
   return (
     <div>

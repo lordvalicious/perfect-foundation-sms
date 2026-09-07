@@ -30,7 +30,7 @@ export function WorkflowTimeline({ transitions }) {
           transitions
             .slice()
             .reverse()
-            .map((transition, index) => (
+            .map(transition => (
               <div key={transition.id} className="border rounded p-3 bg-white">
                 <div className="flex items-start gap-3">
                   <div className={`px-2 py-1 rounded text-xs font-medium ${getActionColor(transition.action)}`}>

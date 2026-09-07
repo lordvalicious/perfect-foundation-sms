@@ -396,7 +396,6 @@ export default function StaffPage() {
     const fullName = getStaffName(member);
     const employeeNumber = member.employee_number || "";
     const phone = member.phone || "";
-    const campusName = member.campus || "";
 
     const searchValue = search.toLowerCase();
 
