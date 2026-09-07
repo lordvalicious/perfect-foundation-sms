@@ -102,7 +102,7 @@ export default function StaffPage() {
     date_of_birth: "",
     phone: "",
     email: "",
-    campus: "",
+    primary_campus: "",
     designation: "Other",
     department: "",
     joining_date: "",
@@ -113,10 +113,30 @@ export default function StaffPage() {
   };
 
   const [form, setForm] = useState(emptyForm);
+  const [campuses, setCampuses] = useState([]);
 
   /* =========================
-     LOAD STAFF
+     LOAD STAFF & CAMPUSES
   ========================= */
+
+  const loadCampuses = useCallback(() => {
+    return fetch("/api/schools/campuses/", {
+      credentials: "include",
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to load campuses.");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        const campusData = Array.isArray(data) ? data : data.results || [];
+        setCampuses(campusData);
+      })
+      .catch((err) => {
+        console.error("Failed to load campuses:", err);
+      });
+  }, []);
 
   const loadStaffData = useCallback(() => {
     return fetch(STAFF_API_URL, {
@@ -153,7 +173,8 @@ export default function StaffPage() {
 
   useEffect(() => {
     loadStaffData();
-  }, [loadStaffData]);
+    loadCampuses();
+  }, [loadStaffData, loadCampuses]);
 
   /* =========================
      FORM HANDLING
@@ -191,7 +212,7 @@ export default function StaffPage() {
       date_of_birth: member.date_of_birth || "",
       phone: member.phone || "",
       email: member.email || "",
-      campus: member.campus || "",
+      primary_campus: member.primary_campus || "",
       designation: member.designation || "Other",
       department: member.department || "",
       joining_date: member.joining_date || "",
@@ -247,7 +268,7 @@ export default function StaffPage() {
       body.append("date_of_birth", form.date_of_birth || "");
       body.append("phone", form.phone || "");
       body.append("email", form.email || "");
-      body.append("campus", form.campus || "");
+      body.append("primary_campus", form.primary_campus || "");
       body.append("designation", form.designation || "");
       body.append("department", form.department || "");
       body.append("joining_date", form.joining_date || "");
@@ -392,7 +413,9 @@ export default function StaffPage() {
         .includes(searchValue);
 
     const matchesCampus =
-      !campus || campusName.toLowerCase() === campus.toLowerCase();
+      !campus ||
+      (member.primary_campus && member.primary_campus === campus) ||
+      (member.campus && member.campus.toString() === campus);
 
     const matchesDesignation =
       !designation ||
@@ -418,7 +441,7 @@ export default function StaffPage() {
   });
 
   const campusOptions = [
-    ...new Set(staff.map((member) => member.campus).filter(Boolean)),
+    ...campuses.filter((c) => c.name).map((c) => ({ id: c.id, name: c.name })),
   ];
 
   const departmentOptions = [
@@ -574,9 +597,9 @@ export default function StaffPage() {
         >
           <option value="">All campuses</option>
 
-          {campusOptions.map((item) => (
-            <option key={item} value={item}>
-              {item}
+          {campusOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.name}
             </option>
           ))}
         </select>
@@ -756,7 +779,9 @@ export default function StaffPage() {
 
                       <span>
                         <Building2 size={14} />
-                        {member.campus || "—"}
+                        {member.primary_campus
+                          ? campuses.find((c) => c.id === member.primary_campus)?.name || "—"
+                          : "—"}
                       </span>
 
                       <span>
@@ -1003,17 +1028,17 @@ export default function StaffPage() {
                   <label>
                     Campus
                     <select
-                      name="campus"
-                      value={form.campus}
+                      name="primary_campus"
+                      value={form.primary_campus}
                       onChange={handleChange}
                     >
                       <option value="">
                         Select campus
                       </option>
 
-                      {campusOptions.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
+                      {campusOptions.map((opt) => (
+                        <option key={opt.id} value={opt.id}>
+                          {opt.name}
                         </option>
                       ))}
                     </select>
