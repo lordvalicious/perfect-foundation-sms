@@ -115,6 +115,26 @@ class TenantListCreateView(APIView):
                 status="active",
             )
 
+        # Create school admin if admin data provided
+        admin_data = request.data.get("admin")
+        if admin_data:
+            admin_user = self._create_school_admin(school, admin_data)
+            if admin_user:
+                return Response(
+                    {
+                        "id": school.id,
+                        "name": school.name,
+                        "code": school.code,
+                        "detail": "Tenant created with admin user.",
+                        "admin": {
+                            "id": admin_user.id,
+                            "username": admin_user.username,
+                            "email": admin_user.email,
+                        },
+                    },
+                    status=201,
+                )
+
         return Response(
             {
                 "id": school.id,
@@ -124,6 +144,55 @@ class TenantListCreateView(APIView):
             },
             status=201,
         )
+
+    def _create_school_admin(self, school, admin_data):
+        """Create a user account and assign ADMIN role linked to the school."""
+        from django.db import transaction
+        from django.db.utils import IntegrityError
+        from rest_framework.exceptions import ValidationError
+
+        username = (admin_data.get("username") or "").strip()
+        email = (admin_data.get("email") or "").strip()
+        password = admin_data.get("password") or ""
+        first_name = (admin_data.get("first_name") or "").strip()
+        last_name = (admin_data.get("last_name") or "").strip()
+        phone = (admin_data.get("phone") or "").strip()
+
+        if not username or not email or not password:
+            return None
+
+        from apps.accounts.models import User, Role, InstitutionMembership, RoleAssignment
+
+        try:
+            with transaction.atomic():
+                # Create the user account
+                from django.contrib.auth.hashers import make_password
+                user = User.objects.create(
+                    username=username,
+                    email=email,
+                    password=make_password(password),
+                    first_name=first_name,
+                    last_name=last_name,
+                    phone=phone,
+                    institution=school,
+                    is_superuser=False,
+                )
+
+                # Assign ADMIN role (Institution Admin)
+                membership, _ = InstitutionMembership.objects.get_or_create(
+                    user=user,
+                    institution=school,
+                    defaults={"status": "active"},
+                )
+
+                RoleAssignment.objects.get_or_create(
+                    membership=membership,
+                    role=Role.ADMIN,
+                )
+
+                return user
+        except IntegrityError:
+            return None
 
 
 class TenantDetailView(APIView):

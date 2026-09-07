@@ -29,6 +29,12 @@ const EMPTY_FORM = {
   code: "",
   city: "",
   first_campus: "",
+  admin_username: "",
+  admin_email: "",
+  admin_password: "",
+  admin_first_name: "",
+  admin_last_name: "",
+  admin_phone: "",
 };
 
 function labelFor(status) {
@@ -236,6 +242,8 @@ export default function TenantsPage() {
     setCreateSaving(true);
     setCreateError("");
 
+    const hasAdminData = createForm.admin_username || createForm.admin_email || createForm.admin_password;
+
     apiFetch(BASE, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
@@ -244,6 +252,14 @@ export default function TenantsPage() {
         code: createForm.code,
         city: createForm.city,
         first_campus: createForm.first_campus,
+        admin: hasAdminData ? {
+          username: createForm.admin_username,
+          email: createForm.admin_email,
+          password: createForm.admin_password,
+          first_name: createForm.admin_first_name,
+          last_name: createForm.admin_last_name,
+          phone: createForm.admin_phone,
+        } : undefined,
       }),
     })
       .then((data) => {
@@ -424,6 +440,62 @@ export default function TenantsPage() {
               onChange={(e) => setCreateForm({ ...createForm, first_campus: e.target.value })}
             />
           </label>
+          <fieldset style={{ border: 0, padding: 0, marginTop: 16, borderTop: "1px solid var(--border)" }}>
+            <legend style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12 }}>School Administrator (optional)</legend>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+              Create the first admin user for this school. They will have full admin access.
+            </p>
+            <label>
+              Username *
+              <input
+                placeholder="e.g. admin_springfield"
+                value={createForm.admin_username}
+                onChange={(e) => setCreateForm({ ...createForm, admin_username: e.target.value })}
+              />
+            </label>
+            <label>
+              Email *
+              <input
+                type="email"
+                placeholder="e.g. admin@springfield.edu"
+                value={createForm.admin_email}
+                onChange={(e) => setCreateForm({ ...createForm, admin_email: e.target.value })}
+              />
+            </label>
+            <label>
+              Password *
+              <input
+                type="password"
+                placeholder="Minimum 8 characters"
+                value={createForm.admin_password}
+                onChange={(e) => setCreateForm({ ...createForm, admin_password: e.target.value })}
+              />
+            </label>
+            <label>
+              First name
+              <input
+                placeholder="e.g. John"
+                value={createForm.admin_first_name}
+                onChange={(e) => setCreateForm({ ...createForm, admin_first_name: e.target.value })}
+              />
+            </label>
+            <label>
+              Last name
+              <input
+                placeholder="e.g. Doe"
+                value={createForm.admin_last_name}
+                onChange={(e) => setCreateForm({ ...createForm, admin_last_name: e.target.value })}
+              />
+            </label>
+            <label>
+              Phone
+              <input
+                placeholder="e.g. +92 300 1234567"
+                value={createForm.admin_phone}
+                onChange={(e) => setCreateForm({ ...createForm, admin_phone: e.target.value })}
+              />
+            </label>
+          </fieldset>
         </SchoolModal>
       )}
 
