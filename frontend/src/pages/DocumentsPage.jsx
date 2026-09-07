@@ -313,11 +313,11 @@ export default function DocumentsPage() {
           </div>
         </div>
         <div className="stat-card">
-          <div className="stat-icon" style={{ color: expiringSoon.length > 0 ? "#e74c3c" : undefined }}>
+          <div className="stat-icon" style={{ color: expiringSoon.length > 0 ? "var(--danger)" : undefined }}>
             <FileText size={21} />
           </div>
           <div>
-            <h3 style={{ color: expiringSoon.length > 0 ? "#e74c3c" : undefined }}>{expiringSoon.length}</h3>
+            <h3 style={{ color: expiringSoon.length > 0 ? "var(--danger)" : undefined }}>{expiringSoon.length}</h3>
             <p>Expiring Soon</p>
           </div>
         </div>

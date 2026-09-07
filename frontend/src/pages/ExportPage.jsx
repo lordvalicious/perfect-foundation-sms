@@ -75,7 +75,7 @@ export default function ExportPage() {
             <h3><Database size={16} /> Full Data Backup</h3>
           </div>
           <div className="form-section">
-            <p style={{ marginBottom: 12, fontSize: 13, color: "#666" }}>
+            <p style={{ marginBottom: 12, fontSize: 13, color: "var(--text-muted)" }}>
               Download a complete JSON backup of all system data including students, teachers, invoices, payments, attendance, and enrollments.
             </p>
             <button
@@ -108,13 +108,13 @@ export default function ExportPage() {
                   border: "1px solid #e0e0e0",
                   borderRadius: 8,
                   padding: 16,
-                  background: "#fff",
+                  background: "var(--surface)",
                 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
                     <span style={{ fontSize: 24 }}>{ICONS[exp.key] || "📄"}</span>
                     <div>
                       <strong>{exp.label}</strong>
-                      <div style={{ fontSize: 11, color: "#666" }}>{exp.filename}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{exp.filename}</div>
                     </div>
                   </div>
 

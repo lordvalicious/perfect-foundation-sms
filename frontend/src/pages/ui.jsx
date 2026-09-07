@@ -56,6 +56,29 @@ export function PanelHeader({ title, subtitle, count, action }) {
   );
 }
 
+export function Skeleton({ className = "", style }) {
+  return <div className={`skeleton ${className}`.trim()} style={style} aria-hidden="true" />;
+}
+
+export function SkeletonBlock({ rows = 6, text }) {
+  return (
+    <div className="skeleton-block" role="status" aria-label={text || "Loading"}>
+      <div className="skeleton-block-head">
+        <Skeleton className="skeleton-chip" style={{ width: 180 }} />
+        <Skeleton className="skeleton-chip" style={{ width: 110 }} />
+      </div>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div className="skeleton-row" key={i}>
+          <Skeleton style={{ flex: 1.2, height: 14 }} />
+          <Skeleton style={{ flex: 0.8, height: 14 }} />
+          <Skeleton style={{ width: 64, height: 14 }} />
+        </div>
+      ))}
+      <div className="sr-only">{text || "Loading"}</div>
+    </div>
+  );
+}
+
 export function StateArea({
   loading,
   error,
@@ -64,9 +87,11 @@ export function StateArea({
   errorText,
   onRetry,
   children,
+  skeletonRows,
+  skeleton,
 }) {
   if (loading) {
-    return <div className="state-card">{loadingText}</div>;
+    return skeleton !== false ? <SkeletonBlock rows={skeletonRows} text={loadingText} /> : <div className="state-card">{loadingText}</div>;
   }
 
   if (error) {
@@ -146,4 +171,47 @@ export function StatusBadge({ status, label }) {
       {label || (status ? status.charAt(0).toUpperCase() + status.slice(1) : "\u2014")}
     </span>
   );
+}
+
+export function Button({ variant = "primary", className = "", children, ...props }) {
+  const base = variant === "primary" ? "primary-button" : "secondary-button";
+  return (
+    <button type="button" className={`${base} ${className}`.trim()} {...props}>
+      {children}
+    </button>
+  );
+}
+
+export function StatCard({ label, value, icon: Icon, sub }) {
+  return (
+    <div className="stat-card">
+      {Icon && (
+        <div className="stat-icon">
+          <Icon size={18} />
+        </div>
+      )}
+      <div className="stat-info">
+        <span>{label}</span>
+        <strong>{typeof value === "number" ? value.toLocaleString() : value}</strong>
+        {sub && <small>{sub}</small>}
+      </div>
+    </div>
+  );
+}
+
+export function TabButton({ active, onClick, icon: Icon, children }) {
+  return (
+    <button
+      type="button"
+      className={`tab-button ${active ? "active" : ""}`.trim()}
+      onClick={onClick}
+    >
+      {Icon && <Icon size={15} style={{ verticalAlign: "-2px", marginRight: 6 }} />}
+      {children}
+    </button>
+  );
+}
+
+export function Badge({ tone = "info", children }) {
+  return <span className={`status-badge ${tone}`}>{children}</span>;
 }

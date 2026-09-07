@@ -1,4 +1,6 @@
-﻿import {
+import {
+  lazy,
+  Suspense,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -68,59 +70,60 @@ import { AuthProvider, useAuth } from "./auth";
 import { SchoolProvider, useSchool } from "./schoolContext";
 import { LanguageProvider, useLang } from "./i18n";
 import LanguageToggle from "./components/LanguageToggle";
-import LoginPage from "./pages/LoginPage";
-import AttendancePage from "./pages/AttendancePage";
-import FinancePage from "./pages/FinancePage";
-import ExamsPage from "./pages/ExamsPage";
-import ReportCardsPage from "./pages/ReportCardsPage";
-import TimetablePage from "./pages/TimetablePage";
-import CampusesPage from "./pages/CampusesPage";
-import SettingsPage from "./pages/SettingsPage";
-import EventsPage from "./pages/EventsPage";
-import AuditLogsPage from "./pages/AuditLogsPage";
-import AssignmentsPage from "./pages/AssignmentsPage";
-import ProfilePage from "./pages/ProfilePage";
-import StaffPage from "./pages/StaffPage";
-import ParentPortalPage from "./pages/ParentPortalPage";
-import LibraryPage from "./pages/LibraryPage";
-import TransportPage from "./pages/TransportPage";
-import InventoryPage from "./pages/InventoryPage";
-import PayrollPage from "./pages/PayrollPage";
-import ReportsPage from "./pages/ReportsPage";
-import AnnouncementsPage from "./pages/AnnouncementsPage";
-import MessagesPage from "./pages/MessagesPage";
-import SMSPage from "./pages/SMSPage";
-import Dashboard from "./pages/Dashboard";
-import StudentsPage from "./pages/StudentsPage";
-import Student360Page from "./pages/Student360Page";
-import AcademicsPage from "./pages/AcademicsPage";
-import TeachersPage from "./pages/TeachersPage";
-import HRPage from "./pages/HRPage";
-import AdmissionsPage from "./pages/AdmissionsPage";
-import BulkFinancePage from "./pages/BulkFinancePage";
-import StudentFeesPage from "./pages/StudentFeesPage";
-import DocumentsPage from "./pages/DocumentsPage";
-import ReportBuilderPage from "./pages/ReportBuilderPage";
-import TemplatesPage from "./pages/TemplatesPage";
-import BrandingPage from "./pages/BrandingPage";
-import CampusDashboardPage from "./pages/CampusDashboardPage";
-import ExecutiveDashboardPage from "./pages/ExecutiveDashboardPage";
-import ExportPage from "./pages/ExportPage";
-import HealthPage from "./pages/HealthPage";
-import DataImportPage from "./pages/DataImportPage";
-import DisciplinePage from "./pages/DisciplinePage";
-import StaffOperationsPage from "./pages/StaffOperationsPage";
-import HomeworkPage from "./pages/HomeworkPage";
-import HealthRecordsPage from "./pages/HealthRecordsPage";
-import AdmissionsApplyPage from "./pages/AdmissionsApplyPage";
-import VerifyEmailPage from "./pages/VerifyEmailPage";
-import AlumniPage from "./pages/AlumniPage";
-import HostelPage from "./pages/HostelPage";
-import LMSPage from "./pages/LMSPage";
-import TenantsPage from "./pages/TenantsPage";
-import HelpdeskPage from "./pages/HelpdeskPage";
-import VisitorsPage from "./pages/VisitorsPage";
-import DigitalIdsPage from "./pages/DigitalIdsPage";
+import { SkeletonBlock } from "./pages/ui";
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const AttendancePage = lazy(() => import("./pages/AttendancePage"));
+const FinancePage = lazy(() => import("./pages/FinancePage"));
+const ExamsPage = lazy(() => import("./pages/ExamsPage"));
+const ReportCardsPage = lazy(() => import("./pages/ReportCardsPage"));
+const TimetablePage = lazy(() => import("./pages/TimetablePage"));
+const CampusesPage = lazy(() => import("./pages/CampusesPage"));
+const SettingsPage = lazy(() => import("./pages/SettingsPage"));
+const EventsPage = lazy(() => import("./pages/EventsPage"));
+const AuditLogsPage = lazy(() => import("./pages/AuditLogsPage"));
+const AssignmentsPage = lazy(() => import("./pages/AssignmentsPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
+const StaffPage = lazy(() => import("./pages/StaffPage"));
+const ParentPortalPage = lazy(() => import("./pages/ParentPortalPage"));
+const LibraryPage = lazy(() => import("./pages/LibraryPage"));
+const TransportPage = lazy(() => import("./pages/TransportPage"));
+const InventoryPage = lazy(() => import("./pages/InventoryPage"));
+const PayrollPage = lazy(() => import("./pages/PayrollPage"));
+const ReportsPage = lazy(() => import("./pages/ReportsPage"));
+const AnnouncementsPage = lazy(() => import("./pages/AnnouncementsPage"));
+const MessagesPage = lazy(() => import("./pages/MessagesPage"));
+const SMSPage = lazy(() => import("./pages/SMSPage"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const StudentsPage = lazy(() => import("./pages/StudentsPage"));
+const Student360Page = lazy(() => import("./pages/Student360Page"));
+const AcademicsPage = lazy(() => import("./pages/AcademicsPage"));
+const TeachersPage = lazy(() => import("./pages/TeachersPage"));
+const HRPage = lazy(() => import("./pages/HRPage"));
+const AdmissionsPage = lazy(() => import("./pages/AdmissionsPage"));
+const BulkFinancePage = lazy(() => import("./pages/BulkFinancePage"));
+const StudentFeesPage = lazy(() => import("./pages/StudentFeesPage"));
+const DocumentsPage = lazy(() => import("./pages/DocumentsPage"));
+const ReportBuilderPage = lazy(() => import("./pages/ReportBuilderPage"));
+const TemplatesPage = lazy(() => import("./pages/TemplatesPage"));
+const BrandingPage = lazy(() => import("./pages/BrandingPage"));
+const CampusDashboardPage = lazy(() => import("./pages/CampusDashboardPage"));
+const ExecutiveDashboardPage = lazy(() => import("./pages/ExecutiveDashboardPage"));
+const ExportPage = lazy(() => import("./pages/ExportPage"));
+const HealthPage = lazy(() => import("./pages/HealthPage"));
+const DataImportPage = lazy(() => import("./pages/DataImportPage"));
+const DisciplinePage = lazy(() => import("./pages/DisciplinePage"));
+const StaffOperationsPage = lazy(() => import("./pages/StaffOperationsPage"));
+const HomeworkPage = lazy(() => import("./pages/HomeworkPage"));
+const HealthRecordsPage = lazy(() => import("./pages/HealthRecordsPage"));
+const AdmissionsApplyPage = lazy(() => import("./pages/AdmissionsApplyPage"));
+const VerifyEmailPage = lazy(() => import("./pages/VerifyEmailPage"));
+const AlumniPage = lazy(() => import("./pages/AlumniPage"));
+const HostelPage = lazy(() => import("./pages/HostelPage"));
+const LMSPage = lazy(() => import("./pages/LMSPage"));
+const TenantsPage = lazy(() => import("./pages/TenantsPage"));
+const HelpdeskPage = lazy(() => import("./pages/HelpdeskPage"));
+const VisitorsPage = lazy(() => import("./pages/VisitorsPage"));
+const DigitalIdsPage = lazy(() => import("./pages/DigitalIdsPage"));
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -423,6 +426,22 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
   const { t } = useLang();
   const { currentSchool, availableSchools, activeCampus, campusList, setActiveCampusId, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole } = useSchool();
 
+  // Drive the mobile slide-in drawer. The CSS contract (App.css) shows the
+  // drawer/backdrop only when <body> carries .nav-open.
+  useEffect(() => {
+    document.body.classList.toggle("nav-open", mobileNavOpen);
+    const onKey = (e) => {
+      if (e.key === "Escape" && mobileNavOpen) setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    // Lock background scroll while the drawer is open.
+    document.body.style.overflow = mobileNavOpen ? "hidden" : "";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [mobileNavOpen]);
+
   useEffect(() => {
     if (!schoolDropdownOpen && !campusDropdownOpen) return;
     const handleClickOutside = (e) => {
@@ -444,11 +463,6 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
     return modules.enabled.includes(item.module);
   };
 
-  const visibleNavigation = navigation.filter(
-    (item) =>
-      moduleAllows(item) &&
-      (item.roles.length === 0 || hasRole(item.roles))
-  );
   const visibleSystemNavigation = systemNavigation.filter(
     (item) =>
       (!item.isPlatform || modules.isPlatformAdmin) &&
@@ -729,17 +743,36 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
       )}
 
       {mobileNavOpen && (
-        <nav className="mobile-nav">
-          <MobileNavSection
-            label="Main"
-            items={visibleNavigation}
-            onNavigate={() => setMobileNavOpen(false)}
-          />
-          <MobileNavSection
-            label="System"
-            items={visibleSystemNavigation}
-            onNavigate={() => setMobileNavOpen(false)}
-          />
+        <nav className="mobile-nav" aria-label="Mobile navigation">
+          <div className="mobile-nav-section">
+            <NavLink
+              to="/"
+              end
+              onClick={() => setMobileNavOpen(false)}
+              className={({ isActive }) => `mobile-nav-link mobile-nav-dash ${isActive ? "active" : ""}`}
+            >
+              <LayoutDashboard size={17} />
+              {t("Dashboard")}
+            </NavLink>
+          </div>
+          {visibleNavGroups
+            .filter((g) => g.label !== "System" && g.items.length > 0)
+            .map((group) => (
+              <MobileNavSection
+                key={group.label}
+                label={group.label}
+                items={group.items}
+                onNavigate={() => setMobileNavOpen(false)}
+              />
+            ))}
+          {visibleSystemNavigation.length > 0 && (
+            <MobileNavSection
+              label="System"
+              items={visibleSystemNavigation}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
+          )}
+          <MobileNavFooter />
         </nav>
       )}
     </div>
@@ -839,6 +872,34 @@ function MobileNavSection({ label, items, onNavigate }) {
   );
 }
 
+function MobileNavFooter() {
+  const { user, logout } = useAuth();
+  const displayName = user?.first_name || user?.username || "User";
+  const initials = displayName.split(" ").map((p) => p.charAt(0)).join("").slice(0, 2).toUpperCase();
+  const roleLabel = user?.primary_role
+    ? user.primary_role.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())
+    : "";
+
+  return (
+    <div className="mobile-nav-footer">
+      <div className="profile">
+        {user?.photo_url ? (
+          <img className="avatar avatar-photo" src={user.photo_url} alt={displayName} />
+        ) : (
+          <div className="avatar">{initials}</div>
+        )}
+        <div>
+          <strong>{displayName}</strong>
+          <span>{roleLabel || "Member"}</span>
+        </div>
+      </div>
+      <button className="logout-button" title="Sign out" onClick={logout}>
+        <LogOut size={16} />
+      </button>
+    </div>
+  );
+}
+
 function RequireRoles({ roles, children }) {
   const { user } = useAuth();
   const { scopedHasRole } = useSchool();
@@ -898,7 +959,8 @@ function Shell() {
 
   return (
     <Layout modules={modules}>
-      <Routes key={currentSchool?.id ?? "none"}>
+      <Suspense fallback={<RouteFallback />}>
+        <Routes key={currentSchool?.id ?? "none"}>
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/" element={<Dashboard />} />
 
@@ -1202,8 +1264,23 @@ function Shell() {
         } />
 
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+        </Routes>
+      </Suspense>
     </Layout>
+  );
+}
+
+function RouteFallback() {
+  return (
+    <section className="content">
+      <div className="page-heading">
+        <div>
+          <p className="breadcrumb">Loading...</p>
+          <h2 style={{ opacity: 0.6 }}>Loading</h2>
+        </div>
+      </div>
+      <SkeletonBlock rows={6} text="Loading page..." />
+    </section>
   );
 }
 

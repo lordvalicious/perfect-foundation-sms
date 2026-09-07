@@ -80,7 +80,7 @@ export default function AdmissionsApplyPage() {
       justifyContent: "center",
       alignItems: "flex-start",
       padding: "40px 16px",
-      background: "#f1f5f9",
+      background: "var(--surface-2)",
     }}>
       <div className="panel" style={{ maxWidth: 620, width: "100%", padding: 28 }}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>

@@ -313,7 +313,7 @@ export default function LMSPage({ isStudent }) {
             />
 
             {lessons.map((lesson) => (
-              <div key={lesson.id} style={{ padding: "10px 0", borderBottom: "1px solid #e2e8f0", display: "flex", gap: 12 }}>
+              <div key={lesson.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--border)", display: "flex", gap: 12 }}>
                 <span style={{ fontWeight: 700 }}>#{lesson.order}</span>
                 <div style={{ flex: 1 }}>
                   <strong>{lesson.title}</strong>
@@ -398,7 +398,7 @@ export default function LMSPage({ isStudent }) {
                 <h4>Questions — {openQuiz.title}</h4>
 
                 {questions.map((q) => (
-                  <div key={q.id} style={{ padding: "8px 0", borderBottom: "1px solid #e2e8f0", display: "flex", gap: 10 }}>
+                  <div key={q.id} style={{ padding: "8px 0", borderBottom: "1px solid var(--border)", display: "flex", gap: 10 }}>
                     <div style={{ flex: 1 }}>
                       <strong>{q.text}</strong>
                       <small style={{ display: "block" }}>

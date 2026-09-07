@@ -230,12 +230,12 @@ export default function AuditLogsPage() {
                         </tr>
                         {expandedId === log.id && log.details && (
                           <tr key={`${log.id}-details`}>
-                            <td colSpan={7} style={{ background: "#f8f9fa", padding: 12 }}>
+                            <td colSpan={7} style={{ background: "var(--surface-2)", padding: 12 }}>
                               <strong style={{ fontSize: 12 }}>Details:</strong>
                               <pre style={{
                                 marginTop: 4,
                                 padding: 8,
-                                background: "#fff",
+                                background: "var(--surface)",
                                 borderRadius: 4,
                                 border: "1px solid #e0e0e0",
                                 fontSize: 12,

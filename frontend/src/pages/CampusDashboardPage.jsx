@@ -81,11 +81,11 @@ export default function CampusDashboardPage() {
             </div>
           </div>
           <div className="stat-card">
-            <div className="stat-icon" style={{ color: totalOutstanding > 0 ? "#e74c3c" : undefined }}>
+            <div className="stat-icon" style={{ color: totalOutstanding > 0 ? "var(--danger)" : undefined }}>
               <DollarSign size={21} />
             </div>
             <div>
-              <h3 style={{ color: totalOutstanding > 0 ? "#e74c3c" : undefined }}>{formatCurrency(totalOutstanding)}</h3>
+              <h3 style={{ color: totalOutstanding > 0 ? "var(--danger)" : undefined }}>{formatCurrency(totalOutstanding)}</h3>
               <p>Total Outstanding</p>
             </div>
           </div>
@@ -97,7 +97,7 @@ export default function CampusDashboardPage() {
             <h3>Campus Comparison</h3>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16, padding: 16 }}>
+          <div className="campus-grid">
             {campuses.map((campus) => {
               const cf = campusFinanceMap[campus.name] || {};
               const campusPercent = totalStudents > 0
@@ -105,72 +105,57 @@ export default function CampusDashboardPage() {
                 : 0;
 
               return (
-                <div key={campus.id} style={{
-                  border: "1px solid #e0e0e0",
-                  borderRadius: 8,
-                  padding: 16,
-                  background: "#fff",
-                }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 12 }}>
-                    <Building2 size={18} style={{ color: "#1a73e8" }} />
+                <div key={campus.id} className="campus-card">
+                  <div className="campus-card-head">
+                    <span className="campus-card-icon"><Building2 size={18} /></span>
                     <div>
                       <strong>{campus.name}</strong>
-                      <div style={{ fontSize: 12, color: "#666" }}>{campus.city || "No city"}</div>
+                      <div className="campus-card-city">{campus.city || "No city"}</div>
                     </div>
-                    <span style={{ marginLeft: "auto", fontSize: 12, opacity: 0.6 }}>
-                      {campusPercent}% of students
-                    </span>
+                    <span className="campus-card-share">{campusPercent}% of students</span>
                   </div>
 
                   {/* Student bar */}
-                  <div style={{ marginBottom: 8 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 4 }}>
+                  <div className="campus-bar-wrap">
+                    <div className="campus-bar-label">
                       <span><GraduationCap size={12} /> Students</span>
                       <strong>{campus.student_count || 0}</strong>
                     </div>
-                    <div style={{ background: "#e0e0e0", borderRadius: 4, height: 6 }}>
-                      <div style={{
-                        background: "#1a73e8",
-                        height: "100%",
-                        borderRadius: 4,
-                        width: `${campusPercent}%`,
-                        transition: "width 0.5s",
-                      }} />
+                    <div className="campus-bar">
+                      <div className="campus-bar-fill" style={{ width: `${campusPercent}%` }} />
                     </div>
                   </div>
 
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: 13, marginTop: 12 }}>
-                    <div style={{ background: "#f5f5f5", padding: "6px 8px", borderRadius: 4 }}>
-                      <div style={{ fontSize: 11, color: "#666" }}>Classes</div>
+                  <div className="campus-metrics">
+                    <div className="campus-metric">
+                      <span>Classes</span>
                       <strong>{campus.class_count || 0}</strong>
                     </div>
-                    <div style={{ background: "#f5f5f5", padding: "6px 8px", borderRadius: 4 }}>
-                      <div style={{ fontSize: 11, color: "#666" }}>Sections</div>
+                    <div className="campus-metric">
+                      <span>Sections</span>
                       <strong>{campus.section_count || 0}</strong>
                     </div>
                     {cf.billed !== undefined && (
-                      <div style={{ background: "#f5f5f5", padding: "6px 8px", borderRadius: 4 }}>
-                        <div style={{ fontSize: 11, color: "#666" }}>Billed</div>
+                      <div className="campus-metric">
+                        <span>Billed</span>
                         <strong>{formatCurrency(cf.billed)}</strong>
                       </div>
                     )}
                     {cf.collected !== undefined && (
-                      <div style={{ background: "#f5f5f5", padding: "6px 8px", borderRadius: 4 }}>
-                        <div style={{ fontSize: 11, color: "#666" }}>Collected</div>
+                      <div className="campus-metric">
+                        <span>Collected</span>
                         <strong>{formatCurrency(cf.collected)}</strong>
                       </div>
                     )}
                     {cf.outstanding !== undefined && cf.outstanding > 0 && (
-                      <div style={{ background: "#fde8e8", padding: "6px 8px", borderRadius: 4, gridColumn: "1 / -1" }}>
-                        <div style={{ fontSize: 11, color: "#c0392b" }}>Outstanding</div>
-                        <strong style={{ color: "#c0392b" }}>{formatCurrency(cf.outstanding)}</strong>
+                      <div className="campus-metric danger wide">
+                        <span>Outstanding</span>
+                        <strong>{formatCurrency(cf.outstanding)}</strong>
                       </div>
                     )}
                   </div>
 
-                  <div style={{ marginTop: 8, fontSize: 11, color: "#999" }}>
-                    Status: {campus.status}
-                  </div>
+                  <div className="campus-card-status">Status: {campus.status}</div>
                 </div>
               );
             })}
@@ -202,20 +187,21 @@ export default function CampusDashboardPage() {
                         <td><strong>{row.campus}</strong></td>
                         <td>{formatCurrency(row.billed)}</td>
                         <td>{formatCurrency(row.collected)}</td>
-                        <td style={{ color: row.outstanding > 0 ? "#c0392b" : undefined }}>
+                        <td className={row.outstanding > 0 ? "cell-danger" : undefined}>
                           {formatCurrency(row.outstanding)}
                         </td>
                         <td>
-                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <div style={{ background: "#e0e0e0", borderRadius: 4, height: 6, width: 60 }}>
-                              <div style={{
-                                background: rate >= 80 ? "#27ae60" : rate >= 50 ? "#f39c12" : "#e74c3c",
-                                height: "100%",
-                                borderRadius: 4,
-                                width: `${rate}%`,
-                              }} />
+                          <div className="rate-bar">
+                            <div className="rate-track">
+                              <div
+                                className="rate-bar-fill"
+                                style={{
+                                  width: `${Math.min(100, rate)}%`,
+                                  background: rate >= 80 ? "var(--success)" : rate >= 50 ? "var(--warn)" : "var(--danger)",
+                                }}
+                              />
                             </div>
-                            {rate}%
+                            <span>{rate}%</span>
                           </div>
                         </td>
                       </tr>

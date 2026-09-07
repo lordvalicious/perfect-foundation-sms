@@ -8,9 +8,9 @@ const HEALTH_URL = "/api/reports/health/";
 
 function StatusIndicator({ status }) {
   const colors = {
-    healthy: "#27ae60",
-    degraded: "#f39c12",
-    error: "#e74c3c",
+    healthy: "var(--success)",
+    degraded: "var(--warn)",
+    error: "var(--danger)",
   };
   const labels = {
     healthy: "Healthy",
@@ -25,13 +25,13 @@ function StatusIndicator({ status }) {
       gap: 6,
       fontSize: 13,
       fontWeight: 600,
-      color: colors[status] || "#999",
+      color: colors[status] || "var(--text-muted)",
     }}>
       <span style={{
         width: 8,
         height: 8,
         borderRadius: "50%",
-        background: colors[status] || "#999",
+        background: colors[status] || "var(--text-muted)",
       }} />
       {labels[status] || status}
     </span>
@@ -87,7 +87,7 @@ export default function HealthPage() {
             {/* Overall Status */}
             <div className="stats-grid" style={{ marginBottom: 24 }}>
               <div className="stat-card">
-                <div className="stat-icon" style={{ color: health.overall_status === "healthy" ? "#27ae60" : "#f39c12" }}>
+                <div className="stat-icon" style={{ color: health.overall_status === "healthy" ? "var(--success)" : "var(--warn)" }}>
                   <Activity size={21} />
                 </div>
                 <div>
@@ -130,16 +130,16 @@ export default function HealthPage() {
               </div>
               <div className="form-section">
                 <div className="form-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-                  <div style={{ background: "#f5f5f5", padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Status</div>
+                  <div style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Status</div>
                     <StatusIndicator status={health.database?.status} />
                   </div>
-                  <div style={{ background: "#f5f5f5", padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Response Time</div>
+                  <div style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Response Time</div>
                     <strong>{health.database?.response_ms || 0}ms</strong>
                   </div>
-                  <div style={{ background: "#f5f5f5", padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Engine</div>
+                  <div style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Engine</div>
                     <strong>{health.database?.engine?.split(".")?.pop() || "N/A"}</strong>
                   </div>
                 </div>
@@ -154,9 +154,9 @@ export default function HealthPage() {
               <div className="form-section">
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: 12 }}>
                   {Object.entries(health.records || {}).map(([key, count]) => (
-                    <div key={key} style={{ background: "#f5f5f5", padding: 12, borderRadius: 8, textAlign: "center" }}>
+                    <div key={key} style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8, textAlign: "center" }}>
                       <div style={{ fontSize: 20, fontWeight: 700 }}>{count.toLocaleString()}</div>
-                      <div style={{ fontSize: 12, color: "#666", textTransform: "capitalize" }}>
+                      <div style={{ fontSize: 12, color: "var(--text-muted)", textTransform: "capitalize" }}>
                         {key.replace(/_/g, " ")}
                       </div>
                     </div>
@@ -172,22 +172,22 @@ export default function HealthPage() {
               </div>
               <div className="form-section">
                 <div className="form-grid" style={{ gridTemplateColumns: "repeat(2, 1fr)" }}>
-                  <div style={{ background: "#f5f5f5", padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Python Version</div>
+                  <div style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Python Version</div>
                     <strong>{health.system?.python_version || "N/A"}</strong>
                   </div>
-                  <div style={{ background: "#f5f5f5", padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Platform</div>
+                  <div style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Platform</div>
                     <strong style={{ fontSize: 13 }}>{health.system?.platform || "N/A"}</strong>
                   </div>
-                  <div style={{ background: "#f5f5f5", padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Debug Mode</div>
-                    <strong style={{ color: health.system?.debug_mode ? "#e74c3c" : "#27ae60" }}>
+                  <div style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Debug Mode</div>
+                    <strong style={{ color: health.system?.debug_mode ? "var(--danger)" : "var(--success)" }}>
                       {health.system?.debug_mode ? "ON" : "OFF"}
                     </strong>
                   </div>
-                  <div style={{ background: "#f5f5f5", padding: 12, borderRadius: 8 }}>
-                    <div style={{ fontSize: 12, color: "#666" }}>Hostname</div>
+                  <div style={{ background: "var(--surface-2)", padding: 12, borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: "var(--text-muted)" }}>Hostname</div>
                     <strong style={{ fontSize: 13 }}>{health.system?.hostname || "N/A"}</strong>
                   </div>
                 </div>

@@ -253,7 +253,7 @@ function FeeConfiguration() {
                                   </span>
                                 )}
                                 {item.frequency && (
-                                  <span style={{ color: "#666", marginLeft: "0.4rem", fontSize: "0.75rem" }}>
+                                  <span style={{ color: "var(--text-muted)", marginLeft: "0.4rem", fontSize: "0.75rem" }}>
                                     {item.frequency} × {item.installments || 1}
                                   </span>
                                 )}
@@ -395,7 +395,7 @@ function OutstandingFees() {
                 <tr key={row.invoice_id}>
                   <td>
                     <strong>{row.student_name}</strong>
-                    <div style={{ fontSize: "0.75rem", color: "#666" }}>{row.admission_number}</div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{row.admission_number}</div>
                   </td>
                   <td>{row.invoice_number}</td>
                   <td>{`${row.class}${row.section ? " · " + row.section : ""}`}</td>
@@ -403,7 +403,7 @@ function OutstandingFees() {
                   <td>{formatCurrency(row.total_amount)}</td>
                   <td>{formatCurrency(row.paid_amount)}</td>
                   <td>
-                    <strong style={{ color: row.is_overdue ? "#c0392b" : undefined }}>
+                    <strong style={{ color: row.is_overdue ? "var(--danger)" : undefined }}>
                       {formatCurrency(row.balance)}
                     </strong>
                   </td>

@@ -304,15 +304,7 @@ export default function ExecutiveDashboardPage() {
                 </div>
                 <div className="panel-body">
                   {(data?.academic?.class_strength || []).map((row) => (
-                    <div
-                      key={row.class}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        padding: "6px 0",
-                        borderBottom: "1px solid #e2e8f0",
-                      }}
-                    >
+                    <div key={row.class} className="class-strength-row">
                       <span>{row.class}</span>
                       <strong>{row.students}</strong>
                     </div>
