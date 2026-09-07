@@ -58,6 +58,11 @@ class CampusSerializer(serializers.ModelSerializer):
         queryset=School.objects.all(),
         required=False,
     )
+    # Admin credentials returned only on create when admin provisioning is requested
+    admin_username = serializers.CharField(read_only=True, required=False)
+    admin_email = serializers.CharField(read_only=True, required=False)
+    admin_password = serializers.CharField(read_only=True, required=False)
+    admin_position = serializers.CharField(read_only=True, required=False)
 
     class Meta:
         model = Campus
@@ -74,7 +79,22 @@ class CampusSerializer(serializers.ModelSerializer):
             "student_count",
             "created_at",
             "updated_at",
+            "admin_username",
+            "admin_email",
+            "admin_password",
+            "admin_position",
         ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        # Include admin credentials from context if available (only on create)
+        admin_creds = self.context.get("admin_credentials")
+        if admin_creds:
+            data["admin_username"] = admin_creds.get("username")
+            data["admin_email"] = admin_creds.get("email")
+            data["admin_password"] = admin_creds.get("password")
+            data["admin_position"] = admin_creds.get("position")
+        return data
 
 
 class AcademicUnitSerializer(serializers.ModelSerializer):

@@ -9,6 +9,8 @@ import {
   Pencil,
   Trash2,
   X,
+  Copy,
+  Check,
 } from "lucide-react";
 import { useApiList } from "./useApiList";
 import {
@@ -25,7 +27,20 @@ const API_URL = "/api/schools/campuses/";
 const TENANTS_URL = "/api/schools/tenants/";
 const SCHOOLS_URL = "/api/schools/";
 
-const emptyForm = { name: "", city: "", address: "", school: "" };
+const emptyForm = {
+  name: "",
+  city: "",
+  address: "",
+  school: "",
+  // Admin provisioning fields
+  admin_first_name: "",
+  admin_last_name: "",
+  admin_username: "",
+  admin_email: "",
+  admin_password: "",
+  admin_confirm_password: "",
+  admin_position: "",
+};
 
 export default function CampusesPage() {
   const { rows, count, loading, error, refresh } = useApiList(API_URL);
@@ -40,6 +55,8 @@ export default function CampusesPage() {
   const [form, setForm] = useState(emptyForm);
 
   const [viewing, setViewing] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [createdAdmin, setCreatedAdmin] = useState(null);
 
   const currentParams = () =>
     new URLSearchParams(
@@ -83,13 +100,20 @@ export default function CampusesPage() {
     if (opening) {
       setEditing(null);
       setFormError("");
+      setCreatedAdmin(null);
       setForm(buildForm(schools.length === 1 ? schools[0].id : ""));
+    } else {
+      setEditing(null);
+      setFormError("");
+      setCreatedAdmin(null);
+      setForm(emptyForm);
     }
   };
 
   const startEdit = (campus) => {
     setEditing(campus);
     setFormError("");
+    setCreatedAdmin(null);
     setForm({
       name: campus.name,
       city: campus.city || "",
@@ -99,6 +123,14 @@ export default function CampusesPage() {
     setShowForm(true);
   };
 
+  const handlePasswordToggle = () => setShowPassword((v) => !v);
+
+  const handleCopy = (text, label) => {
+    navigator.clipboard.writeText(text);
+    setFormError(`${label} copied to clipboard!`);
+    setTimeout(() => setFormError(""), 2000);
+  };
+
   const submit = (event) => {
     event.preventDefault();
     setSaving(true);
@@ -106,15 +138,68 @@ export default function CampusesPage() {
 
     const isEdit = Boolean(editing);
 
+    // Validate admin fields if provided
+    const hasAdminData = form.admin_username || form.admin_email || form.admin_password || form.admin_position;
+    if (hasAdminData) {
+      if (!form.admin_username || !form.admin_email || !form.admin_password || !form.admin_position) {
+        setFormError("All admin fields (username, email, password, position) are required when creating an admin.");
+        setSaving(false);
+        return;
+      }
+      if (form.admin_password !== form.admin_confirm_password) {
+        setFormError("Passwords do not match.");
+        setSaving(false);
+        return;
+      }
+      if (form.admin_password.length < 8) {
+        setFormError("Password must be at least 8 characters.");
+        setSaving(false);
+        return;
+      }
+      if (!["principal", "vice_principal"].includes(form.admin_position)) {
+        setFormError("Position must be Principal or Vice Principal.");
+        setSaving(false);
+        return;
+      }
+    }
+
+    const payload = {
+      name: form.name,
+      city: form.city,
+      address: form.address,
+      school: form.school,
+    };
+
+    if (hasAdminData) {
+      payload.admin = {
+        username: form.admin_username,
+        email: form.admin_email,
+        password: form.admin_password,
+        first_name: form.admin_first_name,
+        last_name: form.admin_last_name,
+        position: form.admin_position,
+      };
+    }
+
     apiFetch(isEdit ? `${API_URL}${editing.id}/` : API_URL, {
       method: isEdit ? "PATCH" : "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(form),
+      body: JSON.stringify(payload),
     })
-      .then(() => {
+      .then((data) => {
         setShowForm(false);
         setEditing(null);
         setForm(emptyForm);
+        if (!isEdit && data.admin_username) {
+          setCreatedAdmin({
+            campusName: form.name,
+            name: `${form.admin_first_name} ${form.admin_last_name}`,
+            position: form.admin_position,
+            username: data.admin_username,
+            email: data.admin_email,
+            password: data.admin_password,
+          });
+        }
         refresh(currentParams());
       })
       .catch((err) => setFormError(err.message))
@@ -194,11 +279,87 @@ export default function CampusesPage() {
               value={form.city}
               onChange={(e) => setForm({ ...form, city: e.target.value })}
             />
-            <input
+<input
               placeholder="Address"
               value={form.address}
               onChange={(e) => setForm({ ...form, address: e.target.value })}
             />
+            {!editing ? (
+              <fieldset style={{ border: 0, padding: 0, marginTop: 16, borderTop: "1px solid var(--border)" }}>
+                <legend style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12 }}>Campus Administrator (optional)</legend>
+                <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
+                  Create the first admin user for this campus. They will have full admin access.
+                </p>
+                <label>
+                  Position *
+                  <select
+                    value={form.admin_position}
+                    onChange={(e) => setForm({ ...form, admin_position: e.target.value })}
+                  >
+                    <option value="">Select position</option>
+                    <option value="principal">Principal</option>
+                    <option value="vice_principal">Vice Principal</option>
+                  </select>
+                </label>
+                <label>
+                  First name *
+                  <input
+                    placeholder="e.g. John"
+                    value={form.admin_first_name}
+                    onChange={(e) => setForm({ ...form, admin_first_name: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Last name *
+                  <input
+                    placeholder="e.g. Doe"
+                    value={form.admin_last_name}
+                    onChange={(e) => setForm({ ...form, admin_last_name: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Username *
+                  <input
+                    placeholder="e.g. principal_campus1"
+                    value={form.admin_username}
+                    onChange={(e) => setForm({ ...form, admin_username: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Email *
+                  <input
+                    type="email"
+                    placeholder="e.g. principal@campus.edu"
+                    value={form.admin_email}
+                    onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Password *
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Minimum 8 characters"
+                      value={form.admin_password}
+                      onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
+                      style={{ flex: 1 }}
+                    />
+                    <button type="button" className="secondary-button" onClick={handlePasswordToggle} style={{ padding: "8px 12px" }}>
+                      {showPassword ? <Eye size={16} /> : <Eye size={16} style={{ opacity: 0.5 }} />}
+                    </button>
+                  </div>
+                </label>
+                <label>
+                  Confirm Password *
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Confirm password"
+                    value={form.admin_confirm_password}
+                    onChange={(e) => setForm({ ...form, admin_confirm_password: e.target.value })}
+                  />
+                </label>
+              </fieldset>
+            ) : null}
             <button className="primary-button" disabled={saving}>
               {saving ? "Saving..." : editing ? "Update Campus" : "Save Campus"}
             </button>
@@ -208,6 +369,61 @@ export default function CampusesPage() {
               {formError}
             </div>
           )}
+        </div>
+      )}
+
+      {createdAdmin && (
+        <div className="panel">
+          <PanelHeader
+            title="Campus Created Successfully"
+            subtitle="Administrator credentials generated. Save these securely — the password will not be shown again."
+          />
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginTop: 16 }}>
+            <div className="detail-grid">
+              <div className="detail-label">Campus</div>
+              <div className="detail-value" style={{ fontWeight: 600 }}>{createdAdmin.campusName}</div>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-label">Administrator</div>
+              <div className="detail-value" style={{ fontWeight: 600 }}>{createdAdmin.name}</div>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-label">Position</div>
+              <div className="detail-value" style={{ fontWeight: 600, textTransform: "capitalize" }}>{createdAdmin.position.replace("_", " ")}</div>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-label">Username</div>
+              <div className="detail-value" style={{ fontFamily: "monospace", fontSize: 14 }}>
+                <span>{createdAdmin.username}</span>
+                <button className="secondary-button" onClick={() => handleCopy(createdAdmin.username, "Username")} style={{ marginLeft: 8, padding: "4px 8px", fontSize: 11 }}>
+                  <Copy size={12} /> Copy
+                </button>
+              </div>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-label">Email</div>
+              <div className="detail-value" style={{ fontFamily: "monospace", fontSize: 14 }}>
+                <span>{createdAdmin.email}</span>
+                <button className="secondary-button" onClick={() => handleCopy(createdAdmin.email, "Email")} style={{ marginLeft: 8, padding: "4px 8px", fontSize: 11 }}>
+                  <Copy size={12} /> Copy
+                </button>
+              </div>
+            </div>
+            <div className="detail-grid">
+              <div className="detail-label">Password</div>
+              <div className="detail-value" style={{ fontFamily: "monospace", fontSize: 14 }}>
+                <span>{createdAdmin.password}</span>
+                <button className="secondary-button" onClick={() => handleCopy(createdAdmin.password, "Password")} style={{ marginLeft: 8, padding: "4px 8px", fontSize: 11 }}>
+                  <Copy size={12} /> Copy
+                </button>
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: 16, display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button className="primary-button" onClick={() => setCreatedAdmin(null)}>
+              <Check size={14} /> Done
+            </button>
+          </div>
         </div>
       )}
 
