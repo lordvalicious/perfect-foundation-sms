@@ -1532,9 +1532,9 @@ class Student360Serializer(serializers.ModelSerializer):
             return {
                 "id": assignment.id,
                 "route_id": assignment.route_id,
-                "route_name": assignment.route.name,
+                "route_name": assignment.route.name if assignment.route else None,
                 "stop_id": assignment.stop_id,
-                "stop_name": assignment.stop.name,
+                "stop_name": assignment.stop.name if assignment.stop else None,
                 "vehicle_number": assignment.route.vehicle.plate_number if assignment.route and assignment.route.vehicle else None,
                 "driver_name": assignment.route.driver.full_name if assignment.route and assignment.route.driver else None,
                 "status": assignment.status,

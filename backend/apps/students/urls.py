@@ -173,11 +173,6 @@ urlpatterns = [
         name="student-activate",
     ),
     path(
-        "<int:student_id>/360/",
-        Student360View.as_view(),
-        name="student-360",
-    ),
-    path(
         "admissions/<int:pk>/",
         AdmissionApplicationDetailView.as_view(),
         name="admission-detail",
