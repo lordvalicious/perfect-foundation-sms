@@ -51,6 +51,12 @@ function SchoolModal({
   onSubmit,
   children,
 }) {
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    document.body.classList.add("modal-open");
+    return () => document.body.classList.remove("modal-open");
+  }, []);
+
   return (
     <div
       className="modal-overlay"
@@ -109,6 +115,11 @@ function SchoolModal({
 }
 
 function SchoolDetail({ tenant, onClose, onEdit, onModules, onAccess, canAccess }) {
+  useEffect(() => {
+    document.body.classList.add("modal-open");
+    return () => document.body.classList.remove("modal-open");
+  }, []);
+
   return (
     <div className="modal-overlay" onMouseDown={(e) => {
       if (e.target === e.currentTarget) onClose();

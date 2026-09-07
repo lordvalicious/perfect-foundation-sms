@@ -2244,6 +2244,22 @@ body.nav-open .mobile-nav {
 
 .form-span { grid-column: 1 / -1; }
 
+/* Labels wrapping inputs (common pattern in forms) */
+label > input,
+label > select,
+label > textarea {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+}
+
+label:has(> input),
+label:has(> select),
+label:has(> textarea) {
+  display: block;
+  margin-bottom: 12px;
+}
+
 input[type="text"],
 input[type="email"],
 input[type="password"],
@@ -2500,6 +2516,12 @@ select {
   animation: fade-in 0.12s var(--ease) both;
 }
 
+/* Prevent body scroll when modal is open */
+body.modal-open {
+  overflow: hidden;
+  touch-action: none;
+}
+
 /* Backdrop overlay used by lifecycle/legacy modals that render a fixed
    full-screen backdrop (kept in sync with .modal-overlay). */
 .modal-backdrop {
@@ -2519,7 +2541,7 @@ select {
 .teacher-modal {
   width: 100%;
   max-width: 520px;
-  max-height: 88vh;
+  max-height: min(88vh, 88dvh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2588,6 +2610,14 @@ select {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* Forms with .modal-body inside need to be flex containers for the layout to work */
+.modal > form:has(> .modal-body),
+.teacher-modal > form:has(> .modal-body) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .modal > form > .modal-footer,
@@ -4561,10 +4591,13 @@ select {
   .stats-grid { grid-template-columns: 1fr 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .bar { grid-template-columns: 90px 1fr 55px; }
-  .modal, .teacher-modal { max-height: 92vh; margin: 0 6px; }
+  .modal, .teacher-modal { max-height: min(92vh, 92dvh); margin: 0 6px; }
   .teacher-modal .modal-body { grid-template-columns: 1fr; }
   .fin-widgets { grid-template-columns: 1fr; }
   .teacher-filter-panel { flex-direction: column; }
+
+  /* Reduce overlay padding on tablet */
+  .modal-overlay { padding: 16px; }
 }
 
 @media (max-width: 560px) {
@@ -4593,6 +4626,13 @@ select {
     white-space: nowrap;
   }
   .topbar-right { gap: 2px; }
+
+  /* Reduce overlay padding on mobile */
+  .modal-overlay { padding: 12px; }
+  .modal, .teacher-modal { max-height: min(95vh, 95dvh); margin: 0 4px; }
+  .modal-header { padding: 12px 16px 8px; }
+  .modal-body { padding: 12px 16px; }
+  .modal-footer { padding: 10px 16px 12px; }
 }
 
 /* Narrowest phones: keep the brand mark compact and let the switcher breathe. */
