@@ -118,7 +118,7 @@ class TenantListCreateView(APIView):
         # Create school admin if admin data provided
         admin_data = request.data.get("admin")
         if admin_data:
-            admin_user = self._create_school_admin(school, admin_data)
+            admin_user, admin_password = self._create_school_admin(school, admin_data)
             if admin_user:
                 return Response(
                     {
@@ -130,6 +130,7 @@ class TenantListCreateView(APIView):
                             "id": admin_user.id,
                             "username": admin_user.username,
                             "email": admin_user.email,
+                            "password": admin_password,
                         },
                     },
                     status=201,
@@ -150,6 +151,8 @@ class TenantListCreateView(APIView):
         from django.db import transaction
         from django.db.utils import IntegrityError
         from rest_framework.exceptions import ValidationError
+        from apps.accounts.services import create_user_with_username
+        from apps.accounts.models import Role, InstitutionMembership, RoleAssignment
 
         username = (admin_data.get("username") or "").strip()
         email = (admin_data.get("email") or "").strip()
@@ -159,40 +162,36 @@ class TenantListCreateView(APIView):
         phone = (admin_data.get("phone") or "").strip()
 
         if not username or not email or not password:
-            return None
-
-        from apps.accounts.models import User, Role, InstitutionMembership, RoleAssignment
+            return None, None
 
         try:
             with transaction.atomic():
-                # Create the user account
-                from django.contrib.auth.hashers import make_password
-                user = User.objects.create(
-                    username=username,
-                    email=email,
-                    password=make_password(password),
-                    first_name=first_name,
-                    last_name=last_name,
-                    phone=phone,
+                user, generated_username, generated_password = create_user_with_username(
+                    base=username,
                     institution=school,
-                    is_superuser=False,
+                    email=email,
+                    password=password,
+                    first_name=first_name or "School",
+                    last_name=last_name or school.name,
+                    must_change_password=False,
                 )
+                if phone:
+                    user.phone = phone
+                    user.save(update_fields=["phone"])
 
-                # Assign ADMIN role (Institution Admin)
                 membership, _ = InstitutionMembership.objects.get_or_create(
                     user=user,
                     institution=school,
                     defaults={"status": "active"},
                 )
-
                 RoleAssignment.objects.get_or_create(
                     membership=membership,
                     role=Role.ADMIN,
                 )
 
-                return user
+                return user, generated_password
         except IntegrityError:
-            return None
+            return None, None
 
 
 class TenantDetailView(APIView):
@@ -255,12 +254,13 @@ class TenantDetailView(APIView):
         admin_data = request.data.get("admin")
         admin_created = None
         if admin_data:
-            admin_user = self._create_school_admin(school, admin_data)
+            admin_user, admin_password = self._create_school_admin(school, admin_data)
             if admin_user:
                 admin_created = {
                     "id": admin_user.id,
                     "username": admin_user.username,
                     "email": admin_user.email,
+                    "password": admin_password,
                 }
                 changes["admin_created"] = True
 

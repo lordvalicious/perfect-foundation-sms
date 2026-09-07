@@ -69,97 +69,103 @@ class SchoolBrandingView(APIView):
         if not settings:
             return Response({"detail": "No school configured."}, status=status.HTTP_404_NOT_FOUND)
 
-        settings.motto = request.data.get("motto", settings.motto)
-        settings.primary_color = request.data.get("primary_color", settings.primary_color)
-        settings.secondary_color = request.data.get("secondary_color", settings.secondary_color)
-        settings.accent_color = request.data.get("accent_color", settings.accent_color)
-        settings.contact_email = request.data.get("contact_email", settings.contact_email)
-        settings.contact_phone = request.data.get("contact_phone", settings.contact_phone)
-        settings.contact_website = request.data.get("contact_website", settings.contact_website)
-        settings.address_line = request.data.get("address_line", settings.address_line)
-        settings.footer_text = request.data.get("footer_text", settings.footer_text)
-        settings.sidebar_color = request.data.get("sidebar_color", settings.sidebar_color)
-        settings.header_color = request.data.get("header_color", settings.header_color)
+        try:
+            settings.motto = request.data.get("motto", settings.motto)
+            settings.primary_color = request.data.get("primary_color", settings.primary_color)
+            settings.secondary_color = request.data.get("secondary_color", settings.secondary_color)
+            settings.accent_color = request.data.get("accent_color", settings.accent_color)
+            settings.contact_email = request.data.get("contact_email", settings.contact_email)
+            settings.contact_phone = request.data.get("contact_phone", settings.contact_phone)
+            settings.contact_website = request.data.get("contact_website", settings.contact_website)
+            settings.address_line = request.data.get("address_line", settings.address_line)
+            settings.footer_text = request.data.get("footer_text", settings.footer_text)
+            settings.sidebar_color = request.data.get("sidebar_color", settings.sidebar_color)
+            settings.header_color = request.data.get("header_color", settings.header_color)
 
-        # --- tenant-level localization / white-label email ---
-        if "short_name" in request.data:
-            settings.short_name = (request.data.get("short_name") or "").strip()[:50]
+            # --- tenant-level localization / white-label email ---
+            if "short_name" in request.data:
+                settings.short_name = (request.data.get("short_name") or "").strip()[:50]
 
-        valid_formats = {choice[0] for choice in SchoolSettings.DATE_FORMAT_CHOICES}
+            valid_formats = {choice[0] for choice in SchoolSettings.DATE_FORMAT_CHOICES}
 
-        if "date_format" in request.data:
-            value = request.data.get("date_format")
+            if "date_format" in request.data:
+                value = request.data.get("date_format")
 
-            settings.date_format = value if value in valid_formats else settings.date_format
+                settings.date_format = value if value in valid_formats else settings.date_format
 
-        valid_languages = {choice[0] for choice in SchoolSettings.LANGUAGE_CHOICES}
+            valid_languages = {choice[0] for choice in SchoolSettings.LANGUAGE_CHOICES}
 
-        if "language" in request.data:
-            value = request.data.get("language")
+            if "language" in request.data:
+                value = request.data.get("language")
 
-            settings.language = value if value in valid_languages else settings.language
+                settings.language = value if value in valid_languages else settings.language
 
-        working_days = request.data.get("working_days")
+            working_days = request.data.get("working_days")
 
-        if isinstance(working_days, str):
-            import json as _json
+            if isinstance(working_days, str):
+                import json as _json
 
-            try:
-                working_days = _json.loads(working_days)
-            except ValueError:
-                working_days = None
+                try:
+                    working_days = _json.loads(working_days)
+                except ValueError:
+                    working_days = None
 
-        if isinstance(working_days, list):
-            valid_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
-            cleaned = [str(day).lower()[:3] for day in working_days if str(day).lower()[:3] in valid_days]
-            settings.working_days = cleaned
+            if isinstance(working_days, list):
+                valid_days = {"mon", "tue", "wed", "thu", "fri", "sat", "sun"}
+                cleaned = [str(day).lower()[:3] for day in working_days if str(day).lower()[:3] in valid_days]
+                settings.working_days = cleaned
 
-        if "email_from_name" in request.data:
-            settings.email_from_name = (
-                request.data.get("email_from_name") or ""
-            ).strip()[:120]
+            if "email_from_name" in request.data:
+                settings.email_from_name = (
+                    request.data.get("email_from_name") or ""
+                ).strip()[:120]
 
-        if "email_from_address" in request.data:
-            from django.core.validators import validate_email
-            from django.core.exceptions import ValidationError as DjangoValidationError
+            if "email_from_address" in request.data:
+                from django.core.validators import validate_email
+                from django.core.exceptions import ValidationError as DjangoValidationError
 
-            address = (request.data.get("email_from_address") or "").strip()
+                address = (request.data.get("email_from_address") or "").strip()
 
-            try:
-                if address:
-                    validate_email(address)
+                try:
+                    if address:
+                        validate_email(address)
 
-                settings.email_from_address = address
-            except DjangoValidationError:
-                return Response(
-                    {"detail": "email_from_address is not a valid email."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
+                    settings.email_from_address = address
+                except DjangoValidationError:
+                    return Response(
+                        {"detail": "email_from_address is not a valid email."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
-        # school-level currency/timezone live on the School row
-        if "currency" in request.data and school:
-            currency = (request.data.get("currency") or "").strip().upper()
+            # school-level currency/timezone live on the School row
+            if "currency" in request.data and school:
+                currency = (request.data.get("currency") or "").strip().upper()
 
-            if 3 <= len(currency) <= 3:
-                school.currency = currency
-                school.save(update_fields=["currency"])
+                if 3 <= len(currency) <= 3:
+                    school.currency = currency
+                    school.save(update_fields=["currency"])
 
-        if "timezone" in request.data and school:
-            timezone_value = (request.data.get("timezone") or "").strip()
+            if "timezone" in request.data and school:
+                timezone_value = (request.data.get("timezone") or "").strip()
 
-            if timezone_value:
-                school.timezone = timezone_value
-                school.save(update_fields=["timezone"])
+                if timezone_value:
+                    school.timezone = timezone_value
+                    school.save(update_fields=["timezone"])
 
-        if "logo" in request.FILES:
-            settings.logo = request.FILES["logo"]
-        if "favicon" in request.FILES:
-            settings.favicon = request.FILES["favicon"]
+            if "logo" in request.FILES:
+                settings.logo = request.FILES["logo"]
+            if "favicon" in request.FILES:
+                settings.favicon = request.FILES["favicon"]
 
-        settings.save()
+            settings.save()
 
-        if "school_name" in request.data and school:
-            school.name = request.data["school_name"]
-            school.save()
+            if "school_name" in request.data and school:
+                school.name = request.data["school_name"]
+                school.save()
 
-        return Response({"detail": "Branding settings updated."})
+            return Response({"detail": "Branding settings updated."})
+        except Exception as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.exception("Branding update failed")
+            return Response({"detail": f"Failed to save: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

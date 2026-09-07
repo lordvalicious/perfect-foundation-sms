@@ -207,6 +207,8 @@ class CampusViewSet(
         from django.db import transaction
         from django.db.utils import IntegrityError
         from rest_framework.exceptions import ValidationError
+        from apps.accounts.services import create_user_with_username
+        from apps.accounts.models import Role, InstitutionMembership, RoleAssignment
 
         username = admin_data.get("username", "").strip()
         email = admin_data.get("email", "").strip()
@@ -220,37 +222,34 @@ class CampusViewSet(
                 {"admin": "Username, email, and password are required for admin creation."}
             )
 
-        from apps.accounts.models import User, Role, InstitutionMembership, RoleAssignment
-        from apps.accounts.models import Role as RoleModel
-
         try:
             with transaction.atomic():
-                # Create the user account
-                from django.contrib.auth.hashers import make_password
-                user = User.objects.create(
-                    username=username,
+                school = self._resolve_school()
+                user, generated_username, generated_password = create_user_with_username(
+                    base=username,
+                    institution=school,
                     email=email,
-                    password=make_password(password),
-                    first_name=first_name,
-                    last_name=last_name,
-                    phone=phone,
-                    institution=self._resolve_school(),
-                    is_superuser=False,
+                    password=password,
+                    first_name=first_name or "Campus",
+                    last_name=last_name or school.name,
+                    must_change_password=False,
                 )
+                if phone:
+                    user.phone = phone
+                    user.save(update_fields=["phone"])
 
-                # Assign CAMPUS_ADMIN role
                 membership, _ = InstitutionMembership.objects.get_or_create(
                     user=user,
-                    institution=self._resolve_school(),
+                    institution=school,
                     defaults={"status": "active"},
                 )
 
                 RoleAssignment.objects.get_or_create(
                     membership=membership,
-                    role=RoleModel.CAMPUS_ADMIN,
+                    role=Role.CAMPUS_ADMIN,
                 )
 
-                return user
+                return user, generated_password
         except IntegrityError:
             raise ValidationError(
                 {"admin": "Failed to create admin user - username or email already exists."}
