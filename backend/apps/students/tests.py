@@ -1,11 +1,14 @@
+import json
 from datetime import date
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from django.test import TestCase
-from rest_framework.test import APIClient
+from rest_framework.test import APIClient, APIRequestFactory, force_authenticate
 
+from apps.accounts.test_access import make_user
 from apps.accounts.models import InstitutionMembership, Role, RoleAssignment, User
+from apps.dashboard.views import dashboard_overview
 from apps.schools.models import AcademicUnit, AcademicYear, Campus, Class, School, Section
 
 from .models import (
@@ -20,6 +23,7 @@ from .models import (
     Inquiry,
     TransferCertificate,
 )
+from .views import StudentListCreateView
 
 
 class StudentLifecycleModelTests(TestCase):
@@ -590,3 +594,104 @@ class Student360APITests(TestCase):
         """Test that unauthenticated access is denied."""
         response = self.client.get(f"/api/students/{self.student.pk}/360/")
         self.assertEqual(response.status_code, 403)
+
+
+class StudentCreationInstitutionRegressionTests(TestCase):
+    """Regression: students created through the API must be stamped with the
+    active institution so the dashboard overview includes them, and campus
+    choices must stay inside the active school (mirrors the teacher fix).
+    """
+
+    def setUp(self):
+        self.school_a = School.objects.create(name="School A")
+        self.campus_a = Campus.objects.create(
+            school=self.school_a, name="Campus A"
+        )
+        self.school_b = School.objects.create(name="School B")
+        self.campus_b = Campus.objects.create(
+            school=self.school_b, name="Campus B"
+        )
+        self.admin_a = make_user("admin_a", "admin", self.school_a)
+        self.admin_b = make_user("admin_b", "admin", self.school_b)
+
+    def _make_request(self, method, path, user, institution, data=None):
+        factory = getattr(APIRequestFactory(), method)
+        django_request = factory(
+            path,
+            data=data,
+            format="json" if data is not None else None,
+        )
+        force_authenticate(django_request, user)
+        if institution is not None:
+            django_request.institution = institution
+        return django_request
+
+    def _create(self, user, institution, payload=None):
+        data = {
+            "first_name": "Zara",
+            "last_name": "Shah",
+            "gender": "female",
+            "guardian_name": "Zara Guardian",
+            "guardian_relationship": "Mother",
+            "guardian_phone": "03000000111",
+            "create_account": False,
+        }
+        if payload:
+            data.update(payload)
+        request = self._make_request(
+            "post",
+            "/api/students/",
+            user,
+            institution,
+            data=data,
+        )
+        response = StudentListCreateView.as_view()(request)
+        response.render()
+        return response
+
+    def _dashboard_total_students(self, user, institution):
+        request = self._make_request(
+            "get", "/api/dashboard/overview/", user, institution
+        )
+        response = dashboard_overview(request)
+        return json.loads(response.content)["students"]["total"]
+
+    def test_created_student_is_stamped_with_institution(self):
+        response = self._create(self.admin_a, self.school_a)
+        self.assertEqual(response.status_code, 201)
+        student = Student.objects.get(pk=json.loads(response.content)["id"])
+        self.assertEqual(student.institution_id, self.school_a.id)
+
+    def test_created_student_increases_dashboard_overview(self):
+        before = self._dashboard_total_students(self.admin_a, self.school_a)
+        response = self._create(self.admin_a, self.school_a)
+        self.assertEqual(response.status_code, 201)
+        after = self._dashboard_total_students(self.admin_a, self.school_a)
+        self.assertEqual(after, before + 1)
+
+    def test_created_student_not_counted_for_other_school(self):
+        self._create(self.admin_a, self.school_a)
+        self.assertEqual(
+            self._dashboard_total_students(self.admin_a, self.school_a),
+            1,
+        )
+        self.assertEqual(
+            self._dashboard_total_students(self.admin_b, self.school_b),
+            0,
+        )
+
+    def test_create_student_requires_active_institution(self):
+        response = self._create(self.admin_a, None)
+        self.assertEqual(response.status_code, 400)
+        body = json.loads(response.content)
+        self.assertIn("institution", body)
+
+    def test_primary_campus_must_belong_to_active_school(self):
+        response = self._create(
+            self.admin_a,
+            self.school_a,
+            payload={"primary_campus": self.campus_b.id},
+        )
+        self.assertEqual(response.status_code, 400)
+        body = json.loads(response.content)
+        self.assertIn("primary_campus", body)

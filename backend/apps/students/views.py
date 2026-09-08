@@ -5,7 +5,11 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework import generics, status
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import (
+    NotFound,
+    PermissionDenied,
+    ValidationError as RestValidationError,
+)
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from decimal import Decimal
@@ -541,6 +545,28 @@ STUDENT_QUERYSET = (
 class StudentListCreateView(generics.ListCreateAPIView):
     serializer_class = StudentSerializer
     permission_classes = [IsAdminOrReadOnly]
+
+    def perform_create(self, serializer):
+        institution = getattr(self.request, "institution", None)
+
+        if institution is None:
+            raise RestValidationError(
+                {"institution": "Select a school before adding a student."}
+            )
+
+        primary_campus = serializer.validated_data.get("primary_campus")
+
+        if primary_campus is not None and primary_campus.school_id != institution.id:
+            raise RestValidationError(
+                {
+                    "primary_campus": (
+                        "The selected campus does not belong to the "
+                        "active school."
+                    )
+                }
+            )
+
+        serializer.save(institution=institution)
 
     def get_queryset(self):
         queryset = STUDENT_QUERYSET.order_by("first_name", "last_name")
