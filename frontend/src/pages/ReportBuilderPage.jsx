@@ -66,8 +66,8 @@ const REPORT_TYPE_SLUGS = {
   staff: "staff",
   subjects: "subjects",
   payments: "payments",
-  student_status: "student_status",
-  fee_categories: "fee_categories",
+  student_status: "student-status",
+  fee_categories: "fee-categories",
 };
 
 function TemplateFormModal({ template, onClose, onSaved }) {

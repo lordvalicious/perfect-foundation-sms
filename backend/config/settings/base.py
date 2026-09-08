@@ -97,6 +97,7 @@ MIDDLEWARE = [
     "apps.accounts.middleware.ActiveInstitutionMiddleware",
     "apps.accounts.campus_middleware.CampusAccessMiddleware",
     "apps.schools.middleware.ModuleAccessMiddleware",
+    "apps.reports.middleware.ReportAuditMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.audit.middleware.LoginAttemptAuditMiddleware",

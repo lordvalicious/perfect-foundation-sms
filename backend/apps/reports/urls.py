@@ -43,6 +43,13 @@ from .pdf_views import (
 )
 from .cron_views import WeeklyReportEmailCronView
 from .at_risk_views import AtRiskReportView
+from .base_views import (
+    ReportAuditView,
+    ReportConfigView,
+    ReportListView,
+    SavedReportDetailView,
+    SavedReportView,
+)
 from .import_views import (
     ImportCommitView,
     ImportPreviewView,
@@ -402,6 +409,11 @@ urlpatterns = [
     path("templates/", ReportTemplateListView.as_view(), name="report-template-list"),
     path("templates/<int:pk>/", ReportTemplateDetailView.as_view(), name="report-template-detail"),
     path("generate/", ReportGenerateView.as_view(), name="report-generate"),
+    path("list/", ReportListView.as_view(), name="report-list"),
+    path("config/<slug:report_key>/", ReportConfigView.as_view(), name="report-config"),
+    path("saved-reports/", SavedReportView.as_view(), name="report-saved-list"),
+    path("saved-reports/<int:pk>/", SavedReportDetailView.as_view(), name="report-saved-detail"),
+    path("audit/", ReportAuditView.as_view(), name="report-audit"),
 
     # Export/Import
     path("export/", DataExportListView.as_view(), name="data-export-list"),

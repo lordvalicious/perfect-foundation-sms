@@ -37,11 +37,11 @@ import {
   Siren,
   Search,
   X,
+  Printer,
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { formatCurrency } from "./format";
 import { apiDownload } from "../api";
-import { DEMO_REPORTS } from "./demoReports";
 import {
   SingleStudentDetail,
   SingleTeacherDetail,
@@ -206,16 +206,54 @@ const STUDENT_DETAIL_KEY = "single-student";
 const TEACHER_DETAIL_KEY = "single-teacher";
 const STAFF_DETAIL_KEY = "single-staff";
 
+const REPORT_CATEGORY = {
+  enrollment: "Students",
+  attendance: "Attendance",
+  "chronic-absentee": "Attendance",
+  results: "Academics",
+  "top-performers": "Academics",
+  "class-performance": "Academics",
+  "student-progress": "Academics",
+  subjects: "Academics",
+  fees: "Finance",
+  "fee-defaulters": "Finance",
+  "collection-trend": "Finance",
+  discounts: "Finance",
+  payments: "Finance",
+  "fee-categories": "Finance",
+  "payroll-summary": "Finance",
+  staff: "Staff",
+  "teacher-workload": "Staff",
+  "student-status": "Students",
+  library: "Operations",
+  "route-utilization": "Operations",
+  "inventory-value": "Operations",
+  "maintenance-due": "Operations",
+  "event-participation": "Events",
+  "sms-usage": "Communications",
+};
+
+const CATEGORY_ORDER = [
+  "Students",
+  "Attendance",
+  "Academics",
+  "Finance",
+  "Staff",
+  "Operations",
+  "Events",
+  "Communications",
+  "Other",
+];
+
+const TOOL_TABS = [
+  { key: GRADEBOOK_KEY, title: "Gradebook", icon: Table2 },
+  { key: AT_RISK_KEY, title: "At-Risk", icon: Siren },
+  { key: STUDENT_DETAIL_KEY, title: "Student Detail", icon: UserCheck },
+  { key: TEACHER_DETAIL_KEY, title: "Teacher Detail", icon: GraduationCap },
+  { key: STAFF_DETAIL_KEY, title: "Staff Detail", icon: Users },
+];
+
 const ReportQueryContext = createContext("");
-
-function reportWithFallback(key, json) {
-  const demo = DEMO_REPORTS[key];
-  if (!demo) return json;
-
-  const hasLiveRows = demo.rowKeys.some((field) => Array.isArray(json[field]) && json[field].length > 0);
-
-  return hasLiveRows ? json : demo.data;
-}
 
 export default function ReportsPage() {
   const [active, setActive] = useState("enrollment");
@@ -243,6 +281,30 @@ export default function ReportsPage() {
   const [campuses, setCampuses] = useState([]);
   const [selectedCampus, setSelectedCampus] = useState("");
   const [queries, setQueries] = useState({});
+  const [tabQuery, setTabQuery] = useState("");
+
+  const groupedReports = useMemo(() => {
+    const q = tabQuery.trim().toLowerCase();
+
+    const visible = q
+      ? REPORTS.filter((report) => report.title.toLowerCase().includes(q))
+      : REPORTS;
+
+    const groups = {};
+    visible.forEach((report) => {
+      const category = REPORT_CATEGORY[report.key] || "Other";
+      (groups[category] ||= []).push(report);
+    });
+
+    return CATEGORY_ORDER.filter((category) => groups[category])
+      .map((category) => ({ category, reports: groups[category] }));
+  }, [tabQuery]);
+
+  const visibleTools = useMemo(() => {
+    const q = tabQuery.trim().toLowerCase();
+    if (!q) return TOOL_TABS;
+    return TOOL_TABS.filter((tab) => tab.title.toLowerCase().includes(q));
+  }, [tabQuery]);
 
   const [atRisk, setAtRisk] = useState(null);
   const [arLoading, setArLoading] = useState(false);
@@ -269,6 +331,16 @@ export default function ReportsPage() {
       .catch((err) => setArError(String(err)))
       .finally(() => setArLoading(false));
   }, [arFilters]);
+
+  const atRiskParams = useCallback(() => {
+    const params = new URLSearchParams({
+      attendance_threshold: arFilters.attendance_threshold || "75",
+      days: arFilters.days || "30",
+      points: arFilters.points || "3",
+    });
+    if (selectedCampus) params.append("campus", selectedCampus);
+    return params;
+  }, [arFilters, selectedCampus]);
 
   const needsExam = EXAM_REPORTS.includes(active);
   const needsStudent = STUDENT_REPORTS.includes(active);
@@ -337,13 +409,19 @@ export default function ReportsPage() {
       const query = params.toString() ? `?${params.toString()}` : "";
 
       fetch(`${BASE}${config.url}${query}`, { credentials: "include" })
-        .then((response) => (response.ok ? response.json() : {}))
+        .then(async (response) => {
+          if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.detail || body.message || `HTTP ${response.status}`);
+          }
+          return response.json();
+        })
         .then((json) => {
-          setData((previous) => ({ ...previous, [key]: reportWithFallback(key, json) }));
+          setData((previous) => ({ ...previous, [key]: json }));
           setLoading(false);
         })
         .catch((err) => {
-          setError(err.message);
+          setError(err.message || "Could not load the report.");
           setLoading(false);
         });
     },
@@ -452,14 +530,35 @@ export default function ReportsPage() {
     }
   };
 
-  const handleDownload = () => {
-    const config = REPORTS.find((item) => item.key === active);
+  const handleExport = (format) => {
+    const isAtRisk = active === AT_RISK_KEY;
+    const config = isAtRisk
+      ? { key: AT_RISK_KEY, url: "at-risk/" }
+      : REPORTS.find((item) => item.key === active);
+
+    if (!config) return;
+
+    const params = isAtRisk ? atRiskParams() : buildParams(active);
+
+    if (format === "print") {
+      setError("");
+      const query = params.toString();
+      window.open(`${BASE}print/${config.key}/${query ? `?${query}` : ""}`, "_blank");
+      return;
+    }
 
     setDownloading(true);
+    setError("");
 
-    const params = buildParams(active);
+    if (format === "pdf") {
+      const query = params.toString();
+      apiDownload(`${BASE}pdf/${config.key}/${query ? `?${query}` : ""}`, `${config.key}_report.pdf`)
+        .catch(() => setError("Could not download the PDF."))
+        .finally(() => setDownloading(false));
+      return;
+    }
+
     params.append("format", "csv");
-
     apiDownload(`${BASE}${config.url}?${params.toString()}`, `${config.key}_report.csv`)
       .catch(() => setError("Could not download the report."))
       .finally(() => setDownloading(false));
@@ -468,6 +567,11 @@ export default function ReportsPage() {
   const current = data[active] || {};
   const reportTitle = REPORTS.find((item) => item.key === active)?.title || "Report";
   const isStandardReport = REPORTS.some((item) => item.key === active);
+  const hasCurrentReport = isStandardReport
+    ? Boolean(data[active])
+    : active === AT_RISK_KEY
+      ? Boolean(atRisk)
+      : false;
 
   return (
     <section className="content">
@@ -477,65 +581,69 @@ export default function ReportsPage() {
         subtitle="Generate and export school-wide reports as CSV."
       />
 
+      <div className="report-tab-search">
+        <Search size={14} />
+        <input
+          type="text"
+          placeholder="Search reports..."
+          value={tabQuery}
+          onChange={(event) => setTabQuery(event.target.value)}
+        />
+        {tabQuery && (
+          <button
+            type="button"
+            className="report-search-clear"
+            aria-label="Clear search"
+            onClick={() => setTabQuery("")}
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
       <div className="tabs">
-        {REPORTS.map((report) => {
-          const Icon = report.icon;
+        {groupedReports.map(({ category, reports }) => (
+          <div key={category} className="tab-group">
+            <span className="tab-group-label">{category}</span>
+            {reports.map((report) => {
+              const Icon = report.icon;
 
-          return (
-            <button
-              key={report.key}
-              className={`tab-button ${active === report.key ? "active" : ""}`}
-              onClick={() => switchReport(report.key)}
-            >
-              <Icon size={15} />
-              {report.title}
-            </button>
-          );
-        })}
+              return (
+                <button
+                  key={report.key}
+                  className={`tab-button ${active === report.key ? "active" : ""}`}
+                  onClick={() => switchReport(report.key)}
+                >
+                  <Icon size={15} />
+                  {report.title}
+                </button>
+              );
+            })}
+          </div>
+        ))}
 
-        <button
-          className={`tab-button ${active === GRADEBOOK_KEY ? "active" : ""}`}
-          onClick={() => setActive(GRADEBOOK_KEY)}
-        >
-          <Table2 size={15} />
-          Gradebook
-        </button>
+        {visibleTools.length > 0 && (
+          <div className="tab-group">
+            <span className="tab-group-label">Tools</span>
+            {visibleTools.map((tab) => {
+              const Icon = tab.icon;
 
-        <button
-          className={`tab-button ${active === AT_RISK_KEY ? "active" : ""}`}
-          onClick={() => {
-            setActive(AT_RISK_KEY);
-
-            if (!atRisk) loadAtRisk();
-          }}
-        >
-          <Siren size={15} />
-          At-Risk
-        </button>
-
-        <button
-          className={`tab-button ${active === STUDENT_DETAIL_KEY ? "active" : ""}`}
-          onClick={() => setActive(STUDENT_DETAIL_KEY)}
-        >
-          <UserCheck size={15} />
-          Student Detail
-        </button>
-
-        <button
-          className={`tab-button ${active === TEACHER_DETAIL_KEY ? "active" : ""}`}
-          onClick={() => setActive(TEACHER_DETAIL_KEY)}
-        >
-          <GraduationCap size={15} />
-          Teacher Detail
-        </button>
-
-        <button
-          className={`tab-button ${active === STAFF_DETAIL_KEY ? "active" : ""}`}
-          onClick={() => setActive(STAFF_DETAIL_KEY)}
-        >
-          <Users size={15} />
-          Staff Detail
-        </button>
+              return (
+                <button
+                  key={tab.key}
+                  className={`tab-button ${active === tab.key ? "active" : ""}`}
+                  onClick={() => {
+                    if (tab.key === AT_RISK_KEY && !atRisk) loadAtRisk();
+                    setActive(tab.key);
+                  }}
+                >
+                  <Icon size={15} />
+                  {tab.title}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="panel">
@@ -593,15 +701,39 @@ export default function ReportsPage() {
                 </div>
               )}
 
-              <button
-                type="button"
-                className="primary-button"
-                onClick={handleDownload}
-                disabled={downloading || !data[active]}
-              >
-                <Download size={15} />
-                {downloading ? "Preparing..." : "Export CSV"}
-              </button>
+              {(isStandardReport || active === AT_RISK_KEY) && (
+                <>
+                  <button
+                    type="button"
+                    className="primary-button"
+                    onClick={() => handleExport("csv")}
+                    disabled={downloading || !hasCurrentReport}
+                  >
+                    <Download size={15} />
+                    {downloading ? "Preparing..." : "Export CSV"}
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => handleExport("pdf")}
+                    disabled={downloading || !hasCurrentReport}
+                  >
+                    <FileText size={15} />
+                    PDF
+                  </button>
+
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    onClick={() => handleExport("print")}
+                    disabled={!hasCurrentReport}
+                  >
+                    <Printer size={15} />
+                    Print
+                  </button>
+                </>
+              )}
             </div>
           }
         />
@@ -609,7 +741,7 @@ export default function ReportsPage() {
         <StateArea
           loading={loading}
           error={error}
-          onRetry={() => load(active)}
+          onRetry={() => (active === AT_RISK_KEY ? loadAtRisk() : load(active))}
         >
           <ReportQueryContext.Provider value={queries[active] || ""}>
           {active === AT_RISK_KEY && (

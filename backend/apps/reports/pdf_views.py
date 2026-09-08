@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 
 from apps.accounts.permissions import IsAccountantRole
 from apps.reports.models import ReportTemplate, SavedReport, ReportDefinition
-from apps.reports.utils import quantize
+from apps.reports.utils import normalize_report_payload, quantize
 
 
 class PDFExportMixin:
@@ -32,11 +32,18 @@ class PDFExportMixin:
         if institution:
             school_name = institution.name
             school_address = institution.address or ""
-            if institution.settings:
-                school_phone = institution.settings.contact_phone or ""
-                school_email = institution.settings.contact_email or ""
-                if institution.settings.logo:
-                    school_logo = institution.settings.logo.url
+
+            school_settings = None
+            try:
+                school_settings = institution.settings
+            except Exception:
+                school_settings = None
+
+            if school_settings is not None:
+                school_phone = school_settings.contact_phone or ""
+                school_email = school_settings.contact_email or ""
+                if school_settings.logo:
+                    school_logo = school_settings.logo.url
 
         campus = None
         if hasattr(self, "campus") and self.campus:
@@ -372,11 +379,14 @@ class PDFExportView(APIView):
 
         # Get report data by calling the report endpoint
         from django.test import RequestFactory
+        from rest_framework.request import Request as DRFRequest
         factory = RequestFactory()
-        report_request = factory.get(report_def.endpoint_url, request.GET.dict())
-        report_request.user = request.user
-        report_request.institution = getattr(request, "institution", None)
-        report_request.institution_membership = getattr(request, "institution_membership", None)
+        raw_request = factory.get(report_def.endpoint_url, request.GET.dict())
+        raw_request.user = request.user
+        raw_request.institution = getattr(request, "institution", None)
+        raw_request.institution_membership = getattr(request, "institution_membership", None)
+        report_request = DRFRequest(raw_request)
+        report_request._user = request.user
 
         # Import and call the view
         from django.urls import resolve
@@ -392,9 +402,9 @@ class PDFExportView(APIView):
             view.request = report_request
             view.format_kwarg = "json"
             response = view.get(report_request)
-            report_data = response.data
+            report_data = normalize_report_payload(response.data)
         else:
-            report_data = {}
+            report_data = normalize_report_payload({})
 
         # Get template
         template = ReportTemplate.objects.filter(
@@ -442,10 +452,13 @@ class PrintView(APIView):
 
         # Get report data
         from django.test import RequestFactory
+        from rest_framework.request import Request as DRFRequest
         factory = RequestFactory()
-        report_request = factory.get(report_def.endpoint_url, request.GET.dict())
-        report_request.user = request.user
-        report_request.institution = getattr(request, "institution", None)
+        raw_request = factory.get(report_def.endpoint_url, request.GET.dict())
+        raw_request.user = request.user
+        raw_request.institution = getattr(request, "institution", None)
+        report_request = DRFRequest(raw_request)
+        report_request._user = request.user
 
         from django.urls import resolve
         try:
@@ -459,9 +472,9 @@ class PrintView(APIView):
             view = view_class()
             view.request = report_request
             response = view.get(report_request)
-            report_data = response.data
+            report_data = normalize_report_payload(response.data)
         else:
-            report_data = {}
+            report_data = normalize_report_payload({})
 
         # Get template
         template = ReportTemplate.objects.filter(
@@ -481,6 +494,13 @@ class PrintView(APIView):
         user = request.user
         institution = getattr(request, "institution", None)
 
+        school_logo = None
+        if institution:
+            try:
+                school_logo = institution.settings.logo.url if institution.settings.logo else None
+            except Exception:
+                school_logo = None
+
         context = {
             "report_data": report_data,
             "template_config": template_config,
@@ -488,7 +508,7 @@ class PrintView(APIView):
             "school": {
                 "name": institution.name if institution else "Perfect Foundation School",
                 "address": institution.address if institution else "",
-                "logo": institution.settings.logo.url if institution and institution.settings and institution.settings.logo else None,
+                "logo": school_logo,
             },
             "generated_by": user.get_full_name() or user.username,
             "generated_at": timezone.now(),
@@ -566,171 +586,3 @@ class ReportTemplatePreviewView(APIView):
         }
 
 
-# Add template for print view
-PRINT_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="utf-8">
-    <title>{{ report_definition.title }} - Print</title>
-    <style>
-        @page {
-            size: A4;
-            margin: 2cm;
-            @bottom-center {
-                content: "Page " counter(page) " of " counter(pages);
-            }
-        }
-        body {
-            font-family: 'Helvetica Neue', Arial, sans-serif;
-            font-size: 11px;
-            line-height: 1.4;
-            color: #333;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 20px;
-            border-bottom: 2px solid #1a73e8;
-            padding-bottom: 15px;
-        }
-        .header img {
-            max-height: 80px;
-            margin-bottom: 10px;
-        }
-        .header h1 {
-            margin: 5px 0;
-            color: #1a73e8;
-            font-size: 22px;
-        }
-        .header .subtitle {
-            color: #666;
-            font-size: 12px;
-        }
-        .filters {
-            background: #f5f5f5;
-            padding: 10px;
-            margin: 15px 0;
-            border-radius: 4px;
-            font-size: 11px;
-        }
-        .summary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 10px;
-            margin: 15px 0;
-        }
-        .summary-card {
-            background: #f8f9fa;
-            padding: 12px;
-            border-radius: 4px;
-            border-left: 3px solid #1a73e8;
-        }
-        .summary-card .label {
-            font-size: 11px;
-            color: #666;
-            text-transform: uppercase;
-        }
-        .summary-card .value {
-            font-size: 18px;
-            font-weight: bold;
-            color: #333;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-            font-size: 10px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background: #1a73e8;
-            color: white;
-            font-weight: bold;
-        }
-        tr:nth-child(even) {
-            background: #f9f9f9;
-        }
-        .footer {
-            margin-top: 30px;
-            text-align: center;
-            font-size: 10px;
-            color: #888;
-            border-top: 1px solid #eee;
-            padding-top: 15px;
-        }
-        @media print {
-            .no-print { display: none; }
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        {% if school.logo %}
-        <img src="{{ school.logo }}" alt="{{ school.name }} Logo">
-        {% endif %}
-        <h1>{{ school.name }}</h1>
-        {% if school.address %}
-        <div class="subtitle">{{ school.address }}</div>
-        {% endif %}
-        {% if school.phone or school.email %}
-        <div class="subtitle">
-            {% if school.phone %}Phone: {{ school.phone }}{% endif %}
-            {% if school.phone and school.email %} | {% endif %}
-            {% if school.email %}Email: {{ school.email }}{% endif %}
-        </div>
-        {% endif %}
-        <h2>{{ report_definition.title }}</h2>
-    </div>
-
-    {% if report_data.filters_applied %}
-    <div class="filters">
-        <strong>Filters:</strong>
-        {% for key, value in report_data.filters_applied.items %}
-            {{ key }}: {{ value }}{% if not forloop.last %}, {% endif %}
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if report_data.summary %}
-    <div class="summary-grid">
-        {% for item in report_data.summary %}
-        <div class="summary-card">
-            <div class="label">{{ item.label }}</div>
-            <div class="value">{{ item.value }}</div>
-        </div>
-        {% endfor %}
-    </div>
-    {% endif %}
-
-    {% if report_data.headers and report_data.rows %}
-    <table>
-        <thead>
-            <tr>
-                {% for header in report_data.headers %}
-                <th>{{ header }}</th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in report_data.rows %}
-            <tr>
-                {% for cell in row %}
-                <td>{{ cell }}</td>
-                {% endfor %}
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-    {% endif %}
-
-    <div class="footer">
-        Generated by {{ generated_by }} on {{ generated_at|date:"Y-m-d H:i" }}
-        {% if template_config.watermark %} | {{ template_config.watermark }}{% endif %}
-    </div>
-</body>
-</html>
-"""
