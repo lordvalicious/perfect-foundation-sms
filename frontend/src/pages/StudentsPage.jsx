@@ -484,9 +484,10 @@ function StudentsPage() {
   const handleSectionChange = (value) => {
     setSection(value);
 
-    setTimeout(() => {
+    const timeoutID = setTimeout(() => {
       fetchAllCampuses(1);
     }, 0);
+    return () => clearTimeout(timeoutID);
   };
 
   const handleSearch = (event) => {
@@ -500,9 +501,10 @@ function StudentsPage() {
     setStatus("");
     setSection("");
 
-    setTimeout(() => {
+    const timeoutID = setTimeout(() => {
       fetchAllCampuses(1);
     }, 0);
+    return () => clearTimeout(timeoutID);
   };
 
   /* --------------------------
@@ -1128,9 +1130,10 @@ function StudentsPage() {
               value={gender}
               onChange={(event) => {
                 setGender(event.target.value);
-                setTimeout(() => {
+                const genderTimeout = setTimeout(() => {
                   fetchAllCampuses(1);
                 }, 0);
+                return () => clearTimeout(genderTimeout);
               }}
             >
               <option value="">All genders</option>
@@ -1157,9 +1160,10 @@ function StudentsPage() {
               value={status}
               onChange={(event) => {
                 setStatus(event.target.value);
-                setTimeout(() => {
+                const statusTimeout = setTimeout(() => {
                   fetchAllCampuses(1);
                 }, 0);
+                return () => clearTimeout(statusTimeout);
               }}
             >
               <option value="">All statuses</option>
