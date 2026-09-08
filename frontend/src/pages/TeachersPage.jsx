@@ -8,6 +8,19 @@ import { buildErrorMessage } from "../api";
 const TEACHERS_API_URL = "/api/teachers/";
 const CAMPUSES_API_URL = "/api/schools/campuses/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useState, useCallback, useEffect } from "react";
+import { Search, GraduationCap, UserCheck, Building2 } from "lucide-react";
+import { PageHeader } from "./ui";
+import ProfileModal from "./ProfileModal";
+import CredentialDisplay from "../components/CredentialDisplay";
+import { buildErrorMessage } from "../api";
+
+const TEACHERS_API_URL = "/api/teachers/";
+const CAMPUSES_API_URL = "/api/schools/campuses/";
+
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);

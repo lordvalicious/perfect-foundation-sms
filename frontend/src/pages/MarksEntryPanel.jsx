@@ -7,6 +7,18 @@ const RESULTS_URL = "/api/exams/results/";
 const PRACTICAL_URL = "/api/exams/practical/";
 const STUDENTS_URL = "/api/students/";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import { PanelHeader } from "./ui";
+import { jsonHeaders } from "../api";
+
+const EXAM_SUBJECTS_URL = "/api/exams/subjects/";
+const RESULTS_URL = "/api/exams/results/";
+const PRACTICAL_URL = "/api/exams/practical/";
+const STUDENTS_URL = "/api/students/";
+
 export default function MarksEntryPanel({ exams, onSaved }) {
   const [exam, setExam] = useState("");
   const [subject, setSubject] = useState("");

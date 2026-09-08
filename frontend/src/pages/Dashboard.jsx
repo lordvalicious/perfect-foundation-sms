@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSchool } from "../schoolContext";
+import { EmptyState } from "../components/EmptyState";
+import { RetryButton } from "../components/RetryButton";
 import { SkeletonBlock } from "./ui";
 import {
   Users,
@@ -105,7 +107,7 @@ function Dashboard() {
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [enrollmentByCampus, setEnrollmentByCampus] = useState([]);
+  const [dashboardError, setDashboardError] = useState("");
   const [attendanceRows, setAttendanceRows] = useState([]);
   const [collectionTrend, setCollectionTrend] = useState([]);
   const [schoolName, setSchoolName] = useState("");
@@ -124,7 +126,7 @@ function Dashboard() {
       .then((data) =>
         setSchoolName(data?.school_name || data?.short_name || "")
       )
-      .catch(() => {});
+      .catch((err) => { setDashboardError(err.message || "Failed to load school branding."); setLoading(false); }); // Fallback label for contexts where the active institution is unavailable.    fetch("/api/schools/branding/", { credentials: "include" })
   }, []);
 
   useEffect(() => {
@@ -183,7 +185,7 @@ function Dashboard() {
           }))
         );
       })
-      .catch(() => {});
+      .catch((err) => { setDashboardError(err.message || "Failed to load enrollment data."); }); // Enrollment data fetch
 
     fetch(ATTENDANCE_REPORT_URL, { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
@@ -197,7 +199,7 @@ function Dashboard() {
           }))
         );
       })
-      .catch(() => {});
+      .catch((err) => { setDashboardError(err.message || "Failed to load attendance data."); }); // Attendance data fetch
 
     fetch(COLLECTION_TREND_URL, { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
@@ -212,7 +214,7 @@ function Dashboard() {
           }))
         );
       })
-      .catch(() => {});
+      .catch((err) => { setDashboardError(err.message || "Failed to load collection trend data."); }); // Collection trend data fetch
   }, []);
 
   const stats = dashboard

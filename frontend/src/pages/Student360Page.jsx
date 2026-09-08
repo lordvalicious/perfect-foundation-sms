@@ -24,6 +24,35 @@ const FINANCE_ROLES = ["super_admin", "admin", "principal", "academic", "account
 const HEALTH_ROLES = ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"];
 const SCHOLAR_ROLES = ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "accountant", "teacher", "staff", "hr"];
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import {
+  AlertOctagon,
+  ArrowLeft,
+  BookOpen,
+  Bus,
+  CalendarCheck,
+  Download,
+  FileText,
+  GraduationCap,
+  HeartPulse,
+  LibraryBig,
+  Trash2,
+  Wallet,
+} from "lucide-react";
+import { useAuth } from "../auth";
+import { apiDownload, apiFetch } from "../api";
+import StudentLifecyclePanel, { CAN_MANAGE, CAN_REVIEW } from "./StudentLifecyclePanel";
+import { EmptyState, PageHeader, StateArea, StatusBadge } from "./ui";
+import { formatCurrency, formatDate } from "./format";
+
+const FINANCE_ROLES = ["super_admin", "admin", "principal", "academic", "accountant"];
+const HEALTH_ROLES = ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"];
+const SCHOLAR_ROLES = ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "accountant", "teacher", "staff", "hr"];
+
 function toList(data) {
   return Array.isArray(data) ? data : data.results || [];
 }

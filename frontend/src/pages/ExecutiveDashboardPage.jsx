@@ -26,6 +26,37 @@ import { formatCurrency, getMonthLabel } from "./format";
 
 const EXECUTIVE_URL = "/api/dashboard/executive/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  AlertTriangle,
+  BookOpen,
+  Building2,
+  DollarSign,
+  GraduationCap,
+  TrendingUp,
+  Users,
+} from "lucide-react";
+import {
+  Area,
+  AreaChart,
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+import { apiFetch } from "../api";
+import { PageHeader, StateArea } from "./ui";
+import { formatCurrency, getMonthLabel } from "./format";
+
+const EXECUTIVE_URL = "/api/dashboard/executive/";
+
 function KpiCard({ icon: Icon, label, value, sub }) {
   return (
     <div className="kpi-card">

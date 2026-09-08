@@ -18,6 +18,29 @@ const SECTIONS_URL = "/api/schools/sections/";
 const SUBJECTS_URL = "/api/schools/subjects/";
 const YEARS_URL = "/api/schools/academic-years/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  GraduationCap,
+  UserPlus,
+  Trash2,
+  BookOpen,
+} from "lucide-react";
+import { PageHeader } from "./ui";
+
+const TEACHERS_URL = "/api/teachers/";
+const STUDENTS_URL = "/api/students/";
+const ASSIGNMENTS_URL = "/api/teachers/assignments/";
+const ENROLLMENTS_URL = "/api/students/enrollments/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+const UNITS_URL = "/api/schools/units/";
+const CLASSES_URL = "/api/schools/classes/";
+const SECTIONS_URL = "/api/schools/sections/";
+const SUBJECTS_URL = "/api/schools/subjects/";
+const YEARS_URL = "/api/schools/academic-years/";
+
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);

@@ -5,6 +5,16 @@ import { ApprovalDecisionModal } from "../components/ApprovalDecisionModal";
 
 const API_URL = "/api/workflow/approvals/";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import { PageHeader, StateArea } from "./ui";
+import { ApprovalCard } from "../components/ApprovalCard";
+import { ApprovalDecisionModal } from "../components/ApprovalDecisionModal";
+
+const API_URL = "/api/workflow/approvals/";
+
 export default function PendingApprovalsPage() {
   const [approvals, setApprovals] = useState([]);
   const [instances, setInstances] = useState({});

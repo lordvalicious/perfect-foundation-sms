@@ -7,6 +7,18 @@ import { WorkflowDefinitionTestModal } from "../components/WorkflowDefinitionTes
 
 const API_URL = "/api/workflow/definitions/";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import { Plus } from "lucide-react";
+import { PageHeader } from "./ui";
+import { WorkflowDefinitionList } from "../components/WorkflowDefinitionList";
+import { WorkflowDefinitionForm } from "../components/WorkflowDefinitionForm";
+import { WorkflowDefinitionTestModal } from "../components/WorkflowDefinitionTestModal";
+
+const API_URL = "/api/workflow/definitions/";
+
 export default function WorkflowDefinitionAdminPage() {
   const [definitions, setDefinitions] = useState([]);
   const [loading, setLoading] = useState(true);

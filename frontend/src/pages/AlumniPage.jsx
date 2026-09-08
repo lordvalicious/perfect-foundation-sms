@@ -5,6 +5,16 @@ import { apiFetch, authHeaders } from "../api";
 
 const BASE = "/api/alumni/";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import { GraduationCap, Pencil, Plus, Trash2 } from "lucide-react";
+import { PageHeader, PanelHeader, StateArea } from "./ui";
+import { apiFetch, authHeaders } from "../api";
+
+const BASE = "/api/alumni/";
+
 export default function AlumniPage() {
   const [rows, setRows] = useState([]);
   const [campuses, setCampuses] = useState([]);

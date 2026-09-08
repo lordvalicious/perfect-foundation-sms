@@ -15,6 +15,26 @@ const PERIODS_API_URL = "/api/timetable/periods/";
 const ENTRIES_API_URL = "/api/timetable/entries/";
 const GENERATE_URL = "/api/timetable/generate/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useState } from "react";
+import { CalendarDays, Sparkles } from "lucide-react";
+import { useApiList } from "./useApiList";
+import { useAuth } from "../auth";
+import {
+  PageHeader,
+  PanelHeader,
+  StateArea,
+  EmptyState,
+  StatusBadge,
+} from "./ui";
+import { apiFetch, authHeaders } from "../api";
+
+const PERIODS_API_URL = "/api/timetable/periods/";
+const ENTRIES_API_URL = "/api/timetable/entries/";
+const GENERATE_URL = "/api/timetable/generate/";
+
 function AutoGeneratePanel() {
   const [campus, setCampus] = useState("");
   const [lessons, setLessons] = useState(5);

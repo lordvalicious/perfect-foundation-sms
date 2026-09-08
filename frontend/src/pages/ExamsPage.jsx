@@ -35,6 +35,46 @@ const EXAM_STATUSES = [
   ["completed", "Completed"],
 ];
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useState } from "react";
+import {
+  ArrowLeft,
+  Armchair,
+  BookOpen,
+  CalendarClock,
+  FileText,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { apiFetch } from "../api";
+import { useApiList } from "./useApiList";
+import {
+  PageHeader,
+  PanelHeader,
+  StateArea,
+  EmptyState,
+  Pagination,
+  StatusBadge,
+} from "./ui";
+import { formatDate } from "./format";
+import MarksEntryPanel from "./MarksEntryPanel";
+import ExamFormModal from "./ExamFormModal";
+import ManageSubjectsPanel from "./ManageSubjectsPanel";
+import ManageSchedulePanel from "./ManageSchedulePanel";
+import ManageSeatingPanel from "./ManageSeatingPanel";
+
+const API_URL = "/api/exams/";
+
+const EXAM_STATUSES = [
+  ["draft", "Draft"],
+  ["scheduled", "Scheduled"],
+  ["completed", "Completed"],
+];
+
 function buildParams(search, status, page) {
   const params = new URLSearchParams();
 

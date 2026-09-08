@@ -40,6 +40,51 @@ const EMPTY_PAYMENT_FORM = {
   notes: "",
 };
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import { Layers, X } from "lucide-react";
+import { useAuth } from "../auth";
+import { PageHeader, StateArea } from "./ui";
+import { formatCurrency } from "./format";
+import { apiFetch, jsonHeaders } from "../api";
+
+const BULK_INVOICES_URL = "/api/finance/invoices/bulk/";
+const BULK_PAYMENTS_URL = "/api/finance/payments/bulk/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+const ACADEMIC_YEARS_URL = "/api/schools/academic-years/";
+const CLASSES_URL = "/api/schools/classes/";
+const CATEGORIES_URL = "/api/finance/categories/";
+const FEE_STRUCTURES_URL = "/api/finance/fee-structures/";
+const INVOICES_URL = "/api/finance/invoices/";
+
+const PAYMENT_METHODS = [
+  ["cash", "Cash"],
+  ["bank", "Bank Transfer"],
+  ["jazzcash", "JazzCash"],
+  ["easypaisa", "EasyPaisa"],
+  ["card", "Card"],
+  ["other", "Other"],
+];
+
+const EMPTY_INVOICE_FORM = {
+  campus: "",
+  academic_year: "",
+  class_obj: "",
+  category: "",
+  due_date: "",
+  notes: "",
+  skip_existing: true,
+};
+
+const EMPTY_PAYMENT_FORM = {
+  payment_date: "",
+  payment_method: "cash",
+  reference: "",
+  notes: "",
+};
+
 function BulkInvoiceModal({ onClose, onDone }) {
   const [form, setForm] = useState(EMPTY_INVOICE_FORM);
   const [saving, setSaving] = useState(false);

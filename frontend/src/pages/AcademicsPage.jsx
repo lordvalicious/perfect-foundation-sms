@@ -23,6 +23,34 @@ const EVENTS_URL = "/api/events/";
 const PROMOTIONS_URL = "/api/students/promotions/";
 const STUDENTS_URL = "/api/students/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  BookOpen,
+  CalendarDays,
+  GraduationCap,
+  Plus,
+  School,
+  Search,
+} from "lucide-react";
+import { apiFetch, jsonHeaders } from "../api";
+import { EmptyState, PageHeader, PanelHeader, StateArea, StatusBadge } from "./ui";
+import { formatDate } from "./format";
+
+const YEARS_URL = "/api/schools/academic-years/";
+const TERMS_URL = "/api/schools/terms/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+const CLASSES_URL = "/api/schools/classes/";
+const SECTIONS_URL = "/api/schools/sections/";
+const UNITS_URL = "/api/schools/units/";
+const SUBJECTS_URL = "/api/schools/subjects/";
+const OFFERINGS_URL = "/api/schools/offerings/";
+const EVENTS_URL = "/api/events/";
+const PROMOTIONS_URL = "/api/students/promotions/";
+const STUDENTS_URL = "/api/students/";
+
 function toList(data) {
   return Array.isArray(data) ? data : data.results || [];
 }

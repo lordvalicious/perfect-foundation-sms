@@ -6,6 +6,17 @@ import { apiFetch, authHeaders } from "../api";
 const BASE = "/api/hostel/";
 const CAMPUSES_URL = "/api/schools/campuses/";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import { BedDouble, Plus } from "lucide-react";
+import { PageHeader, PanelHeader, StateArea } from "./ui";
+import { apiFetch, authHeaders } from "../api";
+
+const BASE = "/api/hostel/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+
 export default function HostelPage() {
   const [tab, setTab] = useState("hostels");
   const [rows, setRows] = useState([]);

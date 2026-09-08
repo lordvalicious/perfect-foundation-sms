@@ -33,6 +33,44 @@ const EMPTY_BOOK_FORM = {
   total_copies: 1,
 };
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useState, useEffect, useCallback } from "react";
+import { BookMarked, Search, BookCopy, RotateCcw, Plus, Pencil, Trash2, X } from "lucide-react";
+import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
+import { formatDate, formatCurrency } from "./format";
+import { apiFetch, jsonHeaders } from "../api";
+
+const BOOKS_URL = "/api/library/books/";
+const ISSUES_URL = "/api/library/issues/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+
+const BOOK_CATEGORY_CHOICES = [
+  { value: "fiction", label: "Fiction" },
+  { value: "non_fiction", label: "Non-Fiction" },
+  { value: "textbook", label: "Textbook" },
+  { value: "reference", label: "Reference" },
+  { value: "science", label: "Science" },
+  { value: "math", label: "Mathematics" },
+  { value: "literature", label: "Literature" },
+  { value: "history", label: "History" },
+  { value: "geography", label: "Geography" },
+  { value: "other", label: "Other" },
+];
+
+const EMPTY_BOOK_FORM = {
+  title: "",
+  campus: "",
+  author: "",
+  isbn: "",
+  publisher: "",
+  publication_year: "",
+  category: "other",
+  description: "",
+  total_copies: 1,
+};
+
 export default function LibraryPage() {
   const [tab, setTab] = useState("books");
   const [books, setBooks] = useState(null);

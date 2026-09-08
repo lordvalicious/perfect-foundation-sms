@@ -974,9 +974,17 @@ function Shell() {
         <Suspense fallback={<RouteFallback />}>
         <Routes key={currentSchool?.id ?? "none"}>
         <Route path="/login" element={<Navigate to="/" replace />} />
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <Dashboard />
+          </RequireRoles>
+        } />
 
-        <Route path="/profile" element={<ProfilePage key={location.pathname} />} />
+        <Route path="/profile" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
+            <ProfilePage key={location.pathname} />
+          </RequireRoles>
+        } />
         <Route path="/profile/teacher/:id" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic"]}>
             <ProfilePage key={location.pathname} />
@@ -1107,7 +1115,11 @@ function Shell() {
           </RequireRoles>
         } />
 
-        <Route path="/events" element={<EventsPage />} />
+        <Route path="/events" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "teacher", "staff"]}>
+            <EventsPage />
+          </RequireRoles>
+        } />
 
         <Route path="/announcements" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "teacher", "staff", "student", "parent"]}>
@@ -1218,7 +1230,11 @@ function Shell() {
         } />
 
         {modules.isPlatformAdmin && (
-          <Route path="/tenants" element={<TenantsPage />} />
+          <Route path="/tenants" element={
+            <RequireRoles roles={["super_admin", "admin", "principal"]}>
+              <TenantsPage />
+            </RequireRoles>
+          } />
         )}
 
         <Route path="/hostel" element={

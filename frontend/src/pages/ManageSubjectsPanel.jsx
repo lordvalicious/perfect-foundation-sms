@@ -6,6 +6,17 @@ import { EmptyState, PanelHeader, StateArea } from "./ui";
 const SUBJECTS_URL = "/api/exams/subjects/";
 const OFFERINGS_URL = "/api/schools/offerings/?page_size=500";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import { AlertTriangle, BookOpen, Pencil, Plus, Trash2, X } from "lucide-react";
+import { apiFetch } from "../api";
+import { EmptyState, PanelHeader, StateArea } from "./ui";
+
+const SUBJECTS_URL = "/api/exams/subjects/";
+const OFFERINGS_URL = "/api/schools/offerings/?page_size=500";
+
 function toList(data) {
   return Array.isArray(data) ? data : data.results || [];
 }

@@ -26,6 +26,37 @@ const TABS = [
   { key: "outstanding", label: "Outstanding Fees", icon: FileWarning },
 ];
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import {
+  ClipboardList,
+  Coins,
+  FileWarning,
+  Layers,
+  Receipt,
+  Users,
+  Wallet,
+} from "lucide-react";
+import { apiFetch, jsonHeaders } from "../api";
+import { useLang } from "../i18n";
+import { PageHeader, PanelHeader, StateArea, EmptyState, StatusBadge } from "./ui";
+import { formatCurrency, formatDate } from "./format";
+
+const ACADEMIC_YEARS_URL = "/api/schools/academic-years/";
+const CAMPUSES_URL = "/api/schools/campuses/";
+const CLASSES_URL = "/api/schools/classes/";
+const SECTIONS_URL = "/api/schools/sections/";
+const FEE_ASSIGNMENT_PREVIEW_URL = "/api/finance/fee-assignment/preview/";
+const OUTSTANDING_URL = "/api/finance/outstanding/";
+const FEE_OVERRIDES_URL = "/api/finance/fee-overrides/";
+
+const TABS = [
+  { key: "config", label: "Fee Configuration", icon: Layers },
+  { key: "outstanding", label: "Outstanding Fees", icon: FileWarning },
+];
+
 export default function StudentFeesPage() {
   const { t } = useLang();
   const [tab, setTab] = useState("config");

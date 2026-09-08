@@ -2,6 +2,13 @@ import { useEffect, useState } from "react";
 import { CheckCircle2, GraduationCap } from "lucide-react";
 import { authHeaders } from "../api";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import { CheckCircle2, GraduationCap } from "lucide-react";
+import { authHeaders } from "../api";
+
 export default function AdmissionsApplyPage() {
   const [options, setOptions] = useState(null);
   const [form, setForm] = useState({

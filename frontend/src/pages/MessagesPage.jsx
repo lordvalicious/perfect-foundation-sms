@@ -20,6 +20,31 @@ import { apiFetch, jsonHeaders } from "../api";
 
 const MESSAGES_URL = "/api/communication/messages/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useState } from "react";
+import {
+  Inbox,
+  Mail,
+  Plus,
+  Search,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
+import { useAuth } from "../auth";
+import {
+  PageHeader,
+  PanelHeader,
+  StateArea,
+  EmptyState,
+  Pagination,
+} from "./ui";
+import { apiFetch, jsonHeaders } from "../api";
+
+const MESSAGES_URL = "/api/communication/messages/";
+
 function roleLabel(role) {
   if (!role) return "";
   return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());

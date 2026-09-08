@@ -7,6 +7,18 @@ import { formatCurrency } from "./format";
 const CAMPUSES_URL = "/api/schools/campuses/";
 const FINANCE_BREAKDOWN_URL = "/api/dashboard/finance/breakdown/";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import { Building2, DollarSign, GraduationCap } from "lucide-react";
+import { apiFetch } from "../api";
+import { PageHeader, StateArea } from "./ui";
+import { formatCurrency } from "./format";
+
+const CAMPUSES_URL = "/api/schools/campuses/";
+const FINANCE_BREAKDOWN_URL = "/api/dashboard/finance/breakdown/";
+
 export default function CampusDashboardPage() {
   const [campuses, setCampuses] = useState([]);
   const [finance, setFinance] = useState(null);

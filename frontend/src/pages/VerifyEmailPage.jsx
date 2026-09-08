@@ -3,6 +3,14 @@ import { Link } from "react-router-dom";
 import { ShieldCheck, MailCheck, MailX, Loader } from "lucide-react";
 import { useLang } from "../i18n";
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ShieldCheck, MailCheck, MailX, Loader } from "lucide-react";
+import { useLang } from "../i18n";
+
 export default function VerifyEmailPage() {
   const { lang } = useLang();
   const [state, setState] = useState("verifying");

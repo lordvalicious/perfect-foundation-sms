@@ -30,6 +30,41 @@ const EMPTY_FORM = {
   campus: "",
 };
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState, createElement } from "react";
+import { X, Plus, Trash2, Edit, AlertTriangle } from "lucide-react";
+import { apiFetch } from "../api";
+import { useApiList } from "./useApiList";
+import { PanelHeader, StateArea, EmptyState } from "./ui";
+import { formatDate } from "./format";
+
+const API_URL = "/api/discipline/incidents/";
+
+const SEVERITIES = [
+  { value: "minor", label: "Minor" },
+  { value: "moderate", label: "Moderate" },
+  { value: "major", label: "Major" },
+];
+
+const STATUSES = [
+  { value: "open", label: "Open" },
+  { value: "action_taken", label: "Action Taken" },
+  { value: "resolved", label: "Resolved" },
+];
+
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  location: "",
+  incident_date: "",
+  status: "open",
+  severity: "minor",
+  student: "",
+  campus: "",
+};
+
 export default function DisciplinePage() {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);

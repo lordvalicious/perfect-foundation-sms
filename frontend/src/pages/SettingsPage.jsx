@@ -31,6 +31,42 @@ const OFFERINGS_API_URL = "/api/schools/offerings/";
 import TwoFASection from "./TwoFASection";
 import NotificationsPanel from "./NotificationsPanel";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import {
+  School as SchoolIcon,
+  Building2,
+  LayoutGrid,
+  Layers,
+  BookOpen,
+  CalendarRange,
+  Boxes,
+  Users,
+} from "lucide-react";
+import { useApiList } from "./useApiList";
+import {
+  PageHeader,
+  PanelHeader,
+  StateArea,
+  EmptyState,
+  StatusBadge,
+} from "./ui";
+import { formatDate } from "./format";
+
+const SCHOOLS_API_URL = "/api/schools/";
+const CAMPUSES_API_URL = "/api/schools/campuses/";
+const UNITS_API_URL = "/api/schools/units/";
+const CLASSES_API_URL = "/api/schools/classes/";
+const SECTIONS_API_URL = "/api/schools/sections/";
+const YEARS_API_URL = "/api/schools/academic-years/";
+const TERMS_API_URL = "/api/schools/terms/";
+const SUBJECTS_API_URL = "/api/schools/subjects/";
+const OFFERINGS_API_URL = "/api/schools/offerings/";
+
+import TwoFASection from "./TwoFASection";
+import NotificationsPanel from "./NotificationsPanel";
+
 function StatCard({ icon: Icon, label, value }) {
   return (
     <div className="stat-card">

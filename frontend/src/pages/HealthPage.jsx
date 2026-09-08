@@ -6,6 +6,17 @@ import { formatDate } from "./format";
 
 const HEALTH_URL = "/api/reports/health/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useState } from "react";
+import { Activity, Database, RefreshCw, Server, Users } from "lucide-react";
+import { apiFetch } from "../api";
+import { PageHeader, StateArea } from "./ui";
+import { formatDate } from "./format";
+
+const HEALTH_URL = "/api/reports/health/";
+
 function StatusIndicator({ status }) {
   const colors = {
     healthy: "var(--success)",

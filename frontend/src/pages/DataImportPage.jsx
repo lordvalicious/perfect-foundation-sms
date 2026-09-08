@@ -18,6 +18,29 @@ const IMPORT_TYPES = [
   },
 ];
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useRef, useState } from "react";
+import { Upload, FileDown, CheckCircle2, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { PageHeader, PanelHeader, StateArea } from "./ui";
+import { apiFetch, apiDownload, authHeaders } from "../api";
+
+const IMPORT_TYPES = [
+  {
+    key: "students",
+    label: "Students",
+    description:
+      "Creates students, guardians and active enrollments. Campus, class and section are matched by name.",
+  },
+  {
+    key: "teachers",
+    label: "Teachers",
+    description:
+      "Creates teacher records with campus assignment. Login accounts are not created.",
+  },
+];
+
 export default function DataImportPage() {
   const [typeKey, setTypeKey] = useState("students");
   const [file, setFile] = useState(null);

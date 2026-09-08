@@ -17,6 +17,28 @@ const CARD_STATUS_LABELS = {
   expired: "Expired",
 };
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import { Plus, X, CreditCard, ShieldX } from "lucide-react";
+import { PageHeader, PanelHeader, StateArea, EmptyState, StatusBadge } from "./ui";
+import { apiFetch, authHeaders } from "../api";
+
+const API_URL = "/api/digital-ids/cards/";
+
+const HOLDER_TYPES = [
+  { value: "student", label: "Student", endpoint: "/api/students/" },
+  { value: "teacher", label: "Teacher", endpoint: "/api/teachers/" },
+  { value: "staff", label: "Staff", endpoint: "/api/staff/" },
+];
+
+const CARD_STATUS_LABELS = {
+  active: "Active",
+  revoked: "Revoked",
+  expired: "Expired",
+};
+
 function holderLabel(holder, type) {
   if (!holder) return "";
   const parts = [holder.first_name, holder.last_name || ""];

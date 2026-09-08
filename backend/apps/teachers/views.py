@@ -33,10 +33,11 @@ class TeacherListCreateView(generics.ListCreateAPIView):
         if not is_manager(user):
             profile = get_teacher_profile(user)
 
-            if profile is None:
-                return queryset.none()
-
-            queryset = queryset.filter(pk=profile.pk)
+            if profile is not None:
+                queryset = queryset.filter(
+                    Q(institution=profile.institution)
+                    | Q(membership__institution=profile.institution)
+                )
 
         search = self.request.query_params.get("search")
 

@@ -17,6 +17,28 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Banknote, BadgePoundSterling, ReceiptText } from "lucide-react";
+import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
+import { formatCurrency, formatDate } from "./format";
+import { apiFetch, apiDownload, jsonHeaders } from "../api";
+
+const BASE = "/api/payroll/";
+
+const ENDPOINTS = {
+  structures: { url: "salary-structures/", icon: BadgePoundSterling, title: "Salary Structures" },
+  records: { url: "records/", icon: Banknote, title: "Payroll Records" },
+  payslips: { url: "payslips/", icon: ReceiptText, title: "Payslips" },
+};
+
+const MONTHS = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
 export default function PayrollPage() {
   const [tab, setTab] = useState("records");
   const [data, setData] = useState({});

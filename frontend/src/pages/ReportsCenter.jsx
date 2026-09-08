@@ -19,6 +19,30 @@ import { useNavigate } from "react-router-dom";
 
 const BASE = "/api/reports/";
 
+
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useState, useEffect, useMemo, useCallback } from "react";
+import {
+  LayoutDashboard,
+  BarChart3,
+  FileText,
+  Search,
+  Star,
+  Clock,
+  Plus,
+  List,
+  Grid,
+  ChevronRight,
+} from "lucide-react";
+import { PageHeader, StateArea, StatCard, Button, TabButton } from "./ui";
+import { apiFetch } from "../api";
+import { formatCurrency } from "./format";
+import { REPORT_CATEGORIES } from "../config/reports";
+import { useNavigate } from "react-router-dom";
+
+const BASE = "/api/reports/";
+
 function ReportCard({ report, onClick, onFavoriteToggle, isFavorite }) {
   const Icon = report.icon;
   return (

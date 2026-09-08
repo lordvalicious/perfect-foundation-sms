@@ -42,6 +42,53 @@ const emptyForm = {
   admin_position: "",
 };
 
+export default 
+const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
+
+import { useEffect, useState } from "react";
+import {
+  Building2,
+  BookOpen,
+  Users,
+  LayoutGrid,
+  Plus,
+  Eye,
+  Pencil,
+  Trash2,
+  X,
+  Copy,
+  Check,
+} from "lucide-react";
+import { useApiList } from "./useApiList";
+import {
+  PageHeader,
+  PanelHeader,
+  StateArea,
+  EmptyState,
+  StatusBadge,
+} from "./ui";
+import { apiFetch, authHeaders } from "../api";
+import { formatDate } from "./format";
+
+const API_URL = "/api/schools/campuses/";
+const TENANTS_URL = "/api/schools/tenants/";
+const SCHOOLS_URL = "/api/schools/";
+
+const emptyForm = {
+  name: "",
+  city: "",
+  address: "",
+  school: "",
+  // Admin provisioning fields
+  admin_first_name: "",
+  admin_last_name: "",
+  admin_username: "",
+  admin_email: "",
+  admin_password: "",
+  admin_confirm_password: "",
+  admin_position: "",
+};
+
 export default function CampusesPage() {
   const { rows, count, loading, error, refresh } = useApiList(API_URL);
 
