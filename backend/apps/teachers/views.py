@@ -1,6 +1,6 @@
 from django.db.models import Q
 from rest_framework import generics
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, ValidationError
 
 from apps.accounts.access import restrict_to_allowed_campuses
 from apps.accounts.permissions import IsAdminOrReadOnly
@@ -71,6 +71,27 @@ class TeacherListCreateView(generics.ListCreateAPIView):
         )
 
         return queryset
+
+    def perform_create(self, serializer):
+        institution = getattr(self.request, "institution", None)
+        if institution is None:
+            raise ValidationError(
+                {"institution": "Select a school before adding a teacher."}
+            )
+
+        primary_campus = serializer.validated_data.get("primary_campus")
+        if primary_campus is not None:
+            if primary_campus.school_id != institution.id:
+                raise ValidationError(
+                    {
+                        "primary_campus": (
+                            "The selected campus does not belong to the "
+                            "active school."
+                        )
+                    }
+                )
+
+        serializer.save(institution=institution)
 
 
 class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):

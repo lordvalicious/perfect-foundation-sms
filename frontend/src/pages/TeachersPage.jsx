@@ -71,21 +71,35 @@ function TeachersPage() {
   ========================= */
 
   const loadTeachersData = useCallback(() => {
-    return fetch(TEACHERS_API_URL, {
-      credentials: "include",
-    })
-      .then((response) => {
+    const collect = async (startUrl) => {
+      const all = [];
+      let url = startUrl;
+
+      while (url) {
+        const response = await fetch(url, { credentials: "include" });
+
         if (!response.ok) {
           throw new Error("Failed to load teachers.");
         }
 
-        return response.json();
-      })
-      .then((data) => {
-        const teacherData = Array.isArray(data)
-          ? data
-          : data.results || data.teachers || [];
+        const data = await response.json();
+        const pageData = Array.isArray(data) ? data : data.results || [];
 
+        all.push(...pageData);
+
+        if (data && data.next) {
+          const nextUrl = new URL(data.next, window.location.origin);
+          url = nextUrl.pathname + nextUrl.search;
+        } else {
+          url = null;
+        }
+      }
+
+      return all;
+    };
+
+    return collect(TEACHERS_API_URL)
+      .then((teacherData) => {
         setTeachers(teacherData);
       })
       .catch((err) => {
