@@ -70,6 +70,7 @@ import { AuthProvider, useAuth } from "./auth";
 import { SchoolProvider, useSchool } from "./schoolContext";
 import { LanguageProvider, useLang } from "./i18n";
 import LanguageToggle from "./components/LanguageToggle";
+import ErrorBoundary from "./components/ErrorBoundary";
 import { SkeletonBlock } from "./pages/ui";
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const AttendancePage = lazy(() => import("./pages/AttendancePage"));
@@ -969,7 +970,8 @@ function Shell() {
 
   return (
     <Layout modules={modules}>
-      <Suspense fallback={<RouteFallback />}>
+      <ErrorBoundary>
+        <Suspense fallback={<RouteFallback />}>
         <Routes key={currentSchool?.id ?? "none"}>
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/" element={<Dashboard />} />
@@ -1275,7 +1277,8 @@ function Shell() {
 
         <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </Suspense>
+        </Suspense>
+      </ErrorBoundary>
     </Layout>
   );
 }

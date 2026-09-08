@@ -385,8 +385,14 @@ function TeachersPage() {
       employeeNumber.toLowerCase().includes(searchValue) ||
       phone.toLowerCase().includes(searchValue);
 
+    const campusId =
+      typeof teacher.campus === "object" && teacher.campus?.id != null
+        ? String(teacher.campus.id)
+        : String(teacher.campus ?? "");
+
     const matchesCampus =
       !campus ||
+      campusId === String(campus) ||
       campusName.toLowerCase() === campus.toLowerCase();
 
     const matchesGender =
@@ -541,8 +547,8 @@ function TeachersPage() {
           <option value="">All campuses</option>
 
           {campusOptions.map((item) => (
-            <option key={item} value={item}>
-              {item}
+            <option key={item.id} value={item.id}>
+              {item.name}
             </option>
           ))}
         </select>
