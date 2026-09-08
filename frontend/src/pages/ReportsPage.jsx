@@ -6,6 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { useSchool } from "./schoolContext";
 import {
   BarChart3,
   Download,
@@ -243,7 +244,7 @@ export default function ReportsPage() {
   const [campuses, setCampuses] = useState([]);
   const [selectedCampus, setSelectedCampus] = useState("");
   const [queries, setQueries] = useState({});
-
+  const { currentSchool, schoolScopeVersion } = useSchool();
   const [atRisk, setAtRisk] = useState(null);
   const [arLoading, setArLoading] = useState(false);
   const [arError, setArError] = useState("");
@@ -263,7 +264,7 @@ export default function ReportsPage() {
       points: arFilters.points || "3",
     });
 
-    fetch(`${BASE}at-risk/?${params.toString()}`, { credentials: "include" })
+    fetch(`${BASE}at-risk/?institution=${currentSchool?.id}&${params.toString()}`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : Promise.reject("Could not load.")))
       .then(setAtRisk)
       .catch((err) => setArError(String(err)))
@@ -309,6 +310,10 @@ export default function ReportsPage() {
         params.append("campus", selectedCampus);
       }
 
+      if (currentSchool?.id) {
+        params.append("institution", currentSchool.id);
+      }
+
       if (EXAM_REPORTS.includes(key) && exam) {
         params.append("exam", exam);
       }
@@ -323,7 +328,7 @@ export default function ReportsPage() {
 
       return params;
     },
-    [exam, studentId, threshold, selectedCampus]
+    [exam, studentId, threshold, selectedCampus, currentSchool]
   );
 
   const load = useCallback(

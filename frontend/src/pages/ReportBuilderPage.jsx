@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSchool } from "../schoolContext";
 import {
   BarChart3,
   Copy,
@@ -79,6 +80,7 @@ function TemplateFormModal({ template, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const { currentSchool } = useSchool();
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -205,7 +207,7 @@ function ReportPreviewModal({ reportType, filters, onClose }) {
     apiFetch(GENERATE_URL, {
       method: "POST",
       headers: jsonHeaders(),
-      body: JSON.stringify({ report_type: reportType, filters }),
+      body: JSON.stringify({ report_type: reportType, filters, institution: currentSchool?.id }),
     }, "Failed to generate report.")
       .then((d) => { if (!cancelled) setData(d); })
       .catch((err) => { if (!cancelled) setError(err.message); })
@@ -217,13 +219,15 @@ function ReportPreviewModal({ reportType, filters, onClose }) {
   const handleExportCSV = () => {
     const params = new URLSearchParams(filters);
     const slug = REPORT_TYPE_SLUGS[reportType] || reportType;
-    window.open(`/api/reports/${slug}/?${params}&format=csv`, "_blank");
+    const institution = currentSchool?.id ? `&institution=${currentSchool.id}` : "";
+    window.open(`/api/reports/${slug}/?${params}&format=csv${institution}`, "_blank");
   };
 
   const handleExportPDF = () => {
     const params = new URLSearchParams(filters);
     const slug = REPORT_TYPE_SLUGS[reportType] || reportType;
-    window.open(`/api/reports/pdf/${slug}/?${params}`, "_blank");
+    const institution = currentSchool?.id ? `&institution=${currentSchool.id}` : "";
+    window.open(`/api/reports/pdf/${slug}/?${params}${institution}`, "_blank");
   };
 
   return (
