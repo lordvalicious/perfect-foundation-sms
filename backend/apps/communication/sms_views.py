@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import is_global
+from apps.accounts.access import get_institution, is_global
 from apps.students.models import Student
 from apps.teachers.models import Teacher
 
@@ -77,6 +77,8 @@ class SMSBroadcastView(APIView):
         role = (request.data.get("role") or "").strip()
         campus_id = request.data.get("campus_id")
 
+        institution = get_institution(request)
+
         phone_numbers = set()
 
         if recipient_ids:
@@ -98,16 +100,29 @@ class SMSBroadcastView(APIView):
                 users_qs = User.objects.filter(
                     memberships__status="active"
                 ).distinct()
+
+                if institution:
+                    users_qs = users_qs.filter(memberships__institution=institution)
+
                 phone_numbers.update(_collect_phones(users_qs.values_list("id", flat=True)))
                 student_ids = Student.objects.filter(
                     enrollment__status="active",
-                ).values_list("id", flat=True)
+                )
+                if institution:
+                    student_ids = student_ids.filter(
+                        enrollment__campus__school=institution
+                    )
+                student_ids = student_ids.values_list("id", flat=True)
                 phone_numbers.update(_parent_phones_for_students(student_ids))
 
             elif role == "parent":
                 users_qs = User.objects.filter(
                     guardian_profile__isnull=False
                 )
+
+                if institution:
+                    users_qs = users_qs.filter(memberships__institution=institution)
+
                 if campus_id:
                     student_ids = Student.objects.filter(
                         enrollment__campus_id=campus_id,
@@ -130,6 +145,10 @@ class SMSBroadcastView(APIView):
                     memberships__status="active",
                     student_profile__isnull=False,
                 ).distinct()
+
+                if institution:
+                    users_qs = users_qs.filter(memberships__institution=institution)
+
                 if campus_id:
                     users_qs = users_qs.filter(
                         student_profile__enrollment__campus_id=campus_id,
@@ -142,6 +161,10 @@ class SMSBroadcastView(APIView):
                     memberships__status="active",
                     teacher_profile__isnull=False,
                 ).distinct()
+
+                if institution:
+                    users_qs = users_qs.filter(memberships__institution=institution)
+
                 if campus_id:
                     users_qs = users_qs.filter(
                         teacher_profile__primary_campus_id=campus_id,
@@ -154,6 +177,12 @@ class SMSBroadcastView(APIView):
                     role=role,
                     membership__status="active",
                 ).values_list("membership__user_id", flat=True)
+
+                if institution:
+                    role_user_ids = role_user_ids.filter(
+                        membership__institution=institution
+                    )
+
                 if campus_id:
                     role_user_ids = User.objects.filter(
                         id__in=role_user_ids,
@@ -182,6 +211,7 @@ class SMSBroadcastView(APIView):
                 status="sent" if ok else "failed",
                 error=err or "",
                 sent_by=user,
+                institution=institution,
             )
             if ok:
                 sent += 1
@@ -204,10 +234,16 @@ class SMSLogListView(APIView):
 
     def get(self, request):
         user = request.user
+        institution = get_institution(request)
         qs = SMSLog.objects.select_related("recipient", "sent_by").all()
 
         if not is_global(user):
             qs = qs.filter(sent_by=user)
+
+        if institution is not None and not is_global(user):
+            qs = qs.filter(
+                Q(institution=institution) | Q(institution__isnull=True)
+            )
 
         status_filter = request.query_params.get("status")
         if status_filter:

@@ -258,6 +258,13 @@ class ExamSubjectListView(generics.ListCreateAPIView):
             .order_by("exam", "subject__name")
         )
 
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "exam__campus_id",
+            institution_field="exam__academic_year__school",
+        )
+
         exam = self.request.query_params.get("exam")
 
         if exam:
@@ -302,9 +309,11 @@ class ExamSubjectDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAcademicMemberRole]
 
     def get_queryset(self):
-        return (
-            ExamSubject.objects
-            .select_related("exam", "subject")
+        return apply_campus_scope(
+            ExamSubject.objects.select_related("exam", "subject"),
+            self.request,
+            "exam__campus_id",
+            institution_field="exam__academic_year__school",
         )
 
     def perform_update(self, serializer):
@@ -382,28 +391,34 @@ class StudentResultListView(generics.ListCreateAPIView):
 
         user = self.request.user
 
-        if not is_manager(user):
-            if is_student(user):
-                profile = get_student_profile(user)
+        if is_manager(user):
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
+        elif is_student(user):
+            profile = get_student_profile(user)
 
-                if profile is None:
-                    return queryset.none()
+            if profile is None:
+                return queryset.none()
 
-                queryset = queryset.filter(student=profile)
-            elif is_parent(user):
-                student_ids = parent_student_ids(user)
+            queryset = queryset.filter(student=profile)
+        elif is_parent(user):
+            student_ids = parent_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
-            elif is_teacher(user):
-                student_ids = teacher_student_ids(user)
+            queryset = queryset.filter(student_id__in=student_ids)
+        elif is_teacher(user):
+            student_ids = teacher_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
+            queryset = queryset.filter(student_id__in=student_ids)
         else:
             queryset = apply_campus_scope(
                 queryset,
@@ -446,6 +461,11 @@ class StudentResultListView(generics.ListCreateAPIView):
                 "assigned to teach."
             )
 
+        assert_campus_allowed(
+            self.request.user,
+            exam_subject.exam.campus_id,
+        )
+
         result = serializer.save()
 
         record_audit(
@@ -482,28 +502,34 @@ class StudentResultDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         user = self.request.user
 
-        if not is_manager(user):
-            if is_student(user):
-                profile = get_student_profile(user)
+        if is_manager(user):
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
+        elif is_student(user):
+            profile = get_student_profile(user)
 
-                if profile is None:
-                    return queryset.none()
+            if profile is None:
+                return queryset.none()
 
-                queryset = queryset.filter(student=profile)
-            elif is_parent(user):
-                student_ids = parent_student_ids(user)
+            queryset = queryset.filter(student=profile)
+        elif is_parent(user):
+            student_ids = parent_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
-            elif is_teacher(user):
-                student_ids = teacher_student_ids(user)
+            queryset = queryset.filter(student_id__in=student_ids)
+        elif is_teacher(user):
+            student_ids = teacher_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
+            queryset = queryset.filter(student_id__in=student_ids)
         else:
             queryset = apply_campus_scope(
                 queryset,
@@ -601,28 +627,41 @@ class PracticalResultListCreateView(generics.ListCreateAPIView):
 
         user = self.request.user
 
-        if not is_manager(user):
-            if is_student(user):
-                profile = get_student_profile(user)
+        if is_manager(user):
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
+        elif is_student(user):
+            profile = get_student_profile(user)
 
-                if profile is None:
-                    return queryset.none()
+            if profile is None:
+                return queryset.none()
 
-                queryset = queryset.filter(student=profile)
-            elif is_parent(user):
-                student_ids = parent_student_ids(user)
+            queryset = queryset.filter(student=profile)
+        elif is_parent(user):
+            student_ids = parent_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
-            elif is_teacher(user):
-                student_ids = teacher_student_ids(user)
+            queryset = queryset.filter(student_id__in=student_ids)
+        elif is_teacher(user):
+            student_ids = teacher_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
+            queryset = queryset.filter(student_id__in=student_ids)
+        else:
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
 
         exam = self.request.query_params.get("exam")
 
@@ -653,6 +692,11 @@ class PracticalResultListCreateView(generics.ListCreateAPIView):
                 "you are assigned to teach."
             )
 
+        assert_campus_allowed(
+            self.request.user,
+            exam_subject.exam.campus_id,
+        )
+
         serializer.save()
 
 
@@ -669,28 +713,41 @@ class PracticalResultDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         user = self.request.user
 
-        if not is_manager(user):
-            if is_student(user):
-                profile = get_student_profile(user)
+        if is_manager(user):
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
+        elif is_student(user):
+            profile = get_student_profile(user)
 
-                if profile is None:
-                    return queryset.none()
+            if profile is None:
+                return queryset.none()
 
-                queryset = queryset.filter(student=profile)
-            elif is_parent(user):
-                student_ids = parent_student_ids(user)
+            queryset = queryset.filter(student=profile)
+        elif is_parent(user):
+            student_ids = parent_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
-            elif is_teacher(user):
-                student_ids = teacher_student_ids(user)
+            queryset = queryset.filter(student_id__in=student_ids)
+        elif is_teacher(user):
+            student_ids = teacher_student_ids(user)
 
-                if not student_ids:
-                    return queryset.none()
+            if not student_ids:
+                return queryset.none()
 
-                queryset = queryset.filter(student_id__in=student_ids)
+            queryset = queryset.filter(student_id__in=student_ids)
+        else:
+            queryset = apply_campus_scope(
+                queryset,
+                self.request,
+                "exam__campus_id",
+                institution_field="exam__academic_year__school",
+            )
 
         return queryset
 
@@ -1175,14 +1232,51 @@ class GradeAmendmentListCreateView(generics.ListCreateAPIView):
         if status:
             queryset = queryset.filter(status=status)
 
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "student_result__exam__campus_id",
+            institution_field="student_result__exam__academic_year__school",
+        )
+
         # Teachers can only see amendments for their exams/subjects
-        teacher = getattr(self.request.user, "teacher_profile", None)
-        if teacher:
-            queryset = queryset.filter(
-                student_result__exam_subject__teacher=teacher
+        teacher = get_teacher_profile(self.request.user)
+        if teacher is not None:
+            from apps.teachers.models import TeacherAssignment
+
+            assignments = list(
+                TeacherAssignment.objects.filter(
+                    teacher=teacher,
+                    status="active",
+                ).values_list(
+                    "class_obj_id", "subject_id", "academic_year_id"
+                )
             )
 
+            if not assignments:
+                return queryset.none().order_by("-requested_at")
+
+            q = Q()
+            for class_id, subject_id, year_id in assignments:
+                q |= Q(
+                    student_result__exam__class_obj_id=class_id,
+                    student_result__exam_subject__subject_id=subject_id,
+                    student_result__exam__academic_year_id=year_id,
+                )
+
+            queryset = queryset.filter(q)
+
         return queryset.order_by("-requested_at")
+
+    def perform_create(self, serializer):
+        student_result = serializer.validated_data["student_result"]
+
+        assert_campus_allowed(
+            self.request.user,
+            student_result.exam.campus_id,
+        )
+
+        serializer.save()
 
 
 class GradeAmendmentApproveView(APIView):
@@ -1198,6 +1292,11 @@ class GradeAmendmentApproveView(APIView):
         user = request.user
         if not (user.is_superuser or user.has_any_role(["principal", "vice_principal", "admin", "super_admin"])):
             return Response({"detail": "Insufficient permissions to approve amendments."}, status=403)
+
+        assert_campus_allowed(
+            user,
+            amendment.student_result.exam.campus_id,
+        )
 
         try:
             amendment.approve(request.user)
@@ -1222,6 +1321,11 @@ class GradeAmendmentRejectView(APIView):
         user = request.user
         if not (user.is_superuser or user.has_any_role(["principal", "vice_principal", "admin", "super_admin"])):
             return Response({"detail": "Insufficient permissions to reject amendments."}, status=403)
+
+        assert_campus_allowed(
+            user,
+            amendment.student_result.exam.campus_id,
+        )
 
         rejection_reason = request.data.get("rejection_reason", "").strip()
         if not rejection_reason:

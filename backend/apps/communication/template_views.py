@@ -1,13 +1,25 @@
 """API views for message templates."""
 
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import get_institution, is_global
 from apps.accounts.permissions import IsAdminRole
 
 from .models import MessageTemplate
+
+
+def _get_templates_queryset(request):
+    """Return institution-scoped templates for the current user."""
+    institution = get_institution(request)
+    if institution is None or is_global(request.user):
+        return MessageTemplate.objects.all()
+    return MessageTemplate.objects.filter(
+        Q(institution=institution) | Q(institution__isnull=True)
+    )
 
 
 class MessageTemplateListView(APIView):
@@ -15,7 +27,7 @@ class MessageTemplateListView(APIView):
 
     def get(self, request):
         channel = request.query_params.get("channel", "")
-        templates = MessageTemplate.objects.all()
+        templates = _get_templates_queryset(request)
         if channel:
             templates = templates.filter(channel=channel)
 
@@ -44,12 +56,15 @@ class MessageTemplateListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        institution = get_institution(request)
         template = MessageTemplate.objects.create(
             name=name,
             channel=request.data.get("channel", "sms"),
             subject=request.data.get("subject", ""),
             body=body,
             variables=request.data.get("variables", []),
+            is_active=request.data.get("is_active", True),
+            institution=institution,
             created_by=request.user,
         )
 
@@ -63,14 +78,15 @@ class MessageTemplateListView(APIView):
 class MessageTemplateDetailView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
-    def get_object(self, pk):
+    def get_object(self, request, pk):
+        queryset = _get_templates_queryset(request)
         try:
-            return MessageTemplate.objects.get(pk=pk)
+            return queryset.get(pk=pk)
         except MessageTemplate.DoesNotExist:
             return None
 
     def get(self, request, pk):
-        template = self.get_object(pk)
+        template = self.get_object(request, pk)
         if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -87,7 +103,7 @@ class MessageTemplateDetailView(APIView):
         })
 
     def put(self, request, pk):
-        template = self.get_object(pk)
+        template = self.get_object(request, pk)
         if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -102,7 +118,7 @@ class MessageTemplateDetailView(APIView):
         return Response({"detail": "Template updated."})
 
     def delete(self, request, pk):
-        template = self.get_object(pk)
+        template = self.get_object(request, pk)
         if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -114,9 +130,8 @@ class MessageTemplatePreviewView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk):
-        try:
-            template = MessageTemplate.objects.get(pk=pk)
-        except MessageTemplate.DoesNotExist:
+        template = _get_templates_queryset(request).filter(pk=pk).first()
+        if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         context = request.data.get("context", {})

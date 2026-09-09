@@ -58,7 +58,7 @@ class SalaryStructureListView(generics.ListCreateAPIView):
         employee = serializer.validated_data["employee"]
         if not employee_queryset(self.request).filter(pk=employee.pk).exists():
             raise PermissionDenied("The employee is outside your campus scope.")
-        serializer.save()
+        serializer.save(institution=self.request.institution)
 
     def get_queryset(self):
         queryset = payroll_queryset(
@@ -81,6 +81,14 @@ class SalaryStructureDetailView(generics.RetrieveUpdateDestroyAPIView):
     def get_queryset(self):
         return payroll_queryset(SalaryStructure.objects.all(), self.request)
 
+    def perform_update(self, serializer):
+        employee = serializer.validated_data.get("employee")
+        if employee is not None and not employee_queryset(
+            self.request
+        ).filter(pk=employee.pk).exists():
+            raise PermissionDenied("The employee is outside your campus scope.")
+        serializer.save()
+
 
 class PayrollRecordListView(generics.ListCreateAPIView):
     serializer_class = PayrollRecordSerializer
@@ -89,6 +97,11 @@ class PayrollRecordListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         employee = serializer.validated_data["employee"]
         structure = serializer.validated_data["salary_structure"]
+        period = serializer.validated_data.get("payroll_period")
+        if period is not None and period.institution_id != employee.institution_id:
+            raise PermissionDenied(
+                "The payroll period belongs to a different institution."
+            )
         if not employee_queryset(self.request).filter(pk=employee.pk).exists():
             raise PermissionDenied("The employee is outside your campus scope.")
         if not payroll_queryset(
@@ -134,6 +147,34 @@ class PayrollRecordDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         return payroll_queryset(PayrollRecord.objects.all(), self.request)
+
+    def perform_update(self, serializer):
+        validated = serializer.validated_data
+        employee = validated.get("employee")
+        if employee is not None and not employee_queryset(
+            self.request
+        ).filter(pk=employee.pk).exists():
+            raise PermissionDenied("The employee is outside your campus scope.")
+
+        structure = validated.get("salary_structure")
+        if structure is not None and not payroll_queryset(
+            SalaryStructure.objects.all(),
+            self.request,
+        ).filter(pk=structure.pk).exists():
+            raise PermissionDenied(
+                "The salary structure is outside your campus scope."
+            )
+
+        period = validated.get("payroll_period")
+        instance = self.get_object()
+        if period is not None and period.institution_id != (
+            employee or instance.employee
+        ).institution_id:
+            raise PermissionDenied(
+                "The payroll period belongs to a different institution."
+            )
+
+        serializer.save()
 
 
 class PayrollProcessView(APIView):
