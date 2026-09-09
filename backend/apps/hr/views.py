@@ -178,7 +178,16 @@ class EmployeeDocumentListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         employee = get_object_or_404(employee_queryset(self.request), pk=self.kwargs["employee_id"])
-        serializer.save(employee=employee, uploaded_by=self.request.user)
+        campus = serializer.validated_data.get("campus") or employee.primary_campus
+        serializer.save(employee=employee, uploaded_by=self.request.user, campus=campus)
+
+
+class EmployeeDocumentDetailView(generics.RetrieveDestroyAPIView):
+    permission_classes = [IsAccountantRole]
+    serializer_class = EmployeeDocumentSerializer
+
+    def get_queryset(self):
+        return owned_queryset(EmployeeDocument, self.request)
 
 
 class EmployeeWorkloadListCreateView(generics.ListCreateAPIView):
