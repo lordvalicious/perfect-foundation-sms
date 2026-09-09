@@ -16,17 +16,15 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.accounts.access import assert_campus_allowed
-from apps.hr.models import Employee
+from apps.accounts.permissions import IsAccountantRole
 
 
 class PayrollPayslipPdfView(APIView):
     """GET /api/payroll/records/<pk>/payslip.pdf"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAccountantRole]
 
     def get(self, request, pk):
         from .models import PayrollRecord

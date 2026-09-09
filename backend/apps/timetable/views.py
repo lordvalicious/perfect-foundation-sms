@@ -1,9 +1,16 @@
 from django.db.models import Q
+from django.http import Http404
 from rest_framework import generics
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import (
+    apply_campus_scope,
+    assert_campus_allowed,
+    get_institution,
+    is_global,
+    user_allowed_campus_ids,
+)
 from apps.accounts.permissions import IsAcademicMemberRole
 from apps.accounts.scopes import (
     get_teacher_profile,
@@ -29,6 +36,14 @@ class PeriodListView(generics.ListAPIView):
 
     def get_queryset(self):
         queryset = Period.objects.all().order_by("number")
+
+        institution = get_institution(self.request)
+
+        if institution is not None:
+            queryset = queryset.filter(
+                Q(institution=institution)
+                | Q(institution__isnull=True)
+            )
 
         status = self.request.query_params.get("status")
 
@@ -89,7 +104,12 @@ class TimetableEntryListView(generics.ListAPIView):
         if day:
             queryset = queryset.filter(day=day)
 
-        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "campus_id",
+            institution_field="campus__school_id",
+        )
 
         class_obj = self.request.query_params.get("class")
 
@@ -132,10 +152,6 @@ class TimetableConflictsView(APIView):
     def get(self, request):
         from django.shortcuts import get_object_or_404
 
-        from apps.accounts.access import (
-            apply_campus_scope,
-            assert_campus_allowed,
-        )
         from apps.schools.models import AcademicYear, Campus
         from .conflicts import find_conflicts
 
@@ -148,7 +164,13 @@ class TimetableConflictsView(APIView):
                 return Response(
                     {"detail": "Invalid academic year id."}, status=400
                 )
-            year = get_object_or_404(AcademicYear, pk=year_id)
+            year = get_object_or_404(
+                AcademicYear, pk=year_id
+            )
+            if year.school_id != get_institution(request).id:
+                raise Http404(
+                    "Academic year is outside the active institution."
+                )
             filters["academic_year"] = year
 
         campus_id = request.query_params.get("campus")
@@ -163,6 +185,15 @@ class TimetableConflictsView(APIView):
             filters["campus"] = campus
 
         conflicts = find_conflicts(**filters)
+
+        allowed_campus_ids = user_allowed_campus_ids(request.user)
+
+        if not is_global(request.user) and allowed_campus_ids:
+            conflicts = [
+                conflict
+                for conflict in conflicts
+                if conflict["campus_id"] in allowed_campus_ids
+            ]
 
         return Response(
             {

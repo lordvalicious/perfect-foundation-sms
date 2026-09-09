@@ -6,7 +6,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsAnnouncementRole
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed, get_institution
 from apps.accounts.scopes import (
     MANAGER_ROLES,
     get_guardian_profile,
@@ -76,11 +76,11 @@ def _message_recipient_users(user):
 
         q = (
             Q(memberships__role_assignments__role__in=staff_roles + ["teacher"])
-            | Q(student_profile_id__in=student_ids)
+            | Q(student_profile__id__in=student_ids)
         )
 
         if guardian_ids:
-            q |= Q(guardian_profile_id__in=guardian_ids)
+            q |= Q(guardian_profile__id__in=guardian_ids)
 
         return base.filter(q).distinct().order_by("first_name", "last_name")
 
@@ -120,7 +120,7 @@ def _message_recipient_users(user):
         if teacher_ids:
             q |= Q(
                 memberships__role_assignments__role="teacher",
-                teacher_profile_id__in=teacher_ids,
+                teacher_profile__id__in=teacher_ids,
             )
 
         return base.filter(q).distinct().order_by("first_name", "last_name")
@@ -147,7 +147,7 @@ def _message_recipient_users(user):
         if teacher_ids:
             q |= Q(
                 memberships__role_assignments__role="teacher",
-                teacher_profile_id__in=teacher_ids,
+                teacher_profile__id__in=teacher_ids,
             )
 
         return base.filter(q).distinct().order_by("first_name", "last_name")
@@ -176,7 +176,9 @@ def scoped_announcement_queryset(request):
     )
 
     if is_manager(user):
-        return queryset
+        return apply_campus_scope(
+            queryset, request, "campus_id", institution_field="institution"
+        )
 
     queryset = queryset.filter(status="published")
     if is_teacher(user):
@@ -197,7 +199,9 @@ def scoped_announcement_queryset(request):
     queryset = queryset.filter(
         Q(class_obj__isnull=True) | Q(class_obj_id__in=class_ids)
     )
-    return apply_campus_scope(queryset, request, "campus_id")
+    return apply_campus_scope(
+        queryset, request, "campus_id", institution_field="institution"
+    )
 
 
 class AnnouncementListView(generics.ListCreateAPIView):
@@ -223,13 +227,18 @@ class AnnouncementListView(generics.ListCreateAPIView):
         validated = serializer.validated_data
         campus = validated.get("campus")
         class_obj = validated.get("class_obj")
-        if campus and campus.school_id != self.request.institution.id:
+        institution = getattr(self.request, "institution", None)
+        if campus and institution and campus.school_id != institution.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Campus is outside the active institution.")
-        if class_obj and class_obj.unit.campus.school_id != self.request.institution.id:
+        if campus:
+            assert_campus_allowed(self.request.user, campus.pk)
+        if class_obj and institution and class_obj.unit.campus.school_id != institution.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Class is outside the active institution.")
-        instance = serializer.save()
+        if class_obj:
+            assert_campus_allowed(self.request.user, class_obj.unit.campus_id)
+        instance = serializer.save(institution=institution)
 
         record_audit(
             request=self.request,
@@ -252,13 +261,18 @@ class AnnouncementDetailView(generics.RetrieveUpdateDestroyAPIView):
         validated = serializer.validated_data
         campus = validated.get("campus", serializer.instance.campus)
         class_obj = validated.get("class_obj", serializer.instance.class_obj)
-        if campus and campus.school_id != self.request.institution.id:
+        institution = getattr(self.request, "institution", None)
+        if campus and institution and campus.school_id != institution.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Campus is outside the active institution.")
-        if class_obj and class_obj.unit.campus.school_id != self.request.institution.id:
+        if campus:
+            assert_campus_allowed(self.request.user, campus.pk)
+        if class_obj and institution and class_obj.unit.campus.school_id != institution.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Class is outside the active institution.")
-        instance = serializer.save()
+        if class_obj:
+            assert_campus_allowed(self.request.user, class_obj.unit.campus_id)
+        instance = serializer.save(institution=institution)
 
         record_audit(
             request=self.request,
@@ -386,7 +400,8 @@ class MessageListView(generics.ListCreateAPIView):
         ).exists():
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("This recipient is not available to you.")
-        instance = serializer.save()
+        institution = getattr(self.request, "institution", None)
+        instance = serializer.save(institution=institution)
 
         record_audit(
             request=self.request,
