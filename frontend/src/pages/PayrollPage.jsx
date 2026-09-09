@@ -46,7 +46,7 @@ export default function PayrollPage() {
           setLoading(false);
         });
     },
-    []
+    [],
   );
 
   const initialLoadDone = useRef(false);
