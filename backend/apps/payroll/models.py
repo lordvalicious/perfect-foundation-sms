@@ -173,6 +173,7 @@ class PayrollRecord(models.Model):
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("processed", "Processed"),
+        ("approved", "Approved"),
         ("paid", "Paid"),
         ("cancelled", "Cancelled"),
     ]
@@ -251,6 +252,7 @@ class PayrollRecord(models.Model):
         choices=[
             ("draft", "Draft"),
             ("processed", "Processed"),
+            ("approved", "Approved"),
             ("paid", "Paid"),
             ("cancelled", "Cancelled"),
         ],
