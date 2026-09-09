@@ -108,6 +108,13 @@ class ReportCardListView(generics.ListAPIView):
         if report_status:
             queryset = queryset.filter(status=report_status)
 
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "exam__campus_id",
+            institution_field="exam__academic_year__school",
+        )
+
         return queryset
 
     def list(self, request, *args, **kwargs):
@@ -194,7 +201,12 @@ class ReportCardDetailView(generics.RetrieveAPIView):
 
                 queryset = queryset.filter(student_id__in=student_ids)
 
-        return queryset
+        return apply_campus_scope(
+            queryset,
+            self.request,
+            "exam__campus_id",
+            institution_field="exam__academic_year__school",
+        )
 
 
 class ReportCardStatusView(APIView):
@@ -286,11 +298,23 @@ class GradeScaleListView(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        return (
+        queryset = (
             GradeScale.objects
             .prefetch_related("bands")
             .order_by("-is_default", "name")
         )
+
+        from apps.accounts.access import get_institution
+
+        institution = get_institution(self.request)
+
+        if institution is not None:
+            queryset = queryset.filter(
+                Q(institution=institution)
+                | Q(institution__isnull=True)
+            )
+
+        return queryset
 
 
 class GradeAmendmentListCreateView(generics.ListCreateAPIView):
@@ -425,6 +449,11 @@ class ReportCardPdfView(APIView):
 
                 if report_card.student_id not in student_ids:
                     return None
+        else:
+            assert_campus_allowed(
+                user,
+                report_card.exam.campus_id,
+            )
 
         return report_card
 
@@ -480,6 +509,13 @@ class ReportCardPdfBatchView(APIView):
             ReportCard.objects
             .select_related("student", "exam", "exam__class_obj")
             .filter(exam_id=exam_id)
+        )
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "exam__campus_id",
+            institution_field="exam__academic_year__school",
         )
 
         if queryset.exists() is False:

@@ -4,12 +4,13 @@ import time
 
 from django.contrib.auth import get_user_model
 from django.core.mail import get_connection
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import is_global
+from apps.accounts.access import get_institution, is_global
 from apps.students.models import Student
 
 from .email_service import email_configured, send_email_message
@@ -18,14 +19,20 @@ from .models import EmailLog
 User = get_user_model()
 
 
-def _resolve_user_ids(role, campus_id):
+def _resolve_user_ids(role, campus_id, institution=None):
     qs = User.objects.filter(memberships__status="active").distinct()
+
+    if institution:
+        qs = qs.filter(memberships__institution=institution)
 
     if role == "all":
         return list(qs.values_list("id", flat=True))
 
     if role == "parent":
         users = User.objects.filter(guardian_profile__isnull=False)
+
+        if institution:
+            users = users.filter(memberships__institution=institution)
 
         if campus_id:
             student_ids = Student.objects.filter(
@@ -100,10 +107,12 @@ class EmailBroadcastView(APIView):
         role = (request.data.get("role") or "").strip()
         campus_id = request.data.get("campus_id")
 
+        institution = get_institution(request)
+
         if recipient_ids:
             target_users = User.objects.filter(id__in=recipient_ids)
         elif role:
-            ids = _resolve_user_ids(role, campus_id)
+            ids = _resolve_user_ids(role, campus_id, institution)
             target_users = User.objects.filter(id__in=ids)
         else:
             return Response(
@@ -167,6 +176,7 @@ class EmailBroadcastView(APIView):
                 status="sent" if ok else "failed",
                 error=err or "",
                 sent_by=user,
+                institution=institution,
             )
 
             if ok:
@@ -187,7 +197,15 @@ class EmailLogListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        logs = EmailLog.objects.all()[:200]
+        institution = get_institution(request)
+        queryset = EmailLog.objects.all()
+
+        if institution is not None and not is_global(request.user):
+            queryset = queryset.filter(
+                Q(institution=institution) | Q(institution__isnull=True)
+            )
+
+        logs = queryset[:200]
         data = [
             {
                 "id": log.id,
