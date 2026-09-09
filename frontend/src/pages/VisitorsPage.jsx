@@ -22,32 +22,6 @@ const VISITOR_STATUS_LABELS = {
   no_show: "No-show",
 };
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { Plus, X, LogOut, Search, UserCheck, DoorOpen } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea, EmptyState, StatusBadge } from "./ui";
-import { apiFetch, authHeaders } from "../api";
-
-const API_URL = "/api/visitors/visitors/";
-
-const EMPTY_FORM = {
-  campus: "",
-  full_name: "",
-  phone: "",
-  id_number: "",
-  company: "",
-  vehicle_number: "",
-  purpose: "",
-  meeting_party: "",
-};
-
-const VISITOR_STATUS_LABELS = {
-  checked_in: "Checked In",
-  checked_out: "Checked Out",
-  no_show: "No-show",
-};
 
 export default function VisitorsPage() {
   const [visitors, setVisitors] = useState([]);

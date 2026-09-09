@@ -21,29 +21,6 @@ const EXAM_STATUSES = [
 ];
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { X } from "lucide-react";
-import { apiFetch } from "../api";
-
-const CAMPUSES_URL = "/api/schools/campuses/";
-const YEARS_URL = "/api/schools/academic-years/";
-const TERMS_URL = "/api/schools/terms/";
-const CLASSES_URL = "/api/schools/classes/?page_size=500";
-
-const EXAM_TYPES = [
-  ["monthly", "Monthly Test"],
-  ["midterm", "Mid-Term"],
-  ["final", "Final-Term"],
-  ["annual", "Annual"],
-];
-
-const EXAM_STATUSES = [
-  ["draft", "Draft"],
-  ["scheduled", "Scheduled"],
-  ["completed", "Completed"],
-];
 
 function toList(data) {
   return Array.isArray(data) ? data : data.results || [];

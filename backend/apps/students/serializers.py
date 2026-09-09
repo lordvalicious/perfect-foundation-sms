@@ -20,6 +20,42 @@ from .models import (
     ProgressionRecord,
 )
 
+ALLOWED_DOCUMENT_EXTENSIONS = {
+    ".pdf",
+    ".jpg",
+    ".jpeg",
+    ".png",
+    ".gif",
+    ".doc",
+    ".docx",
+    ".xls",
+    ".xlsx",
+    ".csv",
+    ".txt",
+}
+
+MAX_DOCUMENT_SIZE = 10 * 1024 * 1024  # 10 MB
+
+
+def validate_document_file(file_obj):
+    import os
+
+    name = (getattr(file_obj, "name", "") or "").lower()
+    ext = os.path.splitext(name)[1]
+
+    if ext not in ALLOWED_DOCUMENT_EXTENSIONS:
+        raise serializers.ValidationError(
+            "File type is not supported. "
+            "Use PDF, image, Office or text files."
+        )
+
+    if file_obj.size > MAX_DOCUMENT_SIZE:
+        raise serializers.ValidationError(
+            "File must be at most 10 MB."
+        )
+
+    return file_obj
+
 
 class GuardianSerializer(serializers.ModelSerializer):
     class Meta:
@@ -411,6 +447,17 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url) if request else url
 
         return None
+
+    def validate_document_type(self, value):
+        valid = dict(StudentDocument.DOCUMENT_TYPE_CHOICES)
+
+        if value not in valid:
+            raise serializers.ValidationError("Invalid document type.")
+
+        return value
+
+    def validate_file(self, value):
+        return validate_document_file(value)
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):

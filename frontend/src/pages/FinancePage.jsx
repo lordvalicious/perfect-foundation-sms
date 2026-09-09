@@ -50,58 +50,6 @@ const PAYMENT_METHODS = [
 ];
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import {
-  Search,
-  Wallet,
-  Receipt,
-  FileDown,
-  PlusCircle,
-  Plus,
-} from "lucide-react";
-import { useApiList } from "./useApiList";
-import {
-  PageHeader,
-  PanelHeader,
-  StateArea,
-  EmptyState,
-  Pagination,
-  StatusBadge,
-} from "./ui";
-import { formatCurrency, formatDate } from "./format";
-import { useLang } from "../i18n";
-import { jsonHeaders } from "../api";
-
-const INVOICES_API_URL = "/api/finance/invoices/";
-const PAYMENTS_API_URL = "/api/finance/payments/";
-const CATEGORIES_API_URL = "/api/finance/categories/";
-const FEE_STRUCTURES_API_URL = "/api/finance/fee-structures/";
-const ACADEMIC_YEARS_API_URL = "/api/schools/academic-years/";
-const CAMPUSES_API_URL = "/api/schools/campuses/";
-const CLASSES_API_URL = "/api/schools/classes/";
-const DASHBOARD_FINANCE_URL = "/api/dashboard/finance/";
-const DASHBOARD_BREAKDOWN_URL = "/api/dashboard/finance/breakdown/";
-
-const INVOICE_STATUSES = [
-  ["draft", "Draft"],
-  ["issued", "Issued"],
-  ["partial", "Partially Paid"],
-  ["paid", "Paid"],
-  ["overdue", "Overdue"],
-  ["cancelled", "Cancelled"],
-];
-
-const PAYMENT_METHODS = [
-  ["cash", "Cash"],
-  ["bank", "Bank Transfer"],
-  ["jazzcash", "JazzCash"],
-  ["easypaisa", "EasyPaisa"],
-  ["card", "Card"],
-  ["other", "Other"],
-];
 
 function buildParams(search, status, page) {
   const params = new URLSearchParams();

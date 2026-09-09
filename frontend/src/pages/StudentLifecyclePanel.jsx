@@ -11,19 +11,6 @@ import { StateArea, EmptyState, StatusBadge } from "./ui";
    ========================================================================== */
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { GraduationCap, LogOut, RotateCcw, UserCheck } from "lucide-react";
-import { apiFetch, authHeaders } from "../api";
-import { StateArea, EmptyState, StatusBadge } from "./ui";
-
-/* =============================================================================
-   StudentLifecyclePanel — student lifecycle operations built against the
-   backend business rules (/api/students). Never re-implements promotion,
-   transfer or graduation logic — those live in Developer 1's progression
-   services.
-   ========================================================================== */
 
 function endpointParams() {
   return { credentials: "include" };

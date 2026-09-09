@@ -4,12 +4,14 @@ import time
 
 from django.contrib.auth import get_user_model
 from django.core.mail import get_connection
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import is_global
+from apps.accounts.access import get_institution, is_global
+from apps.accounts.permissions import IsAdminRole
 from apps.students.models import Student
 
 from .email_service import email_configured, send_email_message
@@ -18,17 +20,42 @@ from .models import EmailLog
 User = get_user_model()
 
 
-def _resolve_user_ids(role, campus_id):
-    qs = User.objects.filter(memberships__status="active").distinct()
+def _institution_log_filter(request):
+    """Q filter matching logs belonging to the active institution.
+
+    Matches the log's own ``institution`` FK or, for legacy rows created
+    before the FK was stamped, the sender's active membership school.
+    """
+    institution = getattr(request, "institution", None)
+    if institution is None:
+        institution = get_institution(request)
+    if institution is None:
+        return Q(pk__in=[])
+    return Q(institution_id=institution.pk) | Q(
+        sent_by__memberships__status="active",
+        sent_by__memberships__institution_id=institution.pk,
+    )
+
+
+def _resolve_user_ids(role, campus_id, institution):
+    qs = User.objects.filter(
+        memberships__status="active",
+        memberships__institution_id=institution.pk,
+    ).distinct()
 
     if role == "all":
         return list(qs.values_list("id", flat=True))
 
     if role == "parent":
-        users = User.objects.filter(guardian_profile__isnull=False)
+        users = User.objects.filter(
+            guardian_profile__isnull=False,
+            memberships__status="active",
+            memberships__institution_id=institution.pk,
+        )
 
         if campus_id:
             student_ids = Student.objects.filter(
+                institution_id=institution.pk,
                 enrollment__campus_id=campus_id,
                 enrollment__status="active",
             ).values_list("id", flat=True)
@@ -36,7 +63,7 @@ def _resolve_user_ids(role, campus_id):
                 guardian_profile__students__id__in=student_ids
             )
 
-        return list(users.values_list("id", flat=True))
+        return list(users.distinct().values_list("id", flat=True))
 
     if role == "student":
         users = qs.filter(student_profile__isnull=False)
@@ -87,6 +114,14 @@ class EmailBroadcastView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        institution = get_institution(request)
+
+        if institution is None:
+            return Response(
+                {"detail": "No active institution."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         subject = (request.data.get("subject") or "").strip()
         message = (request.data.get("message") or "").strip()
 
@@ -101,9 +136,13 @@ class EmailBroadcastView(APIView):
         campus_id = request.data.get("campus_id")
 
         if recipient_ids:
-            target_users = User.objects.filter(id__in=recipient_ids)
+            target_users = User.objects.filter(
+                id__in=recipient_ids,
+                memberships__status="active",
+                memberships__institution_id=institution.pk,
+            )
         elif role:
-            ids = _resolve_user_ids(role, campus_id)
+            ids = _resolve_user_ids(role, campus_id, institution)
             target_users = User.objects.filter(id__in=ids)
         else:
             return Response(
@@ -126,7 +165,9 @@ class EmailBroadcastView(APIView):
         # Guardians of the targeted students also receive a copy.
         if role in ("parent", "all"):
             guardian_emails = User.objects.filter(
-                guardian_profile_id__isnull=False
+                guardian_profile_id__isnull=False,
+                memberships__status="active",
+                memberships__institution_id=institution.pk,
             ).values_list("email", flat=True)
 
             for value in guardian_emails:
@@ -167,6 +208,7 @@ class EmailBroadcastView(APIView):
                 status="sent" if ok else "failed",
                 error=err or "",
                 sent_by=user,
+                institution=institution,
             )
 
             if ok:
@@ -184,10 +226,21 @@ class EmailBroadcastView(APIView):
 
 
 class EmailLogListView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsAdminRole]
 
     def get(self, request):
-        logs = EmailLog.objects.all()[:200]
+        qs = EmailLog.objects.select_related("sent_by")
+
+        institution = getattr(request, "institution", None)
+        if institution is None:
+            institution = get_institution(request)
+
+        qs = qs.filter(_institution_log_filter(request)).distinct()
+
+        if not is_global(request.user):
+            qs = qs.filter(sent_by=request.user)
+
+        logs = qs.order_by("-created_at")[:200]
         data = [
             {
                 "id": log.id,

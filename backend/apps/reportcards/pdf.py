@@ -1,6 +1,6 @@
 """PDF generation for report cards using ReportLab."""
 
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 from io import BytesIO
 
 from reportlab.lib import colors
@@ -15,6 +15,8 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
+
+from .models import GradeBand
 
 
 def _style():
@@ -190,6 +192,10 @@ def build_report_card_pdf(report_card):
     theory_map = {}
     practical_map = {}
 
+    combined_total = Decimal("0.00")
+    combined_maximum = Decimal("0.00")
+    combined_pass = True
+
     for theory in report_card.results:
         theory_map[theory.exam_subject_id] = theory
 
@@ -220,7 +226,6 @@ def build_report_card_pdf(report_card):
         practical = practical_map.get(exam_subject.id)
 
         total = Decimal("0.00")
-        obtained = 0
         maximum = exam_subject.maximum_marks
         grade = ""
         passed = True
@@ -238,6 +243,10 @@ def build_report_card_pdf(report_card):
             passed = passed and theory.is_pass
             grade = grade or theory.grade
             remarks = remarks or theory.remarks
+
+        combined_total += total
+        combined_maximum += Decimal(str(maximum))
+        combined_pass = combined_pass and passed
 
         rows.append(
             [
@@ -279,18 +288,33 @@ def build_report_card_pdf(report_card):
     flow.append(marks_table)
     flow.append(Spacer(1, 6 * mm))
 
+    combined_percentage = Decimal("0.00")
+
+    if combined_maximum > 0:
+        combined_percentage = (
+            combined_total / combined_maximum
+        ) * Decimal("100")
+        combined_percentage = combined_percentage.quantize(
+            Decimal("0.01"),
+            rounding=ROUND_HALF_UP,
+        )
+
+    band = GradeBand.band_for_percentage(combined_percentage)
+    combined_grade = band.letter_grade if band else "-"
+    combined_result = "Pass" if combined_pass else "Fail"
+
     summary = [
         [
-            f"Total Marks: {report_card.total_marks}",
-            f"Maximum: {report_card.maximum_marks}",
+            f"Total Marks: {combined_total}",
+            f"Maximum: {combined_maximum}",
         ],
         [
-            f"Percentage: {report_card.percentage}%",
-            f"Grade: {report_card.grade}",
+            f"Percentage: {combined_percentage}%",
+            f"Grade: {combined_grade}",
         ],
         [
             f"Position: {report_card.position if report_card.position else '-'}",
-            f"Result: {report_card.overall_result}",
+            f"Result: {combined_result}",
         ],
     ]
 

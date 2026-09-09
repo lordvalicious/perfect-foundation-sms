@@ -12,20 +12,6 @@ const ROLES = [
 ];
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { MessageSquare, Send, Settings2, AlertCircle, CheckCircle, XCircle, Mail } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea } from "./ui";
-
-const API_BASE = "/api/communication";
-
-const ROLES = [
-  { value: "parent", label: "Parents" },
-  { value: "teacher", label: "Teachers" },
-  { value: "student", label: "Students" },
-  { value: "staff", label: "Staff" },
-];
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;

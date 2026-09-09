@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Inbox,
   Mail,
@@ -9,6 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useAuth } from "../auth";
+import { useSchool } from "../schoolContext";
 import {
   PageHeader,
   PanelHeader,
@@ -21,29 +22,6 @@ import { apiFetch, jsonHeaders } from "../api";
 const MESSAGES_URL = "/api/communication/messages/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useState } from "react";
-import {
-  Inbox,
-  Mail,
-  Plus,
-  Search,
-  Send,
-  Trash2,
-  X,
-} from "lucide-react";
-import { useAuth } from "../auth";
-import {
-  PageHeader,
-  PanelHeader,
-  StateArea,
-  EmptyState,
-  Pagination,
-} from "./ui";
-import { apiFetch, jsonHeaders } from "../api";
-
-const MESSAGES_URL = "/api/communication/messages/";
 
 function roleLabel(role) {
   if (!role) return "";
@@ -131,6 +109,14 @@ export default function MessagesPage() {
       .then((json) => setUnread(json.count || 0))
       .catch(() => {});
   };
+
+  const { schoolScopeVersion } = useSchool();
+
+  useEffect(() => {
+    setRows(null);
+    setThreadOpen(false);
+    setThread(null);
+  }, [schoolScopeVersion]);
 
   if (rows === null && !loading) {
     load();
@@ -255,7 +241,7 @@ export default function MessagesPage() {
           method: "POST",
           headers: jsonHeaders(),
           body: JSON.stringify({
-            recipient: other ? other.id : null,
+            recipient_id: other ? other.id : null,
             subject: root.subject && root.subject.startsWith("Re:") ? root.subject : `Re: ${root.subject}`,
             body: replyBody,
             parent: root.id,

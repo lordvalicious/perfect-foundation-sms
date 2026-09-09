@@ -9,17 +9,6 @@ const SEATING_URL = "/api/exams/seating/";
 const SEATING_BULK_URL = "/api/exams/seating/bulk/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { Armchair, Save, Wand2, AlertTriangle } from "lucide-react";
-import { apiFetch } from "../api";
-import { EmptyState, PanelHeader, StateArea } from "./ui";
-
-const SECTIONS_URL = "/api/schools/sections/?page_size=500";
-const STUDENTS_URL = "/api/students/?page_size=500";
-const SEATING_URL = "/api/exams/seating/";
-const SEATING_BULK_URL = "/api/exams/seating/bulk/";
 
 function toList(data) {
   return Array.isArray(data) ? data : data.results || [];

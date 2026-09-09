@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { FileText, Upload, Download, Search, Filter, X } from "lucide-react";
 import { useAuth } from "../auth";
+import { useSchool } from "../schoolContext";
 import { apiFetch } from "../api";
 import { PageHeader, PanelHeader, StateArea, StatusBadge, EmptyState } from "./ui";
 import { formatDate } from "./format";
@@ -31,39 +32,6 @@ const EMPLOYEE_DOC_TYPES = [
 ];
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import { FileText, Upload, Download, Search, Filter, X } from "lucide-react";
-import { useAuth } from "../auth";
-import { apiFetch } from "../api";
-import { PageHeader, PanelHeader, StateArea, StatusBadge, EmptyState } from "./ui";
-import { formatDate } from "./format";
-
-const DOCUMENTS_URL = "/api/documents/";
-const DOCUMENTS_UPLOAD_URL = "/api/documents/upload/";
-const STUDENTS_API = "/api/students/";
-const EMPLOYEES_API = "/api/hr/employees/";
-const CAMPUSES_URL = "/api/schools/campuses/";
-
-const STUDENT_DOC_TYPES = [
-  ["birth_certificate", "Birth Certificate"],
-  ["b_form", "B-Form / CNIC"],
-  ["report_card", "Report Card"],
-  ["transfer_certificate", "Transfer Certificate"],
-  ["fee_challan", "Fee Challan"],
-  ["medical", "Medical Record"],
-  ["other", "Other"],
-];
-
-const EMPLOYEE_DOC_TYPES = [
-  ["CNIC", "CNIC"],
-  ["degree", "Degree"],
-  ["experience_letter", "Experience Letter"],
-  ["offer_letter", "Offer Letter"],
-  ["contract", "Contract"],
-  ["other", "Other"],
-];
 
 function UploadDocumentModal({ onClose, onDone }) {
   const [entityType, setEntityType] = useState("student");
@@ -288,12 +256,15 @@ export default function DocumentsPage() {
     fetchDocuments();
   }, [fetchDocuments]);
 
+  const { schoolScopeVersion } = useSchool();
+
   useEffect(() => {
     fetch(CAMPUSES_URL, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : []))
       .then((d) => setCampuses(Array.isArray(d) ? d : d.results || []))
       .catch(() => {});
-  }, []);
+    fetchDocuments();
+  }, [schoolScopeVersion]);
 
   const studentDocs = documents.filter((d) => d.entity_type === "student");
   const employeeDocs = documents.filter((d) => d.entity_type === "employee");

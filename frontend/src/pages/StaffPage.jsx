@@ -25,33 +25,6 @@ import { buildErrorMessage } from "../api";
 const STAFF_API_URL = "/api/staff/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import {
-  useCallback,
-  useEffect,
-  useState,
-} from "react";
-import {
-  Search,
-  Users,
-  UserPlus,
-  Building2,
-  Briefcase,
-  Phone,
-  Mail,
-  ShieldCheck,
-  LayoutGrid,
-  Eye,
-  Pencil,
-  Trash2,
-} from "lucide-react";
-
-import ProfileModal from "./ProfileModal";
-import CredentialDisplay from "../components/CredentialDisplay";
-import { buildErrorMessage } from "../api";
-
-const STAFF_API_URL = "/api/staff/";
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;

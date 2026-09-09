@@ -1,13 +1,41 @@
 """API views for message templates."""
 
+from django.db.models import Q
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.accounts.access import get_institution
 from apps.accounts.permissions import IsAdminRole
 
 from .models import MessageTemplate
+
+
+def _visible_templates(request):
+    """Templates of the active institution.
+
+    Blocks every school from seeing another school's templates. Legacy
+    rows (created before the institution FK was stamped) resolve through
+    their creator's membership so the seeded templates keep working.
+    """
+    qs = MessageTemplate.objects.select_related("created_by")
+
+    institution = getattr(request, "institution", None)
+    if institution is None:
+        institution = get_institution(request)
+
+    if institution is None:
+        return qs.none()
+
+    return qs.filter(
+        Q(institution_id=institution.pk)
+        | Q(
+            institution__isnull=True,
+            created_by__memberships__status="active",
+            created_by__memberships__institution_id=institution.pk,
+        )
+    )
 
 
 class MessageTemplateListView(APIView):
@@ -15,7 +43,7 @@ class MessageTemplateListView(APIView):
 
     def get(self, request):
         channel = request.query_params.get("channel", "")
-        templates = MessageTemplate.objects.all()
+        templates = _visible_templates(request)
         if channel:
             templates = templates.filter(channel=channel)
 
@@ -44,6 +72,8 @@ class MessageTemplateListView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        institution = get_institution(request)
+
         template = MessageTemplate.objects.create(
             name=name,
             channel=request.data.get("channel", "sms"),
@@ -51,6 +81,7 @@ class MessageTemplateListView(APIView):
             body=body,
             variables=request.data.get("variables", []),
             created_by=request.user,
+            institution=institution,
         )
 
         return Response({
@@ -63,14 +94,15 @@ class MessageTemplateListView(APIView):
 class MessageTemplateDetailView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
-    def get_object(self, pk):
-        try:
-            return MessageTemplate.objects.get(pk=pk)
-        except MessageTemplate.DoesNotExist:
-            return None
+    def get_object(self, request, pk):
+        return (
+            _visible_templates(request)
+            .filter(pk=pk)
+            .first()
+        )
 
     def get(self, request, pk):
-        template = self.get_object(pk)
+        template = self.get_object(request, pk)
         if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -87,7 +119,7 @@ class MessageTemplateDetailView(APIView):
         })
 
     def put(self, request, pk):
-        template = self.get_object(pk)
+        template = self.get_object(request, pk)
         if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -102,7 +134,7 @@ class MessageTemplateDetailView(APIView):
         return Response({"detail": "Template updated."})
 
     def delete(self, request, pk):
-        template = self.get_object(pk)
+        template = self.get_object(request, pk)
         if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
@@ -114,9 +146,13 @@ class MessageTemplatePreviewView(APIView):
     permission_classes = [IsAuthenticated, IsAdminRole]
 
     def post(self, request, pk):
-        try:
-            template = MessageTemplate.objects.get(pk=pk)
-        except MessageTemplate.DoesNotExist:
+        template = (
+            _visible_templates(request)
+            .filter(pk=pk)
+            .first()
+        )
+
+        if not template:
             return Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
 
         context = request.data.get("context", {})

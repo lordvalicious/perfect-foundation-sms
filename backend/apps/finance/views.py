@@ -931,7 +931,8 @@ class BulkInvoiceCreateView(APIView):
         for enrollment in enrollments:
             try:
                 invoice = Invoice.objects.create(
-                    invoice_number=next_invoice_number(),
+                    institution=request.institution,
+                    invoice_number=next_invoice_number(request.institution),
                     enrollment=enrollment,
                     student=enrollment.student,
                     academic_year=enrollment.academic_year,
@@ -940,11 +941,17 @@ class BulkInvoiceCreateView(APIView):
                     status="issued",
                     notes=notes,
                 )
+                override = StudentFeeOverride.objects.filter(
+                    student=enrollment.student,
+                    fee_structure=fee_structure,
+                    status="active",
+                ).first()
+                item_amount = override.amount if override else fee_structure.amount
                 InvoiceItem.objects.create(
                     invoice=invoice,
                     category=fee_structure.category,
                     description=fee_structure.category.name,
-                    amount=fee_structure.amount,
+                    amount=item_amount,
                 )
                 created.append(invoice.pk)
             except (ModelValidationError, Exception) as exc:
@@ -1060,7 +1067,9 @@ class BulkPaymentCreateView(APIView):
 
             try:
                 payment = Payment.objects.create(
-                    receipt_number=next_receipt_number(),
+                    institution=request.institution,
+                    campus=locked_invoice.enrollment.campus,
+                    receipt_number=next_receipt_number(request.institution),
                     invoice=locked_invoice,
                     amount=amount,
                     payment_date=payment_date,
@@ -1319,6 +1328,7 @@ class StudentOutstandingBalanceView(APIView):
         invoices = service.get_outstanding_invoices(student=student).select_related(
             "enrollment__campus", "enrollment__class_obj", "enrollment__section"
         )
+        invoices = apply_campus_scope(invoices, request, "enrollment__campus_id")
 
         rows = []
         for invoice in invoices:

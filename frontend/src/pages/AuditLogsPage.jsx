@@ -8,16 +8,6 @@ const AUDIT_URL = "/api/audit/";
 const ACTIONS_URL = "/api/audit/actions/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import { Fragment } from "react";
-import { Download, Filter, ScrollText, ChevronDown, ChevronUp } from "lucide-react";
-import { apiFetch, apiDownload } from "../api";
-import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
-
-const AUDIT_URL = "/api/audit/";
-const ACTIONS_URL = "/api/audit/actions/";
 
 function formatTime(value) {
   if (!value) return "—";

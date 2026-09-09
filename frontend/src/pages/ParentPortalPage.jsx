@@ -18,26 +18,6 @@ import { PageHeader, StateArea, EmptyState, StatusBadge } from "./ui";
 import { formatDate, formatCurrency } from "./format";
 
 async 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useMemo, useState } from "react";
-import {
-  Users,
-  Phone,
-  Mail,
-  MapPin,
-  ClipboardCheck,
-  BookOpen,
-  Wallet,
-  FileText,
-  Download,
-  CalendarDays,
-  Megaphone,
-  Receipt,
-  Send,
-} from "lucide-react";
-import { PageHeader, StateArea, EmptyState, StatusBadge } from "./ui";
-import { formatDate, formatCurrency } from "./format";
 
 async function fetchJson(url, fallback, timeoutMs = 30000) {
   const controller = new AbortController();

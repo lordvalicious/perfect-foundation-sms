@@ -294,6 +294,11 @@ class Announcement(models.Model):
             .distinct()
         )
 
+        if self.institution_id:
+            memberships = memberships.filter(
+                memberships__institution_id=self.institution_id
+            )
+
         if roles:
             memberships = memberships.filter(
                 memberships__role_assignments__role__in=roles
@@ -362,6 +367,7 @@ class Announcement(models.Model):
                     title=self.title,
                     message=self.message,
                     notification_type="announcement",
+                    institution=self.institution,
                 )
                 for user_id in new_ids
             ]
@@ -385,6 +391,7 @@ class Announcement(models.Model):
                     status="sent" if ok else "failed",
                     error=err or "",
                     announcement=self,
+                    institution=self.institution,
                 )
 
         return len(new_ids)

@@ -4,14 +4,6 @@ import { apiFetch } from "../api";
 
 const BASE = "/api/auth/2fa/";
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { ShieldCheck, ShieldOff } from "lucide-react";
-import { apiFetch } from "../api";
-
-const BASE = "/api/auth/2fa/";
 
 export default function TwoFASection() {
   const [status, setStatus] = useState(null);

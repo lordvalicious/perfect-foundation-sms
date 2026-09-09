@@ -398,18 +398,22 @@ def _academic(request, year, campus_ids):
     from apps.reportcards.models import ReportCard
     from apps.reports.utils import prefetch_reportcard_results
 
-    cards = list(
-        ReportCard.objects
-        .filter(status__in=["approved", "published"])
-        .select_related("exam")
+    # Institution- and campus-scoped in the database (fail closed). Every
+    # card below belongs to the caller's school / allowed campuses.
+    cards_qs = apply_campus_scope(
+        ReportCard.objects.filter(status__in=["approved", "published"]),
+        request,
+        campus_field="exam__campus_id",
+        institution_field="exam__academic_year__school_id",
     )
 
     if year:
-        cards = [c for c in cards if c.exam.academic_year_id == year.pk]
+        cards_qs = cards_qs.filter(exam__academic_year=year)
 
     if campus_ids:
-        keep = set(campus_ids)
-        cards = [c for c in cards if c.exam.campus_id in keep]
+        cards_qs = cards_qs.filter(exam__campus_id__in=campus_ids)
+
+    cards = list(cards_qs.select_related("exam"))
 
     # percentage / overall_result are computed properties, so aggregate in
     # Python. Prefetch StudentResults to avoid an N+1 per card.

@@ -25,33 +25,6 @@ const STATUS_OPTIONS = [
 ];
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import { Search, CalendarCheck } from "lucide-react";
-import { useApiList } from "./useApiList";
-import {
-  PageHeader,
-  PanelHeader,
-  StateArea,
-  EmptyState,
-  Pagination,
-  StatusBadge,
-} from "./ui";
-import { formatDate } from "./format";
-import { useLang } from "../i18n";
-import { jsonHeaders } from "../api";
-
-const API_URL = "/api/attendance/";
-const BULK_URL = "/api/attendance/bulk/";
-const STUDENTS_URL = "/api/students/";
-
-const STATUS_OPTIONS = [
-  ["present", "Present"],
-  ["absent", "Absent"],
-  ["late", "Late"],
-  ["leave", "Leave"],
-];
 
 function buildParams(search, status, date, page) {
   const params = new URLSearchParams();

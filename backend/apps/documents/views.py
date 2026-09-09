@@ -138,11 +138,36 @@ class DocumentUploadView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        from apps.students.serializers import validate_document_file
+
+        try:
+            validate_document_file(file)
+        except Exception as exc:
+            detail = (
+                getattr(exc, "detail", str(exc))
+                if exc
+                else "Invalid file."
+            )
+            if isinstance(detail, list):
+                detail = "; ".join(str(d) for d in detail)
+            return Response(
+                {"detail": str(detail)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if entity_type == "student":
             student_id = request.data.get("entity_id")
             if not student_id:
                 return Response(
                     {"detail": "entity_id is required for student documents."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            document_type = request.data.get("document_type", "other")
+            valid_types = dict(StudentDocument.DOCUMENT_TYPE_CHOICES)
+            if document_type not in valid_types:
+                return Response(
+                    {"detail": "Invalid document type."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
@@ -167,7 +192,8 @@ class DocumentUploadView(APIView):
 
             doc = StudentDocument.objects.create(
                 student=student,
-                document_type=request.data.get("document_type", "other"),
+                institution=request.institution,
+                document_type=document_type,
                 title=request.data.get("title", file.name),
                 file=file,
                 notes=request.data.get("notes", ""),

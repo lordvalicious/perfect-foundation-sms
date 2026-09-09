@@ -24,32 +24,6 @@ const TEACHER_URL = "/api/reports/staff/teachers/";
 const STAFF_URL = "/api/reports/staff/master/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useMemo, useState } from "react";
-import {
-  Search,
-  User,
-  FileText,
-  Users,
-  GraduationCap,
-  Briefcase,
-  CreditCard,
-  Clock,
-  BookOpen,
-  ShieldAlert,
-  Bus,
-  Phone,
-  Mail,
-  Building2,
-  AlertCircle,
-} from "lucide-react";
-import { StateArea, StatusBadge } from "./ui";
-import { formatCurrency } from "./format";
-
-const STUDENT_PROFILE_URL = "/api/reports/students/profile/";
-const TEACHER_URL = "/api/reports/staff/teachers/";
-const STAFF_URL = "/api/reports/staff/master/";
 
 function InfoRow({ label, value }) {
   return (

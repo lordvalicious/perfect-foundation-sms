@@ -47,57 +47,6 @@ const EMPTY_ASSET_FORM = {
   notes: "",
 };
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useState, useEffect, useCallback } from "react";
-import {
-  Tags,
-  Truck,
-  Wrench,
-  PackageSearch,
-  Search,
-  Plus,
-  Pencil,
-  Trash2,
-  X,
-} from "lucide-react";
-import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
-import { formatCurrency, formatDate } from "./format";
-import { apiFetch, jsonHeaders } from "../api";
-
-const BASE = "/api/inventory/";
-const CAMPUSES_URL = "/api/schools/campuses/";
-
-const ENDPOINTS = {
-  assets: { url: "assets/", icon: PackageSearch, title: "Assets" },
-  categories: { url: "categories/", icon: Tags, title: "Categories" },
-  suppliers: { url: "suppliers/", icon: Truck, title: "Suppliers" },
-  maintenance: { url: "maintenance/", icon: Wrench, title: "Maintenance" },
-};
-
-const ASSET_STATUS_CHOICES = [
-  { value: "in_stock", label: "In Stock" },
-  { value: "in_use", label: "In Use" },
-  { value: "maintenance", label: "Under Maintenance" },
-  { value: "expired", label: "Expired" },
-  { value: "retired", label: "Retired" },
-];
-
-const EMPTY_ASSET_FORM = {
-  name: "",
-  campus: "",
-  code: "",
-  category: "",
-  supplier: "",
-  quantity: 1,
-  unit: "pcs",
-  unit_cost: "",
-  purchase_date: "",
-  location: "",
-  status: "in_stock",
-  notes: "",
-};
 
 export default function InventoryPage() {
   const [tab, setTab] = useState("assets");

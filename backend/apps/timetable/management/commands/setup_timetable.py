@@ -70,7 +70,7 @@ class Command(BaseCommand):
             f"{academic_year.name}\n"
         )
 
-        periods = self.create_periods()
+        periods = self.create_periods(academic_year)
 
         self.create_timetables(
             academic_year,
@@ -84,7 +84,7 @@ class Command(BaseCommand):
             )
         )
 
-    def create_periods(self):
+    def create_periods(self, academic_year):
         periods = {}
 
         created_count = 0
@@ -101,6 +101,7 @@ class Command(BaseCommand):
         ) in self.PERIOD_DATA:
 
             period, created = Period.objects.get_or_create(
+                institution=academic_year.school,
                 number=number,
                 defaults={
                     "name": name,
@@ -138,7 +139,7 @@ class Command(BaseCommand):
     ):
         campuses = (
             Campus.objects
-            .all()
+            .filter(school=academic_year.school)
             .order_by("name")
         )
 

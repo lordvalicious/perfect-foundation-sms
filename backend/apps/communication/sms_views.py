@@ -7,7 +7,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import is_global
+from apps.accounts.access import get_institution, is_global
 from apps.students.models import Student
 from apps.teachers.models import Teacher
 
@@ -45,6 +45,19 @@ def _parent_phones_for_students(student_ids):
     return list(phones)
 
 
+def _sms_log_filter(request):
+    """Q filter matching SMS logs of the active institution."""
+    institution = getattr(request, "institution", None)
+    if institution is None:
+        institution = get_institution(request)
+    if institution is None:
+        return Q(pk__in=[])
+    return Q(institution_id=institution.pk) | Q(
+        sent_by__memberships__status="active",
+        sent_by__memberships__institution_id=institution.pk,
+    )
+
+
 class SMSBroadcastView(APIView):
     """POST to send SMS to selected recipients.
 
@@ -66,6 +79,14 @@ class SMSBroadcastView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
+        institution = get_institution(request)
+
+        if institution is None:
+            return Response(
+                {"detail": "No active institution."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         message = (request.data.get("message") or "").strip()
         if not message:
             return Response(
@@ -80,11 +101,19 @@ class SMSBroadcastView(APIView):
         phone_numbers = set()
 
         if recipient_ids:
-            phone_numbers.update(_collect_phones(recipient_ids))
+            users = User.objects.filter(
+                id__in=recipient_ids,
+                memberships__status="active",
+                memberships__institution_id=institution.pk,
+            )
+            phone_numbers.update(
+                _collect_phones(
+                    list(users.values_list("id", flat=True))
+                )
+            )
 
             student_ids = list(
-                User.objects.filter(
-                    id__in=recipient_ids,
+                users.filter(
                     student_profile__isnull=False,
                 ).values_list("student_profile_id", flat=True)
             )
@@ -96,20 +125,25 @@ class SMSBroadcastView(APIView):
         elif role:
             if role == "all":
                 users_qs = User.objects.filter(
-                    memberships__status="active"
+                    memberships__status="active",
+                    memberships__institution_id=institution.pk,
                 ).distinct()
                 phone_numbers.update(_collect_phones(users_qs.values_list("id", flat=True)))
                 student_ids = Student.objects.filter(
+                    institution_id=institution.pk,
                     enrollment__status="active",
                 ).values_list("id", flat=True)
                 phone_numbers.update(_parent_phones_for_students(student_ids))
 
             elif role == "parent":
                 users_qs = User.objects.filter(
-                    guardian_profile__isnull=False
+                    guardian_profile__isnull=False,
+                    memberships__status="active",
+                    memberships__institution_id=institution.pk,
                 )
                 if campus_id:
                     student_ids = Student.objects.filter(
+                        institution_id=institution.pk,
                         enrollment__campus_id=campus_id,
                         enrollment__status="active",
                     ).values_list("id", flat=True)
@@ -120,7 +154,8 @@ class SMSBroadcastView(APIView):
                 phone_numbers.update(
                     _parent_phones_for_students(
                         Student.objects.filter(
-                            guardian__in=users_qs
+                            institution_id=institution.pk,
+                            guardian__in=users_qs,
                         ).values_list("id", flat=True)
                     )
                 )
@@ -128,6 +163,7 @@ class SMSBroadcastView(APIView):
             elif role == "student":
                 users_qs = User.objects.filter(
                     memberships__status="active",
+                    memberships__institution_id=institution.pk,
                     student_profile__isnull=False,
                 ).distinct()
                 if campus_id:
@@ -140,6 +176,7 @@ class SMSBroadcastView(APIView):
             elif role == "teacher":
                 users_qs = User.objects.filter(
                     memberships__status="active",
+                    memberships__institution_id=institution.pk,
                     teacher_profile__isnull=False,
                 ).distinct()
                 if campus_id:
@@ -153,11 +190,13 @@ class SMSBroadcastView(APIView):
                 role_user_ids = RoleAssignment.objects.filter(
                     role=role,
                     membership__status="active",
+                    membership__institution_id=institution.pk,
                 ).values_list("membership__user_id", flat=True)
                 if campus_id:
                     role_user_ids = User.objects.filter(
                         id__in=role_user_ids,
                         memberships__status="active",
+                        memberships__institution_id=institution.pk,
                     ).filter(
                         Q(staff_profile__primary_campus_id=campus_id)
                         | Q(teacher_profile__primary_campus_id=campus_id)
@@ -182,6 +221,7 @@ class SMSBroadcastView(APIView):
                 status="sent" if ok else "failed",
                 error=err or "",
                 sent_by=user,
+                institution=institution,
             )
             if ok:
                 sent += 1
@@ -204,7 +244,9 @@ class SMSLogListView(APIView):
 
     def get(self, request):
         user = request.user
-        qs = SMSLog.objects.select_related("recipient", "sent_by").all()
+        qs = SMSLog.objects.select_related(
+            "recipient", "sent_by"
+        ).filter(_sms_log_filter(request)).distinct()
 
         if not is_global(user):
             qs = qs.filter(sent_by=user)

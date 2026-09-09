@@ -5,15 +5,6 @@ import { apiFetch, authHeaders, jsonHeaders } from "../api";
 
 const BASE = "/api/homework/";
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import { BookOpenCheck, ClipboardList, Pencil, Plus, Send, Trash2 } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea } from "./ui";
-import { apiFetch, authHeaders, jsonHeaders } from "../api";
-
-const BASE = "/api/homework/";
 
 export default function HomeworkPage({ isStudent }) {
   const [rows, setRows] = useState([]);

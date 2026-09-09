@@ -28,36 +28,6 @@ const EMPTY_FORM = {
 };
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import { CalendarDays, MapPin, Pencil, Plus, Trash2, Users, X } from "lucide-react";
-import { useAuth } from "../auth";
-import { PageHeader, PanelHeader, StateArea } from "./ui";
-
-const EVENT_STATUS = [
-  { value: "draft", label: "Draft" },
-  { value: "published", label: "Published" },
-  { value: "cancelled", label: "Cancelled" },
-];
-
-const AUDIENCE_TYPES = [
-  { value: "everyone", label: "Everyone" },
-  { value: "students", label: "Students" },
-  { value: "teachers", label: "Teachers" },
-  { value: "staff", label: "Staff" },
-  { value: "class", label: "Class" },
-];
-
-const EMPTY_FORM = {
-  title: "",
-  description: "",
-  location: "",
-  start_datetime: "",
-  end_datetime: "",
-  status: "published",
-  audience_type: "everyone",
-};
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;

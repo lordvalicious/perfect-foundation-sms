@@ -57,6 +57,13 @@ class ReportCardListView(generics.ListAPIView):
         )
         user = self.request.user
 
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
+        )
+
         if not is_manager(user):
             if is_student(user):
                 profile = get_student_profile(user)
@@ -167,6 +174,13 @@ class ReportCardDetailView(generics.RetrieveAPIView):
         )
 
         user = self.request.user
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
+        )
 
         if not is_manager(user):
             if is_parent(user):
@@ -480,6 +494,13 @@ class ReportCardPdfBatchView(APIView):
             ReportCard.objects
             .select_related("student", "exam", "exam__class_obj")
             .filter(exam_id=exam_id)
+        )
+
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            campus_field="exam__campus_id",
+            institution_field="exam__academic_year__school_id",
         )
 
         if queryset.exists() is False:

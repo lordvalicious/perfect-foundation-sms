@@ -10,20 +10,6 @@ const DEFAULT_COLORS = {
   accent_color: "#fbbc04",
 };
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Palette, Save, Upload } from "lucide-react";
-import { PageHeader, StateArea } from "./ui";
-
-const BRANDING_URL = "/api/schools/branding/";
-
-const DEFAULT_COLORS = {
-  primary_color: "#1a73e8",
-  secondary_color: "#34a853",
-  accent_color: "#fbbc04",
-};
 
 export default function BrandingPage() {
   const [loading, setLoading] = useState(true);

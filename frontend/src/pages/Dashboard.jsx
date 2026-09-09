@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSchool } from "../schoolContext";
+import { useAuth } from "../auth";
 import { EmptyState } from "../components/EmptyState";
 import { RetryButton } from "../components/RetryButton";
 import { SkeletonBlock } from "./ui";
@@ -18,6 +19,7 @@ import {
   Sparkles,
   TrendingUp,
   Clock,
+  Megaphone,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -101,15 +103,61 @@ function greetingForHour(hour) {
   return "Good evening";
 }
 
-function Dashboard() {
+function RecentActivity({ items }) {
+  return (
+    <div className="dash-card">
+      <div className="dash-card-header">
+        <div>
+          <h3>Recent Activity</h3>
+          <p>Latest announcements in your scope</p>
+        </div>
+      </div>
+
+      {items.length === 0 ? (
+        <p style={{ margin: "1rem 0", fontSize: 13, color: "var(--text-muted)" }}>
+          No recent announcements.
+        </p>
+      ) : (
+        <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          {items.map((item) => (
+            <li
+              key={item.id}
+              style={{
+                display: "flex",
+                gap: 10,
+                padding: "10px 0",
+                borderBottom: "1px solid var(--border, #e2e8f0)",
+              }}
+            >
+              <Megaphone size={16} style={{ flexShrink: 0, marginTop: 2, color: "var(--text-muted)" }} />
+              <div style={{ minWidth: 0 }}>
+                <strong style={{ display: "block", fontSize: 13.5 }}>
+                  {item.title || "Untitled"}
+                </strong>
+                <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                  {item.published_at || item.created_at || ""}
+                </span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function ManagerDashboard() {
   const navigate = useNavigate();
   const { currentSchool } = useSchool();
+  const { user, hasRole } = useAuth();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [dashboardError, setDashboardError] = useState("");
   const [attendanceRows, setAttendanceRows] = useState([]);
+  const [enrollmentByCampus, setEnrollmentByCampus] = useState([]);
   const [collectionTrend, setCollectionTrend] = useState([]);
+  const [announcements, setAnnouncements] = useState([]);
   const [schoolName, setSchoolName] = useState("");
   const [now, setNow] = useState(() => new Date());
 
@@ -215,6 +263,16 @@ function Dashboard() {
         );
       })
       .catch((err) => { setDashboardError(err.message || "Failed to load collection trend data."); }); // Collection trend data fetch
+
+    // Recent activity — institution/person-scoped announcements (top 5).
+    fetch("/api/communication/announcements/", { credentials: "include" })
+      .then((response) => (response.ok ? response.json() : { results: [] }))
+      .then((json) =>
+        setAnnouncements(
+          (Array.isArray(json) ? json : json.results || []).slice(0, 5)
+        )
+      )
+      .catch(() => {});
   }, []);
 
   const stats = dashboard
@@ -623,6 +681,8 @@ function Dashboard() {
                 </div>
               </div>
             )}
+
+            <RecentActivity items={announcements} />
           </div>
         </>
       )}
@@ -630,4 +690,4 @@ function Dashboard() {
   );
 }
 
-export default Dashboard;
+export default ManagerDashboard;

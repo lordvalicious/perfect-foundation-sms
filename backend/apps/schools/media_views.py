@@ -1,22 +1,23 @@
 """Authenticated media serving.
 
 All uploaded files (photos, documents, branding assets) are served
-through this view instead of being publicly accessible. Users can only
-access files belonging to their own institution.
-
-Public branding assets (school logos, favicons, login backgrounds) are
-exempted — they need to be accessible on public login pages.
+through this view instead of being publicly accessible. Access checks
+are **fail closed**: a file must resolve to a real ORM record whose
+owner belongs to the requester's active institution, the requester must
+have campus-level access, and (for documents) an applicable role. A
+manipulated path or an unknown upload prefix is never served.
 """
 
 import mimetypes
 import os
 
 from django.conf import settings
+from django.db.models import Q
 from django.http import FileResponse, Http404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.accounts.access import get_institution, assert_campus_allowed
+from apps.accounts.access import get_institution
 
 # Paths that are always public (login-page assets, favicon)
 PUBLIC_PREFIXES = [
@@ -40,114 +41,424 @@ def _is_public_path(file_path):
     return False
 
 
-def _get_campus_from_path(file_path):
-    """Extract campus ID from file path if present.
-    
-    Expected patterns:
-    - profiles/users/<id>/... (user profile - check user's campus)
-    - profiles/students/<id>/... (student - check student's campus)
-    - profiles/teachers/<id>/... (teacher - check teacher's campus)
-    - profiles/staff/<id>/... (staff - check staff's campus)
-    - documents/students/<id>/... (student document)
-    - etc.
+def _resolve_media_owner(file_path):
+    """Return the ORM record that owns ``file_path``, or None.
+
+    Every known upload prefix maps exactly to the owning model's file
+    field, so a manipulated path either resolves to a genuine record or
+    is denied. Unknown prefixes return None (deny).
     """
     normalized = file_path.replace("\\", "/")
-    
-    # Student documents
+
     if normalized.startswith("students/documents/"):
-        # Path: students/documents/<student_id>/...
-        parts = normalized.split("/")
-        if len(parts) >= 3:
-            try:
-                student_id = int(parts[2])
-                from apps.students.models import Student
-                student = Student.objects.filter(pk=student_id).select_related("primary_campus").first()
-                if student and student.primary_campus_id:
-                    return student.primary_campus_id
-            except (ValueError, IndexError):
-                pass
-    
-    # Student profile images
+        from apps.students.models import StudentDocument
+
+        return (
+            StudentDocument.objects
+            .select_related("student", "institution")
+            .filter(file=normalized)
+            .first()
+        )
+
     if normalized.startswith("profiles/students/"):
-        parts = normalized.split("/")
-        if len(parts) >= 3:
-            try:
-                student_id = int(parts[2])
-                from apps.students.models import Student
-                student = Student.objects.filter(pk=student_id).select_related("primary_campus").first()
-                if student and student.primary_campus_id:
-                    return student.primary_campus_id
-            except (ValueError, IndexError):
-                pass
-    
-    # Teacher profile images
+        from apps.students.models import Student
+
+        return (
+            Student.objects
+            .select_related("primary_campus")
+            .filter(photo=normalized)
+            .first()
+        )
+
     if normalized.startswith("profiles/teachers/"):
-        parts = normalized.split("/")
-        if len(parts) >= 3:
-            try:
-                teacher_id = int(parts[2])
-                from apps.teachers.models import Teacher
-                teacher = Teacher.objects.filter(pk=teacher_id).select_related("primary_campus").first()
-                if teacher and teacher.primary_campus_id:
-                    return teacher.primary_campus_id
-            except (ValueError, IndexError):
-                pass
-    
-    # Staff profile images
+        from apps.teachers.models import Teacher
+
+        return (
+            Teacher.objects
+            .select_related("primary_campus")
+            .filter(photo=normalized)
+            .first()
+        )
+
     if normalized.startswith("profiles/staff/"):
-        parts = normalized.split("/")
-        if len(parts) >= 3:
-            try:
-                staff_id = int(parts[2])
-                from apps.accounts.models import StaffProfile
-                staff = StaffProfile.objects.filter(pk=staff_id).select_related("primary_campus").first()
-                if staff and staff.primary_campus_id:
-                    return staff.primary_campus_id
-            except (ValueError, IndexError):
-                pass
-    
-    # User profile images
+        from apps.accounts.models import StaffProfile
+
+        return (
+            StaffProfile.objects
+            .select_related("primary_campus")
+            .filter(photo=normalized)
+            .first()
+        )
+
     if normalized.startswith("profiles/users/"):
-        parts = normalized.split("/")
-        if len(parts) >= 3:
-            try:
-                user_id = int(parts[2])
-                from apps.accounts.models import User
-                user = User.objects.filter(pk=user_id).select_related("student_profile__primary_campus", "teacher_profile__primary_campus", "staff_profile__primary_campus").first()
-                if user:
-                    if user.student_profile and user.student_profile.primary_campus_id:
-                        return user.student_profile.primary_campus_id
-                    if user.teacher_profile and user.teacher_profile.primary_campus_id:
-                        return user.teacher_profile.primary_campus_id
-                    if user.staff_profile and user.staff_profile.primary_campus_id:
-                        return user.staff_profile.primary_campus_id
-            except (ValueError, IndexError):
-                pass
-    
+        from apps.accounts.models import User
+
+        return User.objects.filter(photo=normalized).first()
+
+    if normalized.startswith("hr/candidates/resumes/"):
+        from apps.hr.models import Candidate
+
+        return (
+            Candidate.objects
+            .select_related("institution", "campus")
+            .filter(resume=normalized)
+            .first()
+        )
+
+    if normalized.startswith("hr/"):
+        from apps.hr.models import (
+            EmployeeDocument,
+            EmploymentContract,
+            LeaveRequest,
+            Loan,
+            SalaryRevision,
+        )
+
+        if normalized.startswith("hr/documents/"):
+            return (
+                EmployeeDocument.objects
+                .select_related("employee", "campus")
+                .filter(file=normalized)
+                .first()
+            )
+
+        if normalized.startswith("hr/contracts/"):
+            return (
+                EmploymentContract.objects
+                .select_related("employee", "campus")
+                .filter(document=normalized)
+                .first()
+            )
+
+        if normalized.startswith("hr/leave/"):
+            return (
+                LeaveRequest.objects
+                .select_related("employee", "campus")
+                .filter(attachment=normalized)
+                .first()
+            )
+
+        if normalized.startswith("hr/loans/"):
+            return (
+                Loan.objects
+                .select_related("employee", "campus")
+                .filter(documents=normalized)
+                .first()
+            )
+
+        if normalized.startswith("hr/salary_revisions/"):
+            return (
+                SalaryRevision.objects
+                .select_related("employee", "campus")
+                .filter(document=normalized)
+                .first()
+            )
+
+        return None
+
+    if normalized.startswith("homework/"):
+        from apps.homework.models import Homework
+
+        return (
+            Homework.objects
+            .select_related("campus", "institution")
+            .filter(attachment=normalized)
+            .first()
+        )
+
+    if normalized.startswith("visitors/"):
+        from apps.visitors.models import Visitor
+
+        return (
+            Visitor.objects
+            .select_related("campus", "institution")
+            .filter(photo=normalized)
+            .first()
+        )
+
+    if normalized.startswith("digital_ids/"):
+        from apps.digital_ids.models import IdCard
+
+        return (
+            IdCard.objects
+            .select_related("campus", "institution")
+            .filter(photo=normalized)
+            .first()
+        )
+
+    if normalized.startswith("payslips/"):
+        from apps.payroll.models import Payslip
+
+        return (
+            Payslip.objects
+            .select_related(
+                "record__employee",
+                "record__employee__primary_campus",
+            )
+            .filter(document=normalized)
+            .first()
+        )
+
+    if normalized.startswith("white_label/"):
+        from apps.white_label.models import WhiteLabelBranding
+
+        fields = [
+            "logo",
+            "logo_dark",
+            "favicon",
+            "favicon_dark",
+            "login_background_image",
+            "email_header_image",
+            "document_watermark",
+            "certificate_border",
+            "og_image",
+        ]
+        for record in (
+            WhiteLabelBranding
+            .objects
+            .select_related("school")
+            .all()
+        ):
+            for field in fields:
+                value = getattr(record, field, None)
+                if value and value.name == normalized:
+                    return record
+
+        return None
+
+    if normalized.startswith("branding/"):
+        from apps.schools.models import School
+
+        return (
+            School.objects
+            .filter(
+                Q(logo=normalized) | Q(favicon=normalized),
+                status="active",
+            )
+            .first()
+        )
+
     return None
 
 
-def _file_belongs_to_user_school(file_path, user):
-    """Check if the user's active institution matches the file's owner.
+def _owner_context(record, file_path):
+    """Return ``(institution_id, campus_ids)`` for an owning record.
 
-    Upload paths embed the app label or student/teacher ID. We verify by
-    checking that the requesting user's institution matches at least one
-    entity referenced in the path. This is a best-effort heuristic —
-    full enforcement happens at the API level before generating URLs.
+    Institution is taken from the record's own FK, from its related
+    entity (student / employee), or from the campus's school. ``None``
+    means "unknown" and is treated as a denial upstream.
     """
-    institution = get_institution(user) if hasattr(user, "is_authenticated") else None
+    model_name = type(record).__name__
 
-    if institution is None:
+    if model_name == "StudentDocument":
+        student = record.student
+        inst = record.institution_id
+        if inst is None and student is not None:
+            inst = student.institution_id
+        if inst is None and student is not None and student.primary_campus_id:
+            inst = student.primary_campus.school_id
+        campus = student.primary_campus_id if student else None
+        return inst, [campus] if campus else []
+
+    if model_name == "Student":
+        inst = record.institution_id
+        if inst is None and record.primary_campus_id:
+            inst = record.primary_campus.school_id
+        campus = record.primary_campus_id
+        return inst, [campus] if campus else []
+
+    if model_name == "Teacher":
+        inst = record.institution_id
+        if inst is None and record.primary_campus_id:
+            inst = record.primary_campus.school_id
+        campus = record.primary_campus_id
+        return inst, [campus] if campus else []
+
+    if model_name == "StaffProfile":
+        inst = record.institution_id
+        if inst is None and record.primary_campus_id:
+            inst = record.primary_campus.school_id
+        campus = record.primary_campus_id
+        return inst, [campus] if campus else []
+
+    if model_name in (
+        "EmployeeDocument",
+        "EmploymentContract",
+        "LeaveRequest",
+        "Loan",
+        "SalaryRevision",
+    ):
+        employee = record.employee
+        inst = getattr(employee, "institution_id", None)
+        campus = getattr(record, "campus_id", None)
+        if campus is None:
+            campus = getattr(employee, "primary_campus_id", None)
+        return inst, [campus] if campus else []
+
+    if model_name == "Candidate":
+        return record.institution_id, (
+            [record.campus_id] if record.campus_id else []
+        )
+
+    if model_name == "Payslip":
+        employee = record.record.employee
+        return employee.institution_id, (
+            [employee.primary_campus_id]
+            if employee.primary_campus_id
+            else []
+        )
+
+    if model_name in ("Homework", "Visitor", "IdCard"):
+        inst = record.institution_id
+        if inst is None and record.campus_id:
+            inst = record.campus.school_id
+        return inst, [record.campus_id] if record.campus_id else []
+
+    if model_name == "WhiteLabelBranding":
+        return record.school_id, []
+
+    if model_name == "School":
+        return record.pk, []
+
+    return None, []
+
+
+def _role_allows_student_document(request, student):
+    """Non-managers may only open documents of students in their scope."""
+    from apps.accounts.scopes import (
+        is_manager,
+        is_parent,
+        is_student,
+        is_teacher,
+        parent_student_ids,
+        teacher_student_ids,
+    )
+
+    if is_manager(request.user):
+        return True
+
+    if student is None:
         return False
 
-    # Check campus-level access if the file is campus-scoped
-    campus_id = _get_campus_from_path(file_path)
-    if campus_id is not None:
-        from apps.accounts.access import assert_campus_allowed
+    if is_student(request.user):
+        return (
+            request.user.student_profile_id is not None
+            and request.user.student_profile_id == student.pk
+        )
+
+    if is_parent(request.user):
+        return student.pk in parent_student_ids(request.user)
+
+    if is_teacher(request.user):
+        return student.pk in teacher_student_ids(request.user)
+
+    return False
+
+
+def _role_allows_hr_document(request, employee):
+    """HR files are for school managers or the employee themself."""
+    from apps.accounts.scopes import is_manager
+
+    if is_manager(request.user):
+        return True
+
+    if employee is None:
+        return False
+
+    teacher = getattr(employee, "teacher", None)
+    if teacher is not None and getattr(teacher, "user_id", None) == request.user.pk:
+        return True
+
+    staff = getattr(employee, "staff_profile", None)
+    if staff is not None and getattr(staff, "user_id", None) == request.user.pk:
+        return True
+
+    return False
+
+
+def _role_allows_homework(request, homework):
+    """Homework attachments are visible to managers and class students."""
+    from apps.accounts.scopes import (
+        is_manager,
+        is_student,
+        student_class_ids,
+    )
+
+    if is_manager(request.user):
+        return True
+
+    if is_student(request.user):
+        return homework.class_obj_id in student_class_ids(request.user)
+
+    return False
+
+
+def _can_access_file(file_path, request):
+    """Fail-closed authorization for a protected media file."""
+    if request.user.is_superuser:
+        return True
+
+    institution = getattr(request, "institution", None)
+    if institution is None:
+        institution = get_institution(request)
+        if institution is None:
+            return False
+
+    normalized = file_path.replace("\\", "/")
+    owner = _resolve_media_owner(normalized)
+
+    if owner is None:
+        return False
+
+    if normalized.startswith("profiles/users/"):
+        return (
+            # Same owner + school check, no campus constraint.
+            owner.pk == request.user.pk
+            or owner.memberships.filter(
+                status="active",
+                institution_id=institution.pk,
+            ).exists()
+        )
+
+    inst_id, campus_ids = _owner_context(owner, normalized)
+
+    if inst_id is not None and inst_id != institution.pk:
+        return False
+
+    from apps.accounts.access import assert_campus_allowed
+
+    for campus_id in campus_ids:
         try:
-            assert_campus_allowed(user, campus_id)
+            assert_campus_allowed(request.user, campus_id)
         except Exception:
             return False
+
+    if normalized.startswith("students/documents/"):
+        return _role_allows_student_document(
+            request,
+            getattr(owner, "student", None),
+        )
+
+    if normalized.startswith("profiles/students/"):
+        return _role_allows_student_document(request, owner)
+
+    if normalized.startswith("hr/candidates/resumes/"):
+        return _role_allows_hr_document(request, None)
+
+    if normalized.startswith("hr/"):
+        return _role_allows_hr_document(
+            request,
+            getattr(owner, "employee", None),
+        )
+
+    if normalized.startswith("payslips/"):
+        return _role_allows_hr_document(
+            request,
+            getattr(owner, "record").employee,
+        )
+
+    if normalized.startswith("homework/"):
+        return _role_allows_homework(request, owner)
 
     return True
 
@@ -177,16 +488,8 @@ class ProtectedMediaView(APIView):
         if not request.user.is_authenticated:
             raise Http404
 
-        # Tenant isolation: user must belong to an institution
-        from apps.accounts.access import get_institution
-
-        institution = getattr(request, "institution", None)
-
-        if institution is None and not request.user.is_superuser:
-            raise Http404
-
-        # Campus-level authorization
-        if not _file_belongs_to_user_school(clean, request.user):
+        # Fail-closed ownership + institution + campus + role checks
+        if not _can_access_file(clean, request):
             raise Http404
 
         return self._serve(full_path)

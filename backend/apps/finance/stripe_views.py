@@ -130,7 +130,9 @@ def _handle_checkout_completed(session):
         return
 
     payment = Payment(
-        receipt_number=next_receipt_number(),
+        institution=invoice.academic_year.school,
+        campus=invoice.enrollment.campus,
+        receipt_number=next_receipt_number(invoice.academic_year.school),
         invoice=invoice,
         amount=amount,
         payment_date=timezone.now().date(),

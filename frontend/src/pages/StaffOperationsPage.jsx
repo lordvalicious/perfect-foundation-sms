@@ -30,40 +30,6 @@ const ATT_STATUS = [
   ["leave", "On Leave"],
 ];
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import {
-  CalendarClock,
-  CheckCircle2,
-  ClipboardCheck,
-  Plus,
-  XCircle,
-  Users,
-} from "lucide-react";
-import { PageHeader, PanelHeader, StateArea } from "./ui";
-import { apiFetch, authHeaders } from "../api";
-
-const BASE = "/api/staff/";
-
-const LEAVE_TYPES = [
-  ["casual", "Casual Leave"],
-  ["sick", "Sick Leave"],
-  ["annual", "Annual Leave"],
-  ["maternity", "Maternity Leave"],
-  ["paternity", "Paternity Leave"],
-  ["unpaid", "Unpaid Leave"],
-  ["other", "Other"],
-];
-
-const ATT_STATUS = [
-  ["present", "Present"],
-  ["absent", "Absent"],
-  ["late", "Late"],
-  ["half_day", "Half Day"],
-  ["leave", "On Leave"],
-];
 
 export default function StaffOperationsPage({ canReview }) {
   const [tab, setTab] = useState("leave");

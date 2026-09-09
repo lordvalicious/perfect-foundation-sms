@@ -12,22 +12,6 @@ import { apiFetch, authHeaders } from "../api";
 
 const BASE = "/api/lms/";
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import {
-  BookOpenCheck,
-  CheckCircle2,
-  Circle,
-  Plus,
-  Send,
-  Trash2,
-} from "lucide-react";
-import { PageHeader, PanelHeader, StateArea } from "./ui";
-import { apiFetch, authHeaders } from "../api";
-
-const BASE = "/api/lms/";
 
 export default function LMSPage({ isStudent }) {
   const [courses, setCourses] = useState([]);

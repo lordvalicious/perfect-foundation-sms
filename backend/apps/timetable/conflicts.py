@@ -50,12 +50,15 @@ def _describe(conflict_type, day, resource_id, resource, pair):
     }
 
 
-def find_conflicts(academic_year=None, campus=None):
+def find_conflicts(academic_year=None, campus=None, campus_ids=None):
     """Scan timetable entries and return structured conflict records.
 
-    Optional filters: ``academic_year`` (instance) and ``campus``
-    (instance). Conflicts are scoped to the same academic year, campus,
-    and day, so legacy cross-year timetables do not produce noise.
+    Optional filters: ``academic_year`` (instance), ``campus``
+    (instance) and ``campus_ids`` (list of campus pks). Conflicts are
+    scoped to the same academic year, campus, and day, so legacy
+    cross-year timetables do not produce noise. Room clashes are always
+    per-campus; teacher/section clashes can span campuses only when
+    ``campus_ids`` is omitted by an intentionally broad caller.
     """
     from .models import TimetableEntry
 
@@ -77,6 +80,9 @@ def find_conflicts(academic_year=None, campus=None):
 
     if campus is not None:
         queryset = queryset.filter(campus=campus)
+
+    if campus_ids:
+        queryset = queryset.filter(campus_id__in=campus_ids)
 
     entries = list(queryset)
 

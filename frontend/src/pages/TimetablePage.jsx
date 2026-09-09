@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarDays, Sparkles } from "lucide-react";
 import { useApiList } from "./useApiList";
 import { useAuth } from "../auth";
+import { useSchool } from "../schoolContext";
 import {
   PageHeader,
   PanelHeader,
@@ -16,27 +17,12 @@ const ENTRIES_API_URL = "/api/timetable/entries/";
 const GENERATE_URL = "/api/timetable/generate/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useState } from "react";
-import { CalendarDays, Sparkles } from "lucide-react";
-import { useApiList } from "./useApiList";
-import { useAuth } from "../auth";
-import {
-  PageHeader,
-  PanelHeader,
-  StateArea,
-  EmptyState,
-  StatusBadge,
-} from "./ui";
-import { apiFetch, authHeaders } from "../api";
-
-const PERIODS_API_URL = "/api/timetable/periods/";
-const ENTRIES_API_URL = "/api/timetable/entries/";
-const GENERATE_URL = "/api/timetable/generate/";
 
 function AutoGeneratePanel() {
-  const [campus, setCampus] = useState("");
+  const { activeCampus, campusList } = useSchool();
+  const [campus, setCampus] = useState(
+    activeCampus?.id != null ? String(activeCampus.id) : ""
+  );
   const [lessons, setLessons] = useState(5);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
@@ -53,7 +39,7 @@ function AutoGeneratePanel() {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
-        campus: isNaN(Number(campus)) ? campus : Number(campus),
+        campus: Number(campus),
         lessons_per_subject: Number(lessons),
         confirm: true,
       }),
@@ -71,11 +57,18 @@ function AutoGeneratePanel() {
       />
 
       <div className="filter-row">
-        <input
-          placeholder="Campus name..."
+        <select
           value={campus}
           onChange={(e) => setCampus(e.target.value)}
-        />
+          aria-label="Campus"
+        >
+          <option value="">Select campus...</option>
+          {campusList.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
 
         <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
           Lessons/subject/week
@@ -126,6 +119,13 @@ export default function TimetablePage() {
   const periods = useApiList(PERIODS_API_URL);
   const entries = useApiList(ENTRIES_API_URL);
   const { user, hasRole } = useAuth();
+  const { schoolScopeVersion } = useSchool();
+
+  useEffect(() => {
+    if (periods.loading || entries.loading) return;
+    periods.refresh(new URLSearchParams({ page: 1 }));
+    entries.refresh(new URLSearchParams({ page: 1 }));
+  }, [schoolScopeVersion]);
 
   const isTeacher = hasRole(["teacher"]);
   const canGenerate = hasRole(["super_admin", "admin", "principal", "academic"]);

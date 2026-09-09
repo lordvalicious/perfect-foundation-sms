@@ -1,6 +1,3 @@
-export 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
 export function PageHeader({ crumb, title, subtitle, action, hero, stats }) {
   if (hero) {
     return (

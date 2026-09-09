@@ -24,32 +24,6 @@ import { formatDate } from "./format";
 import { buildErrorMessage, apiDownload } from "../api";
 
 async 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import {
-  ArrowLeft,
-  BadgeCheck,
-  BookOpen,
-  Briefcase,
-  Building2,
-  CalendarDays,
-  CheckCircle2,
-  FileText,
-  GraduationCap,
-  Layers,
-  Mail,
-  MapPin,
-  Phone,
-  School,
-  User,
-  Users,
-} from "lucide-react";
-
-import { StatusBadge } from "./ui";
-import { formatDate } from "./format";
-import { buildErrorMessage, apiDownload } from "../api";
 
 async function profileErrorMessage(res, fallback) {
   try {

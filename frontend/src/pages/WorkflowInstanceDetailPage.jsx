@@ -7,17 +7,6 @@ import { WorkflowTimeline } from "../components/WorkflowTimeline";
 
 const API_URL = "/api/workflow/instances";
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
-import { PageHeader, StateArea } from "./ui";
-import { WorkflowStateCard } from "../components/WorkflowStateCard";
-import { WorkflowApprovalSteps } from "../components/WorkflowApprovalSteps";
-import { WorkflowTimeline } from "../components/WorkflowTimeline";
-
-const API_URL = "/api/workflow/instances";
 
 export default function WorkflowInstanceDetailPage() {
   const { id } = useParams();

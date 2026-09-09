@@ -17,25 +17,6 @@ const TEACHERS_URL = "/api/teachers/?page_size=500";
 const EXAM_SUBJECTS_URL = "/api/exams/subjects/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import {
-  AlertTriangle,
-  CalendarClock,
-  Pencil,
-  Plus,
-  Trash2,
-  X,
-} from "lucide-react";
-import { apiFetch } from "../api";
-import { EmptyState, PanelHeader, StateArea } from "./ui";
-import { formatDate } from "./format";
-
-const SCHEDULES_URL = "/api/exams/schedules/";
-const SECTIONS_URL = "/api/schools/sections/?page_size=500";
-const TEACHERS_URL = "/api/teachers/?page_size=500";
-const EXAM_SUBJECTS_URL = "/api/exams/subjects/";
 
 function toList(data) {
   return Array.isArray(data) ? data : data.results || [];

@@ -21,7 +21,7 @@ from apps.accounts.scopes import (
     teacher_student_ids,
 )
 from apps.attendance.models import Attendance
-from apps.finance.models import Invoice, Payment
+from apps.finance.models import Invoice, Payment, Concession, PaymentReversal, PaymentRefund
 from apps.exams.models import Exam, StudentResult
 from apps.schools.models import Campus, Class, Section
 from apps.students.models import Student, Enrollment
@@ -223,6 +223,15 @@ def dashboard_attendance(request):
             )
 
         queryset = queryset.filter(student_id__in=student_ids)
+    else:
+        # Manager / staff / accountant: institution + campus scoped so the
+        # cards never aggregate another school's attendance.
+        queryset = apply_campus_scope(
+            queryset,
+            request,
+            "campus_id",
+            institution_field="campus__school_id",
+        )
 
     data = {
         "present": queryset.filter(status="present").count(),
@@ -246,6 +255,13 @@ def dashboard_finance(request):
         total=Sum("amount")
     ).values("total")
 
+    concession_totals = Concession.objects.filter(
+        invoice=OuterRef("pk"),
+        status="approved",
+    ).values("invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
     paid_totals = Payment.objects.filter(
         invoice=OuterRef("pk"),
         status="completed",
@@ -253,47 +269,73 @@ def dashboard_finance(request):
         total=Sum("amount")
     ).values("total")
 
-    invoices = scoped_invoice_queryset(request).annotate(
-        items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
-        paid=Coalesce(Subquery(paid_totals), Decimal("0.00")),
-    )
-
-    payments = Payment.objects.filter(
+    reversal_totals = PaymentReversal.objects.filter(
+        payment__invoice=OuterRef("pk"),
         status="completed",
-        invoice__academic_year__school=request.institution,
-    )
-    payments = apply_campus_scope(
-        payments,
-        request,
-        "invoice__enrollment__campus_id",
-        institution_field=None,
-    )
+    ).values("payment__invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
 
-    payments_total = (
-        payments.aggregate(total=Sum("amount"))["total"] or 0
+    refund_totals = PaymentRefund.objects.filter(
+        payment__invoice=OuterRef("pk"),
+        status="completed",
+    ).values("payment__invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
+    invoices = scoped_invoice_queryset(request)
+
+    if is_parent(user):
+        student_ids = parent_student_ids(user)
+        invoices = (
+            invoices.filter(student_id__in=student_ids)
+            if student_ids
+            else invoices.none()
+        )
+    elif is_student(user):
+        profile = get_student_profile(user)
+        invoices = (
+            invoices.filter(student=profile)
+            if profile is not None
+            else invoices.none()
+        )
+
+    invoices = invoices.annotate(
+        items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
+        concession_total=Coalesce(Subquery(concession_totals), Decimal("0.00")),
+        gross_paid=Coalesce(Subquery(paid_totals), Decimal("0.00")),
+        reversals=Coalesce(Subquery(reversal_totals), Decimal("0.00")),
+        refunds=Coalesce(Subquery(refund_totals), Decimal("0.00")),
     )
 
     counts = {}
-    for row in invoices.values("status").annotate(c=Count("id")):
-        counts[row["status"]] = row["c"]
-
     total_billed = Decimal("0.00")
+    payments_collected = Decimal("0.00")
     outstanding_total = Decimal("0.00")
 
     for inv in invoices:
-        billed = max(inv.items_total - inv.discount, Decimal("0.00"))
+        billed = max(
+            inv.items_total - inv.discount - inv.concession_total,
+            Decimal("0.00"),
+        )
+        paid = max(
+            inv.gross_paid - inv.reversals - inv.refunds,
+            Decimal("0.00"),
+        )
+        counts[inv.status] = counts.get(inv.status, 0) + 1
         total_billed += billed
-        outstanding_total += max(billed - inv.paid, Decimal("0.00"))
+        payments_collected += paid
+        outstanding_total += max(billed - paid, Decimal("0.00"))
 
     data = {
-        "invoices": invoices.count(),
+        "invoices": sum(counts.values()),
         "paid": counts.get("paid", 0),
         "partial": counts.get("partial", 0),
         "issued": counts.get("issued", 0),
         "overdue": counts.get("overdue", 0),
         "cancelled": counts.get("cancelled", 0),
         "total_billed": str(total_billed),
-        "payments_collected": str(payments_total),
+        "payments_collected": str(payments_collected),
         "outstanding": str(outstanding_total),
     }
 
@@ -304,10 +346,14 @@ def dashboard_finance(request):
 @permission_classes([IsAuthenticated])
 def dashboard_finance_breakdown(request):
     """Collection by campus / method, monthly collection and
-    outstanding student balances. School-wide finance only."""
+    outstanding student balances. Finance staff only."""
     user = request.user
 
-    if is_parent(user) or is_student(user):
+    allowed = is_manager(user) or user.has_any_role(
+        ["accountant", "hr"]
+    )
+
+    if not allowed:
         return JsonResponse(
             {"detail": "Finance breakdown is not available."},
             status=403,
@@ -322,10 +368,31 @@ def dashboard_finance_breakdown(request):
         total=Sum("amount")
     ).values("total")
 
-    paid_totals_sub = Payment.objects.filter(
+    concession_totals = Concession.objects.filter(
+        invoice=OuterRef("pk"),
+        status="approved",
+    ).values("invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
+    paid_totals = Payment.objects.filter(
         invoice=OuterRef("pk"),
         status="completed",
     ).values("invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
+    reversal_totals = PaymentReversal.objects.filter(
+        payment__invoice=OuterRef("pk"),
+        status="completed",
+    ).values("payment__invoice").annotate(
+        total=Sum("amount")
+    ).values("total")
+
+    refund_totals = PaymentRefund.objects.filter(
+        payment__invoice=OuterRef("pk"),
+        status="completed",
+    ).values("payment__invoice").annotate(
         total=Sum("amount")
     ).values("total")
 
@@ -337,7 +404,10 @@ def dashboard_finance_breakdown(request):
         )
         .annotate(
             items_total=Coalesce(Subquery(item_totals), Decimal("0.00")),
-            paid=Coalesce(Subquery(paid_totals_sub), Decimal("0.00")),
+            concession_total=Coalesce(Subquery(concession_totals), Decimal("0.00")),
+            gross_paid=Coalesce(Subquery(paid_totals), Decimal("0.00")),
+            reversals=Coalesce(Subquery(reversal_totals), Decimal("0.00")),
+            refunds=Coalesce(Subquery(refund_totals), Decimal("0.00")),
         )
     )
 
@@ -346,15 +416,22 @@ def dashboard_finance_breakdown(request):
 
     for invoice in invoices:
         campus_name = invoice.enrollment.campus.name
-        billed = max(invoice.items_total - invoice.discount, Decimal("0.00"))
-        balance = max(billed - invoice.paid, Decimal("0.00"))
+        billed = max(
+            invoice.items_total - invoice.discount - invoice.concession_total,
+            Decimal("0.00"),
+        )
+        collected = max(
+            invoice.gross_paid - invoice.reversals - invoice.refunds,
+            Decimal("0.00"),
+        )
+        balance = max(billed - collected, Decimal("0.00"))
 
         entry = campus_totals.setdefault(
             campus_name,
             {"billed": Decimal("0.00"), "collected": Decimal("0.00")},
         )
         entry["billed"] += billed
-        entry["collected"] += invoice.paid
+        entry["collected"] += collected
 
         if balance > 0:
             outstanding_rows.append(
@@ -377,22 +454,46 @@ def dashboard_finance_breakdown(request):
         request,
         "invoice__enrollment__campus_id",
         institution_field=None,
-    ).select_related("invoice__enrollment__campus")
+    ).select_related("invoice__enrollment__campus").prefetch_related(
+        "reversals",
+        "refunds",
+    )
 
     method_totals = {}
     monthly_totals = {}
 
     for payment in completed_payments:
+        reversed_total = sum(
+            (
+                rev.amount
+                for rev in payment.reversals.all()
+                if rev.status == "completed"
+            ),
+            Decimal("0.00"),
+        )
+        refunded_total = sum(
+            (
+                ref.amount
+                for ref in payment.refunds.all()
+                if ref.status == "completed"
+            ),
+            Decimal("0.00"),
+        )
+        net = max(
+            payment.amount - reversed_total - refunded_total,
+            Decimal("0.00"),
+        )
+
         method = payment.get_payment_method_display()
         method_totals[method] = (
             method_totals.get(method, Decimal("0.00"))
-            + payment.amount
+            + net
         )
 
         month_key = payment.payment_date.strftime("%Y-%m")
         monthly_totals[month_key] = (
             monthly_totals.get(month_key, Decimal("0.00"))
-            + payment.amount
+            + net
         )
 
     outstanding_rows.sort(

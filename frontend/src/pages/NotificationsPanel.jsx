@@ -19,29 +19,6 @@ const JOBS = [
   },
 ];
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useState } from "react";
-import { BellRing, RefreshCw } from "lucide-react";
-import { apiFetch } from "../api";
-
-const JOBS = [
-  {
-    key: "fee-reminders",
-    label: "Fee reminders",
-    description:
-      "SMS + email to guardians of students with overdue invoices (consolidated, once per week per student).",
-    url: "/api/communication/cron/fee-reminders/",
-  },
-  {
-    key: "absence-alerts",
-    label: "Absence alerts",
-    description:
-      "Same-day SMS + email to guardians of students marked absent today.",
-    url: "/api/attendance/cron/absence-alerts/",
-  },
-];
 
 export default function NotificationsPanel() {
   const [results, setResults] = useState({});
@@ -92,7 +69,15 @@ export default function NotificationsPanel() {
               type="button"
               className="primary-button"
               disabled={!!busy[job.key]}
-              onClick={() => run(job, false)}
+              onClick={() => {
+                if (
+                  window.confirm(
+                    `Run "${job.label}" now? Real SMS and email messages will be sent to parents.`
+                  )
+                ) {
+                  run(job, false);
+                }
+              }}
             >
               {busy[job.key] ? (
                 <RefreshCw size={14} />

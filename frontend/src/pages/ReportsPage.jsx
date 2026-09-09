@@ -6,7 +6,7 @@ import {
   useMemo,
   useState,
 } from "react";
-import { useSchool } from "./schoolContext";
+import { useSchool } from "../schoolContext";
 import {
   BarChart3,
   Download,

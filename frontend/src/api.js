@@ -18,8 +18,20 @@ export function statusMessage(status) {
     return "The requested record could not be found.";
   }
 
+  if (status === 405) {
+    return "The request method is not allowed for the specified URL.";
+  }
+
   if (status === 409) {
     return "A record already exists with those details. Please use a different value.";
+  }
+
+  if (status === 422) {
+    return "The request was well-formed but was unable to be followed due to semantic errors.";
+  }
+
+  if (status === 429) {
+    return "Too many requests. Please wait a moment and try again.";
   }
 
   if (status >= 500) {

@@ -4,7 +4,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import is_global
+from apps.accounts.access import (
+    assert_campus_allowed,
+    get_institution,
+    is_global,
+)
 from apps.schools.models import AcademicYear, Campus
 
 
@@ -61,6 +65,22 @@ class TimetableGenerateView(APIView):
         if campus is None:
             return Response(
                 {"detail": f"Campus '{campus_raw}' not found."}, status=404
+            )
+
+        institution = get_institution(request)
+
+        if institution is None or campus.school_id != institution.pk:
+            return Response(
+                {"detail": "Campus is outside the active institution."},
+                status=403,
+            )
+
+        try:
+            assert_campus_allowed(request.user, campus.pk)
+        except Exception:
+            return Response(
+                {"detail": "You do not have access to this campus."},
+                status=403,
             )
 
         year_id = request.data.get("academic_year")

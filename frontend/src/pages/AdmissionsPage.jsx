@@ -42,50 +42,6 @@ const INQUIRY_SOURCES = [
 ];
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, FilePlus2, Inbox, Search, Trash2, UserPlus, X, Building2, BookOpen } from "lucide-react";
-import { apiFetch, jsonHeaders } from "../api";
-import { PageHeader, PanelHeader, StateArea, StatusBadge } from "./ui";
-
-const ADMISSIONS_URL = "/api/students/admissions/";
-const INQUIRIES_URL = "/api/students/inquiries/";
-const CAMPUSES_URL = "/api/schools/campuses/";
-const ACADEMIC_YEARS_URL = "/api/schools/academic-years/";
-const CLASSES_URL = "/api/schools/classes/";
-const SECTIONS_URL = "/api/schools/sections/";
-const GUARDIANS_URL = "/api/students/guardians/";
-
-const ADMISSION_STATUSES = [
-  ["draft", "Draft"],
-  ["submitted", "Submitted"],
-  ["under_review", "Under review"],
-  ["accepted", "Accepted"],
-  ["rejected", "Rejected"],
-  ["withdrawn", "Withdrawn"],
-];
-
-const INQUIRY_STATUSES = [
-  ["new", "New"],
-  ["contacted", "Contacted"],
-  ["interested", "Interested"],
-  ["application_started", "Application Started"],
-  ["converted", "Converted"],
-  ["lost", "Lost"],
-  ["closed", "Closed"],
-];
-
-const INQUIRY_SOURCES = [
-  ["website", "Website"],
-  ["walk_in", "Walk-in"],
-  ["phone", "Phone"],
-  ["email", "Email"],
-  ["referral", "Referral"],
-  ["social_media", "Social Media"],
-  ["event", "Event / Open House"],
-  ["other", "Other"],
-];
 
 function toList(data) {
   return Array.isArray(data) ? data : data.results || [];

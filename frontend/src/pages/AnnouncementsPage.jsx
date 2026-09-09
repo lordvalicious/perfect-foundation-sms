@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Megaphone, Pencil, Plus, Send, Trash2, X } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatDate } from "./format";
 import { apiFetch, jsonHeaders } from "../api";
+import { useSchool } from "../schoolContext";
 
 const ANNOUNCEMENTS_URL = "/api/communication/announcements/";
 
@@ -12,22 +13,6 @@ const ROLES = [
   ["student", "Students"],
 ];
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useState } from "react";
-import { Megaphone, Pencil, Plus, Send, Trash2, X } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
-import { formatDate } from "./format";
-import { apiFetch, jsonHeaders } from "../api";
-
-const ANNOUNCEMENTS_URL = "/api/communication/announcements/";
-
-const ROLES = [
-  ["parent", "Parents"],
-  ["teacher", "Teachers"],
-  ["student", "Students"],
-];
 
 export default function AnnouncementsPage() {
   const [rows, setRows] = useState(null);
@@ -46,6 +31,12 @@ export default function AnnouncementsPage() {
   });
 
   const [editing, setEditing] = useState(null);
+
+  const { schoolScopeVersion } = useSchool();
+
+  useEffect(() => {
+    setRows(null);
+  }, [schoolScopeVersion]);
 
   const load = () => {
     setLoading(true);

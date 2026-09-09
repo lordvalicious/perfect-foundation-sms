@@ -13,21 +13,6 @@ import {
 const API_URL = "/api/report-cards/";
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useState } from "react";
-import { Search, BookOpen } from "lucide-react";
-import { useApiList } from "./useApiList";
-import {
-  PageHeader,
-  PanelHeader,
-  StateArea,
-  EmptyState,
-  Pagination,
-  StatusBadge,
-} from "./ui";
-
-const API_URL = "/api/report-cards/";
 
 function buildParams(search, result, page) {
   const params = new URLSearchParams();

@@ -28,36 +28,6 @@ const STATUS_LABELS = {
 };
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { LifeBuoy, Pencil, Plus, X, Send, CheckCircle2, RotateCcw } from "lucide-react";
-import { useAuth } from "../auth";
-import { PageHeader, PanelHeader, StateArea, EmptyState, StatusBadge } from "./ui";
-import { apiFetch, jsonHeaders, authHeaders } from "../api";
-
-const API_URL = "/api/helpdesk/tickets/";
-
-const PRIORITIES = [
-  { value: "low", label: "Low" },
-  { value: "medium", label: "Medium" },
-  { value: "high", label: "High" },
-  { value: "urgent", label: "Urgent" },
-];
-
-const STATUSES = [
-  { value: "open", label: "Open" },
-  { value: "in_progress", label: "In Progress" },
-  { value: "resolved", label: "Resolved" },
-  { value: "closed", label: "Closed" },
-];
-
-const STATUS_LABELS = {
-  open: "Open",
-  in_progress: "In Progress",
-  resolved: "Resolved",
-  closed: "Closed",
-};
 
 function statusToneValue(status) {
   if (status === "resolved" || status === "closed") return "active";

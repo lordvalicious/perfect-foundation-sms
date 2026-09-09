@@ -5,15 +5,6 @@ import { apiFetch, authHeaders } from "../api";
 
 const EMPLOYEES_URL = "/api/hr/employees/";
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { BriefcaseBusiness, FileText, Plus, Search, Star, Users } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea, StatusBadge } from "./ui";
-import { apiFetch, authHeaders } from "../api";
-
-const EMPLOYEES_URL = "/api/hr/employees/";
 
 export default function HRPage() {
   const [employees, setEmployees] = useState([]);

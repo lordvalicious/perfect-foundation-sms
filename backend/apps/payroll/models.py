@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.db import models
+from django.utils import timezone
 
 from apps.hr.models import Employee, Allowance, Deduction
 
@@ -137,15 +138,28 @@ class SalaryStructure(models.Model):
     @property
     def total_allowances(self):
         total = Decimal("0")
+
         for component in self.components.filter(component_type="allowance", is_active=True):
-            total += component.amount
+            total += component.calculate_amount(
+                self.basic_salary,
+                self.basic_salary + total,  # running gross
+                Decimal("0"),
+            )
+
         return total
 
     @property
     def total_deductions_components(self):
+        gross = self.gross_salary
         total = Decimal("0")
+
         for component in self.components.filter(component_type="deduction", is_active=True):
-            total += component.amount
+            total += component.calculate_amount(
+                self.basic_salary,
+                gross,
+                gross - total,  # running net
+            )
+
         return total
 
     @property
@@ -173,6 +187,7 @@ class PayrollRecord(models.Model):
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("processed", "Processed"),
+        ("approved", "Approved"),
         ("paid", "Paid"),
         ("cancelled", "Cancelled"),
     ]
@@ -251,6 +266,7 @@ class PayrollRecord(models.Model):
         choices=[
             ("draft", "Draft"),
             ("processed", "Processed"),
+            ("approved", "Approved"),
             ("paid", "Paid"),
             ("cancelled", "Cancelled"),
         ],
@@ -340,7 +356,7 @@ class PayrollRecord(models.Model):
         for component in allowances:
             amount = component.calculate_amount(
                 self.basic_salary,
-                self.basic_salary + self.gross_salary,  # gross_salary not yet calculated
+                self.basic_salary + total_allowances,  # running gross
                 Decimal("0")
             )
             total_allowances += amount
@@ -357,19 +373,17 @@ class PayrollRecord(models.Model):
         # Calculate deductions
         total_deductions = Decimal("0")
         for component in deductions:
-            # For deduction calculation, use gross_salary as base
-            gross_for_deduction = gross_earnings
             amount = component.calculate_amount(
                 self.basic_salary,
                 gross_earnings,
-                gross_earnings  # net not yet calculated
+                gross_earnings - total_deductions  # running net
             )
             total_deductions += amount
             component_details["deductions"][component.code] = {
                 "name": component.name,
                 "amount": str(amount),
                 "calculation_type": component.calculation_type,
-                "is_pre_tax": component.is_pre_tax if hasattr(component, 'is_pre_tax') else False,
+                "is_taxable": component.is_taxable,
             }
 
         # Update record
@@ -391,7 +405,7 @@ class PayrollRecord(models.Model):
             raise ValidationError({"status": "This payroll record has already been paid."})
         self.compute()
         self.status = "processed"
-        self.processed_at = models.DateTimeField(auto_now=True)
+        self.processed_at = timezone.now()
         self.processed_by = user
         self.save()
         record_audit(
@@ -409,7 +423,7 @@ class PayrollRecord(models.Model):
         if self.status not in ["processed", "draft"]:
             raise ValidationError({"status": "Payroll must be processed before approval."})
         self.status = "approved"
-        self.approved_at = models.DateTimeField(auto_now=True)
+        self.approved_at = timezone.now()
         self.approved_by = user
         self.save(update_fields=["status", "approved_at", "approved_by"])
         from apps.audit.models import record_audit
@@ -428,7 +442,7 @@ class PayrollRecord(models.Model):
         if self.status != "approved":
             raise ValidationError({"status": "Payroll must be approved before payment."})
         self.status = "paid"
-        self.paid_at = models.DateTimeField(auto_now=True)
+        self.paid_at = timezone.now()
         self.paid_by = user
         self.save(update_fields=["status", "paid_at", "paid_by"])
         from apps.audit.models import record_audit

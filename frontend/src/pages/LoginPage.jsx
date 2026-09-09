@@ -4,14 +4,6 @@ import { LogIn, ShieldCheck } from "lucide-react";
 import { useAuth } from "../auth";
 import { useLang } from "../i18n";
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { LogIn, ShieldCheck } from "lucide-react";
-import { useAuth } from "../auth";
-import { useLang } from "../i18n";
 
 export default function LoginPage() {
   const { login } = useAuth();

@@ -1,5 +1,6 @@
 """Printable payslip PDF for a payroll record (ReportLab)."""
 
+from decimal import Decimal
 from io import BytesIO
 
 from django.http import HttpResponse
@@ -16,17 +17,15 @@ from reportlab.platypus import (
     Table,
     TableStyle,
 )
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from apps.accounts.access import assert_campus_allowed
-from apps.hr.models import Employee
+from apps.accounts.permissions import IsAccountantRole
 
 
 class PayrollPayslipPdfView(APIView):
     """GET /api/payroll/records/<pk>/payslip.pdf"""
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAccountantRole]
 
     def get(self, request, pk):
         from .models import PayrollRecord
@@ -108,18 +107,42 @@ class PayrollPayslipPdfView(APIView):
         earnings_rows = [["Earnings", "Amount (Rs)"]]
         earnings_rows.append(["Basic Salary", f"{record.basic_salary:,.2f}"])
 
-        for name, value in sorted((record.component_details.get("allowances", {}) or {}).items()):
-            earnings_rows.append([name.replace("_", " ").title(), f"{value:,.2f}"])
+        allowances = record.component_details.get("allowances", {}) or {}
+
+        for code in sorted(allowances.keys()):
+            detail = allowances[code]
+            label = (
+                (detail.get("name") or code).replace("_", " ").title()
+                if isinstance(detail, dict)
+                else code.replace("_", " ").title()
+            )
+            value = (
+                Decimal(detail.get("amount") or "0")
+                if isinstance(detail, dict)
+                else Decimal(detail)
+            )
+            earnings_rows.append([label, f"{value:,.2f}"])
 
         earnings_rows.append(["Gross", f"{record.gross_salary:,.2f}"])
 
         deduction_rows = [["Deductions", "Amount (Rs)"]]
 
-        if record.component_details.get("deductions"):
-            for name, value in sorted(record.component_details["deductions"].items()):
-                deduction_rows.append(
-                    [name.replace("_", " ").title(), f"{value:,.2f}"]
+        deductions = record.component_details.get("deductions", {}) or {}
+
+        if deductions:
+            for code in sorted(deductions.keys()):
+                detail = deductions[code]
+                label = (
+                    (detail.get("name") or code).replace("_", " ").title()
+                    if isinstance(detail, dict)
+                    else code.replace("_", " ").title()
                 )
+                value = (
+                    Decimal(detail.get("amount") or "0")
+                    if isinstance(detail, dict)
+                    else Decimal(detail)
+                )
+                deduction_rows.append([label, f"{value:,.2f}"])
 
         from .tax import monthly_withholding
 

@@ -245,7 +245,7 @@ class PayslipGenerateView(APIView):
             )
 
         # Generate PDF payslip
-        from .pdf_views import PayrollPayslipPdfView
+        from .payslips_pdf import PayrollPayslipPdfView
         pdf_view = PayrollPayslipPdfView()
         pdf_view.request = request
         return pdf_view.get(request, pk=record.pk)

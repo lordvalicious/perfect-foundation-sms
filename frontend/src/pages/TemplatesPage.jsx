@@ -19,27 +19,6 @@ const PLACEHOLDER_HELP = [
 ];
 
 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import { FileText, Plus, Send, Trash2, X } from "lucide-react";
-import { apiFetch, jsonHeaders } from "../api";
-import { useAuth } from "../auth";
-import { PageHeader, PanelHeader, StateArea, StatusBadge, EmptyState } from "./ui";
-
-const TEMPLATES_URL = "/api/communication/templates/";
-const SMS_SEND_URL = "/api/communication/sms/send/";
-
-const PLACEHOLDER_HELP = [
-  { key: "{student_name}", description: "Student's full name" },
-  { key: "{admission_number}", description: "Student admission number" },
-  { key: "{class_name}", description: "Class name" },
-  { key: "{amount}", description: "Fee amount" },
-  { key: "{due_date}", description: "Fee due date" },
-  { key: "{school_name}", description: "School name" },
-  { key: "{parent_name}", description: "Parent/guardian name" },
-  { key: "{date}", description: "Current date" },
-];
 
 function TemplateFormModal({ template, onClose, onSaved }) {
   const [form, setForm] = useState({

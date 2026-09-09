@@ -737,27 +737,51 @@ class GuardianMyView(generics.RetrieveAPIView):
         return profile
 
 
+def _student_document_queryset(request):
+    """Student documents scoped to the requester's institution, campus
+    and role. Non-managers see only documents of students in their own
+    scope (their children, their class, or their own record)."""
+    from apps.accounts.access import apply_campus_scope
+    from apps.accounts.scopes import is_teacher, teacher_student_ids
+
+    queryset = StudentDocument.objects.select_related(
+        "student",
+        "uploaded_by",
+    )
+
+    user = request.user
+
+    if not is_manager(user):
+        if is_parent(user):
+            student_ids = parent_student_ids(user)
+        elif is_teacher(user):
+            student_ids = teacher_student_ids(user)
+        elif is_student(user):
+            student_ids = (
+                [user.student_profile_id]
+                if user.student_profile_id
+                else []
+            )
+        else:
+            student_ids = []
+
+        queryset = queryset.filter(student_id__in=student_ids)
+
+    queryset = apply_campus_scope(
+        queryset,
+        request,
+        "student__primary_campus_id",
+    )
+
+    return queryset
+
+
 class StudentDocumentListCreateView(generics.ListCreateAPIView):
     serializer_class = StudentDocumentSerializer
     permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
-        queryset = StudentDocument.objects.select_related(
-            "student",
-            "uploaded_by",
-        )
-
-        user = self.request.user
-
-        if not is_manager(user):
-            if is_parent(user):
-                queryset = queryset.filter(
-                    parent_scope_filter(user)
-                )
-            else:
-                queryset = queryset.filter(
-                    teacher_scope_filter(user)
-                )
+        queryset = _student_document_queryset(self.request)
 
         student = self.request.query_params.get("student")
 
@@ -772,7 +796,10 @@ class StudentDocumentListCreateView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+        serializer.save(
+            uploaded_by=self.request.user,
+            institution=getattr(self.request, "institution", None),
+        )
 
 
 class StudentDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -780,24 +807,7 @@ class StudentDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrReadOnly]
 
     def get_queryset(self):
-        queryset = StudentDocument.objects.select_related(
-            "student",
-            "uploaded_by",
-        )
-
-        user = self.request.user
-
-        if not is_manager(user):
-            if is_parent(user):
-                queryset = queryset.filter(
-                    parent_scope_filter(user)
-                )
-            else:
-                queryset = queryset.filter(
-                    teacher_scope_filter(user)
-                )
-
-        return queryset
+        return _student_document_queryset(self.request)
 
     def perform_update(self, serializer):
         serializer.save(uploaded_by=self.request.user)

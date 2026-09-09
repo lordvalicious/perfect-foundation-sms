@@ -15,25 +15,6 @@ const TYPES = [
   ["other", "Other"],
 ];
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useState } from "react";
-import { HeartPulse, Pencil, Plus, Trash2, Users, ClipboardList } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea } from "./ui";
-import { apiFetch, authHeaders } from "../api";
-
-const BASE = "/api/health-records/records/";
-
-const TYPES = [
-  ["checkup", "General Checkup"],
-  ["illness", "Illness"],
-  ["injury", "Injury / First Aid"],
-  ["allergy", "Allergy Note"],
-  ["vaccination", "Vaccination"],
-  ["screening", "Screening"],
-  ["other", "Other"],
-];
 
 export default function HealthRecordsPage() {
   const [rows, setRows] = useState([]);

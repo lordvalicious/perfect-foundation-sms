@@ -4,9 +4,10 @@ import csv
 from decimal import Decimal
 
 from django.http import HttpResponse
-from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+from apps.accounts.permissions import IsAccountantRole
 
 from .tax import monthly_withholding
 
@@ -18,7 +19,7 @@ class PayrollBankFileView(APIView):
     Rows with no bank/account details are flagged so finance can chase them.
     """
 
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAccountantRole]
 
     def get(self, request):
         from .models import PayrollRecord
@@ -29,8 +30,9 @@ class PayrollBankFileView(APIView):
 
         queryset = payroll_queryset(
             PayrollRecord.objects.select_related(
-                "teacher",
-                "teacher__primary_campus",
+                "employee",
+                "employee__primary_campus",
+                "employee__teacher",
             ),
             request,
         )
@@ -70,26 +72,29 @@ class PayrollBankFileView(APIView):
         total_payable = Decimal("0")
 
         for record in queryset.order_by(
-            "teacher__primary_campus__name", "teacher__employee_number"
+            "employee__primary_campus__name", "employee__employee_number"
         ):
             withholding = monthly_withholding(record.gross_salary)
             payable = max(record.net_salary - withholding, Decimal("0"))
             total_payable += payable
 
-            missing = "YES" if (
-                not record.teacher.account_number
+            employee = record.employee
+            teacher = getattr(employee, "teacher", None)
+
+            missing = "YES" if not (
+                teacher and teacher.account_number
             ) else ""
 
             writer.writerow([
-                record.teacher.employee_number,
-                record.teacher.full_name,
+                employee.employee_number,
+                employee.full_name,
                 (
-                    record.teacher.primary_campus.name
-                    if record.teacher.primary_campus_id
+                    employee.primary_campus.name
+                    if employee.primary_campus_id
                     else "-"
                 ),
-                record.teacher.bank_name or "-",
-                record.teacher.account_number or "-",
+                (teacher.bank_name if teacher else None) or "-",
+                (teacher.account_number if teacher else None) or "-",
                 f"{record.gross_salary:.2f}",
                 f"{withholding:.2f}",
                 f"{payable:.2f}",

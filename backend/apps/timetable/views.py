@@ -28,7 +28,18 @@ class PeriodListView(generics.ListAPIView):
     pagination_class = None
 
     def get_queryset(self):
-        queryset = Period.objects.all().order_by("number")
+        from apps.accounts.access import get_institution
+
+        institution = getattr(self.request, "institution", None)
+        if institution is None:
+            institution = get_institution(self.request)
+
+        if institution is None:
+            return Period.objects.none()
+
+        queryset = Period.objects.filter(
+            institution_id=institution.pk
+        ).order_by("number")
 
         status = self.request.query_params.get("status")
 
@@ -153,6 +164,8 @@ class TimetableConflictsView(APIView):
 
         campus_id = request.query_params.get("campus")
 
+        campus_ids = None
+
         if campus_id:
             if not str(campus_id).isdigit():
                 return Response(
@@ -161,8 +174,19 @@ class TimetableConflictsView(APIView):
             campus = get_object_or_404(Campus, pk=campus_id)
             assert_campus_allowed(request.user, campus.pk)
             filters["campus"] = campus
+        else:
+            # No campus requested: scan only the campuses the user may
+            # access (never every campus of every school).
+            from apps.accounts.access import user_allowed_campus_ids
 
-        conflicts = find_conflicts(**filters)
+            campus_ids = list(user_allowed_campus_ids(request.user))
+
+            if not campus_ids:
+                return Response(
+                    {"count": 0, "conflicts": []}
+                )
+
+        conflicts = find_conflicts(campus_ids=campus_ids, **filters)
 
         return Response(
             {

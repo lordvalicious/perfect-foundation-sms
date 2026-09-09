@@ -17,27 +17,6 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-export default 
-const { currentSchool, currentRoles, availableSchools, activeCampus, campusList, modules, scopedHasRole } = useSchool();
-
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Banknote, BadgePoundSterling, ReceiptText } from "lucide-react";
-import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
-import { formatCurrency, formatDate } from "./format";
-import { apiFetch, apiDownload, jsonHeaders } from "../api";
-
-const BASE = "/api/payroll/";
-
-const ENDPOINTS = {
-  structures: { url: "salary-structures/", icon: BadgePoundSterling, title: "Salary Structures" },
-  records: { url: "records/", icon: Banknote, title: "Payroll Records" },
-  payslips: { url: "payslips/", icon: ReceiptText, title: "Payslips" },
-};
-
-const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
-];
 
 export default function PayrollPage() {
   const [tab, setTab] = useState("records");
@@ -88,19 +67,19 @@ export default function PayrollPage() {
     }
   };
 
-  const handleProcess = async (recordId) => {
+  const handleProcess = async (recordId, action) => {
     setProcessing(recordId);
     setMessage("");
     setError("");
 
     try {
       await apiFetch(
-        `${BASE}records/${recordId}/process/`,
+        `${BASE}records/${recordId}/${action}/`,
         { method: "POST", headers: jsonHeaders() },
-        "Could not process the payroll record."
+        `Could not ${action} the payroll record.`
       );
 
-      setMessage("Payroll record marked as paid.");
+      setMessage(`Payroll record ${action} successfully.`);
       setData((previous) => ({ ...previous, records: undefined }));
       load("records");
     } catch (err) {
@@ -258,14 +237,34 @@ export default function PayrollPage() {
                         </td>
 
                         <td>
-                          {record.status !== "paid" && (
+                          {record.status === "draft" && (
                             <button
                               type="button"
                               className="table-action"
                               disabled={processing === record.id}
-                              onClick={() => handleProcess(record.id)}
+                              onClick={() => handleProcess(record.id, "process")}
                             >
-                              {processing === record.id ? "Processing..." : "Mark Paid"}
+                              {processing === record.id ? "Processing..." : "Process"}
+                            </button>
+                          )}
+                          {record.status === "processed" && (
+                            <button
+                              type="button"
+                              className="table-action"
+                              disabled={processing === record.id}
+                              onClick={() => handleProcess(record.id, "approve")}
+                            >
+                              {processing === record.id ? "Approving..." : "Approve"}
+                            </button>
+                          )}
+                          {record.status === "approved" && (
+                            <button
+                              type="button"
+                              className="table-action"
+                              disabled={processing === record.id}
+                              onClick={() => handleProcess(record.id, "pay")}
+                            >
+                              {processing === record.id ? "Paying..." : "Mark Paid"}
                             </button>
                           )}
                           {record.status === "paid" && (

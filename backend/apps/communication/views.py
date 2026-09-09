@@ -170,10 +170,20 @@ def scoped_announcement_queryset(request):
 
     institution = getattr(request, "institution", None)
     queryset = queryset.filter(
-        Q(campus__school=institution)
+        Q(institution=institution)
+        | Q(campus__school=institution)
         | Q(class_obj__unit__campus__school=institution)
-        | Q(campus__isnull=True, class_obj__isnull=True)
     )
+
+    # Legacy school-wide announcements without any institution/campus
+    # marker cannot be attributed to one school, so only global (root)
+    # users may see them. This stops cross-tenant leakage.
+    if not is_global(request.user):
+        queryset = queryset.exclude(
+            institution__isnull=True,
+            campus__isnull=True,
+            class_obj__isnull=True,
+        )
 
     if is_manager(user):
         return queryset
@@ -229,7 +239,9 @@ class AnnouncementListView(generics.ListCreateAPIView):
         if class_obj and class_obj.unit.campus.school_id != self.request.institution.id:
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("Class is outside the active institution.")
-        instance = serializer.save()
+        instance = serializer.save(
+            institution=getattr(self.request, "institution", None)
+        )
 
         record_audit(
             request=self.request,
@@ -386,7 +398,9 @@ class MessageListView(generics.ListCreateAPIView):
         ).exists():
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("This recipient is not available to you.")
-        instance = serializer.save()
+        instance = serializer.save(
+            institution=getattr(self.request, "institution", None)
+        )
 
         record_audit(
             request=self.request,
