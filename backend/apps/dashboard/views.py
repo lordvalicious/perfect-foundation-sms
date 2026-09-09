@@ -225,16 +225,25 @@ def dashboard_attendance(request):
         queryset = queryset.filter(student_id__in=student_ids)
     else:
         # Manager roles: scope by institution and campus
-        institution = getattr(request, "institution", None)
+        institution = get_institution(request)
         if institution is not None:
             queryset = queryset.filter(campus__school=institution)
 
+        # Always apply campus scope to enforce per-user campus limits
         queryset = apply_campus_scope(
             queryset,
             request,
             "campus_id",
             institution_field=None,
         )
+
+        # If no institution was on the request (e.g. session not set),
+        # fall back to the user's primary institution membership.
+        if institution is None and request.user.is_authenticated:
+            from apps.accounts.managers import get_current_institution
+            current_inst = get_current_institution()
+            if current_inst is not None:
+                queryset = queryset.filter(campus__school=current_inst)
 
     data = {
         "present": queryset.filter(status="present").count(),

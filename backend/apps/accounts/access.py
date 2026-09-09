@@ -249,6 +249,18 @@ def assert_campus_allowed(user, campus_id):
     if is_global(user):
         from apps.schools.models import Campus
 
+        # Get the user's active institution and verify the campus belongs to it.
+        institution = get_institution(user)
+        if institution is not None:
+            if not Campus.objects.filter(
+                pk=campus_id,
+                status="active",
+                school=institution,
+            ).exists():
+                raise PermissionDenied("You do not have access to this campus.")
+            return
+
+        # Fallback: if no institution context, still validate campus exists+active.
         if not Campus.objects.filter(
             pk=campus_id,
             status="active",
