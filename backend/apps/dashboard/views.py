@@ -223,6 +223,18 @@ def dashboard_attendance(request):
             )
 
         queryset = queryset.filter(student_id__in=student_ids)
+    else:
+        # Manager roles: scope by institution and campus
+        institution = getattr(request, "institution", None)
+        if institution is not None:
+            queryset = queryset.filter(campus__school=institution)
+
+        queryset = apply_campus_scope(
+            queryset,
+            request,
+            "campus_id",
+            institution_field=None,
+        )
 
     data = {
         "present": queryset.filter(status="present").count(),
