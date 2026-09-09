@@ -1099,6 +1099,10 @@ class BankReconciliation(SoftDeleteMixin):
 
     def clean(self):
         errors = {}
+        if self.bank_account_id and self.bank_account.institution_id != self.institution_id:
+            errors["bank_account"] = (
+                "Bank account must belong to the same institution."
+            )
         self.difference = self.statement_balance - self.book_balance
         if errors:
             raise ValidationError(errors)

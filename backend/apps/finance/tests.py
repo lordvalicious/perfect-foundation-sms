@@ -33,6 +33,10 @@ from apps.finance.models import (
     Payment,
     PaymentRefund,
     StudentFeeOverride,
+    BankAccount,
+    BankReconciliation,
+    Budget,
+    Expense,
 )
 from apps.schools.models import (
     AcademicUnit,
@@ -1963,6 +1967,77 @@ class AccountantIsolationTests(TestCase):
             amount=Decimal("12000.00"),
         )
 
+        # --- Additional School B financial objects for the CRUD matrix ---
+        self.payment_b = Payment.objects.create(
+            receipt_number="RCPT-SK-001",
+            invoice=self.invoice_b,
+            amount=Decimal("2000.00"),
+            payment_date=date.today(),
+            payment_method="cash",
+            status="completed",
+        )
+
+        self.concession_b = Concession.objects.create(
+            institution=self.school_b,
+            invoice=self.invoice_b,
+            type="discount",
+            amount=Decimal("500.00"),
+            reason="Sibling discount",
+            status="approved",
+        )
+
+        self.fine_b = Fine.objects.create(
+            institution=self.school_b,
+            student=self.student_b,
+            academic_year=self.year_b,
+            type="disciplinary",
+            amount=Decimal("400.00"),
+            reason="Late payment",
+            status="pending",
+        )
+
+        self.budget_b = Budget.objects.create(
+            institution=self.school_b,
+            campus=self.campus_b,
+            academic_year=self.year_b,
+            name="Annual Budget B",
+            start_date=self.year_b.start_date,
+            end_date=self.year_b.end_date,
+        )
+
+        self.account_b = Account.objects.create(
+            institution=self.school_b,
+            code="1000",
+            name="Cash B",
+            account_type="asset",
+        )
+        self.bank_account_b = BankAccount.objects.create(
+            institution=self.school_b,
+            campus=self.campus_b,
+            account=self.account_b,
+            bank_name="Bank B",
+            account_number="BA-B-0001",
+        )
+
+        self.journal_b = JournalEntry.objects.create(
+            institution=self.school_b,
+            campus=self.campus_b,
+            posting_date=date.today(),
+            description="Opening entry B",
+            status="draft",
+        )
+
+        self.expense_b = Expense.objects.create(
+            institution=self.school_b,
+            campus=self.campus_b,
+            expense_account=self.account_b,
+            payment_account=self.account_b,
+            vendor="Vendor B",
+            expense_date=date.today(),
+            amount=Decimal("300.00"),
+            status="draft",
+        )
+
     def test_accountant_cannot_access_other_school_invoices(self):
         """Lahore accountant cannot list School B invoices."""
         resp = self.client_a.get("/api/finance/invoices/")
@@ -2037,3 +2112,462 @@ class AccountantIsolationTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 403)
+
+    # ------------------------------------------------------------------
+    # Cross-school GET (list + detail)
+    # ------------------------------------------------------------------
+
+    def test_accountant_cannot_list_other_school_fee_structures(self):
+        """School B fee structures never appear in School A's list."""
+        resp = self.client_a.get("/api/finance/fee-structures/")
+        self.assertEqual(resp.status_code, 200)
+        ids = [row["id"] for row in resp.json()]
+        self.assertIn(self.fee_structure_a.pk, ids)
+        self.assertNotIn(self.fee_structure_b.pk, ids)
+
+    def test_accountant_cannot_view_other_school_fee_structure_detail(self):
+        resp = self.client_a.get(
+            f"/api/finance/fee-structures/{self.fee_structure_b.pk}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_view_other_school_payment_detail(self):
+        resp = self.client_a.get(f"/api/finance/payments/{self.payment_b.pk}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_view_other_school_concession_detail(self):
+        resp = self.client_a.get(
+            f"/api/finance/concessions/{self.concession_b.pk}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_view_other_school_fine_detail(self):
+        resp = self.client_a.get(f"/api/finance/fines/{self.fine_b.pk}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_view_other_school_budget_detail(self):
+        resp = self.client_a.get(f"/api/finance/budgets/{self.budget_b.pk}/")
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_view_other_school_bank_account_detail(self):
+        resp = self.client_a.get(
+            f"/api/finance/bank-accounts/{self.bank_account_b.pk}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_view_other_school_journal_entry(self):
+        resp = self.client_a.get(
+            f"/api/finance/journal-entries/{self.journal_b.pk}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_view_other_school_expense(self):
+        resp = self.client_a.get(f"/api/finance/expenses/{self.expense_b.pk}/")
+        self.assertEqual(resp.status_code, 404)
+
+    # ------------------------------------------------------------------
+    # Cross-school POST (create)
+    # ------------------------------------------------------------------
+
+    def test_accountant_cannot_create_fee_structure_for_other_school(self):
+        """Creating a fee structure scoped to School B campus is rejected."""
+        resp = self.client_a.post(
+            "/api/finance/fee-structures/",
+            {
+                "academic_year": self.year_b.id,
+                "campus": self.campus_b.id,
+                "class_obj": self.class_b.id,
+                "category": self.category_b.id,
+                "amount": "1000.00",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+        self.assertEqual(
+            FeeStructure.objects.filter(
+                campus_id=self.campus_b.id,
+                class_obj_id=self.class_b.id,
+            ).count(),
+            1,  # only the School B fixture created in setUp
+        )
+
+    def test_accountant_cannot_create_expense_for_other_school(self):
+        resp = self.client_a.post(
+            "/api/finance/expenses/",
+            {
+                "campus": self.campus_b.id,
+                "expense_account": self.account_b.id,
+                "payment_account": self.account_b.id,
+                "vendor": "Bad Vendor",
+                "expense_date": date.today(),
+                "amount": "100.00",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 403)
+
+    def test_accountant_cannot_create_budget_for_other_school(self):
+        resp = self.client_a.post(
+            "/api/finance/budgets/",
+            {
+                "campus": self.campus_b.id,
+                "academic_year": self.year_b.id,
+                "name": "Sneaky Budget",
+                "start_date": self.year_b.start_date,
+                "end_date": self.year_b.end_date,
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_accountant_cannot_create_bank_reconciliation_for_other_school(self):
+        resp = self.client_a.post(
+            "/api/finance/bank-reconciliations/",
+            {
+                "bank_account": self.bank_account_b.pk,
+                "statement_date": date.today(),
+                "statement_balance": "1000.00",
+                "book_balance": "1000.00",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 400)
+
+    def test_accountant_cannot_create_journal_entry_with_other_school_account(self):
+        """Balanced journal lines against a School B account are rejected."""
+        ledger = Account.objects.create(
+            institution=self.school_b, code="2000", name="Payable B", account_type="liability"
+        )
+        resp = self.client_a.post(
+            "/api/finance/journal-entries/",
+            {
+                "posting_date": date.today(),
+                "description": "Sneaky entry",
+                "lines": [
+                    {"account": self.account_b.id, "debit": "100.00", "credit": "0.00"},
+                    {"account": ledger.id, "debit": "0.00", "credit": "100.00"},
+                ],
+                "campus": self.campus_b.id,
+            },
+            format="json",
+        )
+        # Unbalanced line would be rejected at 400 regardless; ensure no
+        # cross-school journal is ever created with a School B account.
+        self.assertEqual(resp.status_code, 400)
+        self.assertFalse(
+            JournalLine.objects.filter(account_id=self.account_b.id).exists()
+        )
+
+    def test_accountant_cannot_apply_late_fees_to_other_school(self):
+        """Late-fee preview must never include School B invoices."""
+        Invoice.objects.filter(pk=self.invoice_b.pk).update(
+            due_date=date.today() - timedelta(days=10)
+        )
+        resp = self.client_a.get(
+            "/api/finance/late-fees/preview/?flat=100"
+        )
+        self.assertEqual(resp.status_code, 200)
+        rows = resp.json()["rows"]
+        self.assertNotIn(self.invoice_b.invoice_number, [r["invoice"] for r in rows])
+
+    # ------------------------------------------------------------------
+    # Cross-school PUT / PATCH (update)
+    # ------------------------------------------------------------------
+
+    def test_accountant_cannot_update_other_school_fee_structure(self):
+        resp = self.client_a.put(
+            f"/api/finance/fee-structures/{self.fee_structure_b.pk}/",
+            {
+                "academic_year": self.year_b.id,
+                "campus": self.campus_b.id,
+                "class_obj": self.class_b.id,
+                "category": self.category_b.id,
+                "amount": "1.00",
+            },
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_patch_other_school_fine(self):
+        resp = self.client_a.patch(
+            f"/api/finance/fines/{self.fine_b.pk}/",
+            {"amount": "1.00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_patch_other_school_concession(self):
+        resp = self.client_a.patch(
+            f"/api/finance/concessions/{self.concession_b.pk}/",
+            {"amount": "1.00"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_patch_other_school_budget(self):
+        resp = self.client_a.patch(
+            f"/api/finance/budgets/{self.budget_b.pk}/",
+            {"name": "Hacked"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_accountant_cannot_patch_other_school_bank_account(self):
+        resp = self.client_a.patch(
+            f"/api/finance/bank-accounts/{self.bank_account_b.pk}/",
+            {"bank_name": "Hacked"},
+            format="json",
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    # ------------------------------------------------------------------
+    # Cross-school DELETE
+    # ------------------------------------------------------------------
+
+    def test_accountant_cannot_delete_other_school_fee_structure(self):
+        resp = self.client_a.delete(
+            f"/api/finance/fee-structures/{self.fee_structure_b.pk}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(FeeStructure.objects.filter(pk=self.fee_structure_b.pk).exists())
+
+    def test_accountant_cannot_delete_other_school_fine(self):
+        resp = self.client_a.delete(f"/api/finance/fines/{self.fine_b.pk}/")
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(Fine.objects.filter(pk=self.fine_b.pk).exists())
+
+    def test_accountant_cannot_delete_other_school_concession(self):
+        resp = self.client_a.delete(
+            f"/api/finance/concessions/{self.concession_b.pk}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(Concession.objects.filter(pk=self.concession_b.pk).exists())
+
+    def test_accountant_cannot_delete_other_school_budget(self):
+        resp = self.client_a.delete(f"/api/finance/budgets/{self.budget_b.pk}/")
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(Budget.objects.filter(pk=self.budget_b.pk).exists())
+
+    def test_accountant_cannot_delete_other_school_bank_account(self):
+        resp = self.client_a.delete(
+            f"/api/finance/bank-accounts/{self.bank_account_b.pk}/"
+        )
+        self.assertEqual(resp.status_code, 404)
+        self.assertTrue(BankAccount.objects.filter(pk=self.bank_account_b.pk).exists())
+
+    # ------------------------------------------------------------------
+    # Cross-school EXPORT
+    # ------------------------------------------------------------------
+
+    def test_accountant_cannot_export_other_school_receipt(self):
+        """PDF export of a School B payment receipt is blocked (404)."""
+        resp = self.client_a.get(
+            f"/api/finance/payments/{self.payment_b.pk}/receipt.pdf/"
+        )
+        self.assertIn(resp.status_code, (404, 403))
+
+    def test_accountant_cannot_export_other_school_receipt_html(self):
+        resp = self.client_a.get(
+            f"/api/finance/payments/{self.payment_b.pk}/receipt/"
+        )
+        self.assertEqual(resp.status_code, 404)
+
+    def test_receivables_report_only_shows_own_school(self):
+        """Receivables report must never include School B invoices."""
+        resp = self.client_a.get("/api/finance/reports/receivables/")
+        self.assertEqual(resp.status_code, 200)
+        rows = resp.json()["rows"]
+        numbers = [row["invoice"] for row in rows]
+        self.assertNotIn(self.invoice_b.invoice_number, numbers)
+
+    def test_trial_balance_report_only_shows_own_school(self):
+        resp = self.client_a.get("/api/finance/reports/trial-balance/")
+        self.assertEqual(resp.status_code, 200)
+        codes = [row["code"] for row in resp.json()["rows"]]
+        self.assertNotIn(self.account_b.code, codes)
+
+
+class FeeBalanceCalculationTests(TestCase):
+    """Deterministic balance calculation.
+
+    Tuition = 10,000
+    Transport = 2,000
+    Discount = 1,000
+    Payment = 5,000
+
+    Expected remaining balance = 6,000
+
+    Verified through every layer that publishes a balance:
+    database (model properties) -> backend service -> serializer -> API.
+    """
+
+    def setUp(self):
+        self.data = create_base_school()
+        self.school = self.data["school"]
+        self.campus = self.data["campus"]
+        self.year = self.data["year"]
+        self.enrollment = self.data["enrollment"]
+        self.student = self.data["student"]
+
+        self.tuition = FeeCategory.objects.create(
+            name="Tuition", frequency="monthly", institution=self.school
+        )
+        self.transport = FeeCategory.objects.create(
+            name="Transport", frequency="monthly", institution=self.school
+        )
+
+        self.invoice = Invoice.objects.create(
+            invoice_number="INV-CALC-001",
+            institution=self.school,
+            student=self.student,
+            enrollment=self.enrollment,
+            academic_year=self.year,
+            campus=self.campus,
+            issue_date=date(2026, 7, 1),
+            due_date=date(2026, 7, 31),
+            discount=Decimal("1000.00"),
+            status="issued",
+        )
+        InvoiceItem.objects.create(
+            invoice=self.invoice,
+            category=self.tuition,
+            description="Tuition",
+            amount=Decimal("10000.00"),
+        )
+        InvoiceItem.objects.create(
+            invoice=self.invoice,
+            category=self.transport,
+            description="Transport",
+            amount=Decimal("2000.00"),
+        )
+
+    def _pay(self, amount, receipt):
+        Payment.objects.create(
+            receipt_number=receipt,
+            invoice=self.invoice,
+            amount=Decimal(amount),
+            payment_date=date(2026, 7, 15),
+            status="completed",
+        )
+        self.invoice.refresh_from_db()
+
+    def test_balance_at_database_layer(self):
+        """Model properties compute subtotal/total/paid/balance correctly."""
+        self.assertEqual(self.invoice.subtotal, Decimal("12000.00"))
+        self.assertEqual(self.invoice.total_amount, Decimal("11000.00"))
+        self.assertEqual(self.invoice.balance, Decimal("11000.00"))
+
+        self._pay("5000.00", "RCPT-CALC-001")
+
+        self.assertEqual(self.invoice.paid_amount, Decimal("5000.00"))
+        self.assertEqual(self.invoice.balance, Decimal("6000.00"))
+        self.assertEqual(self.invoice.status, "partial")
+
+    def test_balance_through_backend_service(self):
+        """PaymentService + InvoiceService produce the same balance."""
+        from apps.finance.services import InvoiceService, PaymentService
+
+        PaymentService(self.school).process_payment(
+            invoice=self.invoice,
+            amount=Decimal("5000.00"),
+            payment_method="cash",
+            payment_date=date(2026, 7, 15),
+        )
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.paid_amount, Decimal("5000.00"))
+        self.assertEqual(self.invoice.balance, Decimal("6000.00"))
+
+        service = InvoiceService(self.school)
+        outstanding = service.get_outstanding_invoices(student=self.student)
+        inv = outstanding.get(pk=self.invoice.pk)
+        self.assertEqual(inv.balance, Decimal("6000.00"))
+
+        summary = service.get_invoice_summary(self.year)
+        self.assertEqual(summary["total_invoiced"], Decimal("12000.00"))
+        self.assertEqual(summary["total_paid"], Decimal("5000.00"))
+        self.assertEqual(summary["total_discount"], Decimal("1000.00"))
+        self.assertEqual(summary["total_outstanding"], Decimal("6000.00"))
+
+    def test_balance_through_serializer(self):
+        """InvoiceSerializer exposes the same balance."""
+        from apps.finance.serializers import InvoiceSerializer
+
+        self._pay("5000.00", "RCPT-CALC-002")
+
+        data = InvoiceSerializer(self.invoice).data
+        self.assertEqual(Decimal(data["subtotal"]), Decimal("12000.00"))
+        self.assertEqual(Decimal(data["total_amount"]), Decimal("11000.00"))
+        self.assertEqual(Decimal(data["paid_amount"]), Decimal("5000.00"))
+        self.assertEqual(Decimal(data["balance"]), Decimal("6000.00"))
+
+    def test_balance_through_api(self):
+        """The API endpoint returns balance = 6,000 for an accountant."""
+        from apps.accounts.models import (
+            InstitutionMembership,
+            Role,
+            RoleAssignment,
+            StaffProfile,
+            User,
+        )
+
+        user = User.objects.create_user(
+            username="acct_calc", email="ac@test.edu", password="pass"
+        )
+        membership = InstitutionMembership.objects.create(
+            user=user, institution=self.school
+        )
+        RoleAssignment.objects.create(membership=membership, role=Role.ACCOUNTANT)
+        StaffProfile.objects.create(
+            user=user,
+            membership=membership,
+            institution=self.school,
+            primary_campus=self.campus,
+            employee_number="EMP-CALC-001",
+            first_name="Calc",
+            last_name="Accountant",
+            gender="male",
+        )
+
+        self._pay("5000.00", "RCPT-CALC-003")
+
+        client = APIClient()
+        client.force_login(user)
+
+        resp = client.get(f"/api/finance/invoices/{self.invoice.pk}/")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        data = resp.json()
+        self.assertEqual(Decimal(data["subtotal"]), Decimal("12000.00"))
+        self.assertEqual(Decimal(data["total_amount"]), Decimal("11000.00"))
+        self.assertEqual(Decimal(data["paid_amount"]), Decimal("5000.00"))
+        self.assertEqual(Decimal(data["balance"]), Decimal("6000.00"))
+
+        resp = client.get(f"/api/finance/outstanding/?student={self.student.pk}")
+        self.assertEqual(resp.status_code, 200, resp.content)
+        rows = resp.json()["rows"]
+        self.assertEqual(
+            sum(Decimal(row["balance"]) for row in rows), Decimal("6000.00")
+        )
+
+    def test_balance_grows_with_overdue_payment_reversal(self):
+        """Reversing a completed payment restores the 6,000 balance to 11,000."""
+        from apps.finance.services import PaymentService
+
+        PaymentService(self.school).process_payment(
+            invoice=self.invoice,
+            amount=Decimal("5000.00"),
+            payment_method="cash",
+            payment_date=date(2026, 7, 15),
+        )
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.balance, Decimal("6000.00"))
+
+        payment = self.invoice.payments.get(status="completed")
+        PaymentService(self.school).reverse_payment(
+            payment=payment,
+            amount=Decimal("5000.00"),
+            reason="Duplicated entry",
+            user=None,
+        )
+        self.invoice.refresh_from_db()
+        self.assertEqual(self.invoice.paid_amount, Decimal("0.00"))
+        self.assertEqual(self.invoice.balance, Decimal("11000.00"))

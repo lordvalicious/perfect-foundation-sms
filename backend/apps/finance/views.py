@@ -1,4 +1,5 @@
-﻿from decimal import Decimal
+﻿from datetime import date
+from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Q, Sum
@@ -421,6 +422,9 @@ class FeeStructureListView(generics.ListCreateAPIView):
     def get_queryset(self):
         queryset = (
             FeeStructure.objects
+            .filter(
+                academic_year__school=self.request.institution
+            )
             .select_related(
                 "academic_year",
                 "campus",
@@ -455,6 +459,26 @@ class FeeStructureListView(generics.ListCreateAPIView):
             queryset = queryset.filter(status=status)
 
         return queryset
+
+    def perform_create(self, serializer):
+        from apps.accounts.access import assert_campus_allowed
+
+        campus = serializer.validated_data.get("campus")
+        academic_year = serializer.validated_data.get("academic_year")
+
+        if academic_year is not None and academic_year.school_id != self.request.institution.id:
+            raise PermissionDenied(
+                "Academic year is outside the active institution."
+            )
+
+        if campus is not None:
+            if campus.school_id != self.request.institution.id:
+                raise PermissionDenied(
+                    "Campus is outside the active institution."
+                )
+            assert_campus_allowed(self.request.user, campus.pk)
+
+        serializer.save()
 
 
 class FeeStructureDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -931,10 +955,12 @@ class BulkInvoiceCreateView(APIView):
         for enrollment in enrollments:
             try:
                 invoice = Invoice.objects.create(
-                    invoice_number=next_invoice_number(),
+                    invoice_number=next_invoice_number(request.institution),
+                    institution=request.institution,
                     enrollment=enrollment,
                     student=enrollment.student,
                     academic_year=enrollment.academic_year,
+                    campus=enrollment.campus,
                     issue_date=_date.today(),
                     due_date=due_date,
                     status="issued",
@@ -1060,7 +1086,9 @@ class BulkPaymentCreateView(APIView):
 
             try:
                 payment = Payment.objects.create(
-                    receipt_number=next_receipt_number(),
+                    receipt_number=next_receipt_number(request.institution),
+                    institution=request.institution,
+                    campus=locked_invoice.enrollment.campus,
                     invoice=locked_invoice,
                     amount=amount,
                     payment_date=payment_date,
@@ -1194,7 +1222,7 @@ class OutstandingBalanceView(APIView):
             try:
                 student = Student.objects.get(pk=student_id)
                 # Verify student belongs to institution
-                if student.enrollment_set.filter(
+                if student.enrollments.filter(
                     academic_year__school=request.institution
                 ).exists():
                     pass

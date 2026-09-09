@@ -612,6 +612,23 @@ class JournalEntryCreateSerializer(serializers.ModelSerializer):
             )
         return lines
 
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request is not None and not getattr(request, "institution", None) is None:
+            institution = request.institution
+            campus = attrs.get("campus")
+            if campus is not None and campus.school_id != institution.id:
+                raise serializers.ValidationError(
+                    {"campus": "Campus must belong to your institution."}
+                )
+            for line in attrs.get("lines", []):
+                account = line.get("account")
+                if account is not None and account.institution_id != institution.id:
+                    raise serializers.ValidationError(
+                        {"lines": "All journal line accounts must belong to your institution."}
+                    )
+        return attrs
+
     def create(self, validated_data):
         lines = validated_data.pop("lines")
         validated_data["institution"] = self.context["request"].institution
@@ -706,6 +723,23 @@ class BudgetSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "institution", "total_budgeted_income",
                            "total_budgeted_expense", "created_by", "approved_by",
                            "approved_at", "created_at", "updated_at"]
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request is None or getattr(request, "institution", None) is None:
+            return attrs
+        institution = request.institution
+        campus = attrs.get("campus")
+        academic_year = attrs.get("academic_year")
+        if campus is not None and campus.school_id != institution.id:
+            raise serializers.ValidationError(
+                {"campus": "Campus must belong to your institution."}
+            )
+        if academic_year is not None and academic_year.school_id != institution.id:
+            raise serializers.ValidationError(
+                {"academic_year": "Academic year must belong to your institution."}
+            )
+        return attrs
 
 
 class BudgetLineSerializer(serializers.ModelSerializer):

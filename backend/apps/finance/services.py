@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import List, Optional, Dict, Any
 
 from django.db import transaction
-from django.db.models import Sum, Q
+from django.db.models import Sum
 
 from apps.schools.models import AcademicYear, Campus, Class, School
 from apps.students.models import Enrollment, Student
@@ -342,18 +342,21 @@ class InvoiceService:
         if campus:
             queryset = queryset.filter(enrollment__campus=campus)
 
-        stats = queryset.aggregate(
+        invoiced_stats = queryset.aggregate(
             total_invoiced=Sum("items__amount"),
-            total_paid=Sum(
-                "payments__amount",
-                filter=Q(payments__status="completed"),
-            ),
+        )
+        discount_stats = queryset.aggregate(
             total_discount=Sum("discount"),
         )
+        paid_stats = queryset.filter(
+            payments__status="completed"
+        ).aggregate(
+            total_paid=Sum("payments__amount"),
+        )
 
-        total_invoiced = stats["total_invoiced"] or Decimal("0")
-        total_paid = stats["total_paid"] or Decimal("0")
-        total_discount = stats["total_discount"] or Decimal("0")
+        total_invoiced = invoiced_stats["total_invoiced"] or Decimal("0")
+        total_paid = paid_stats["total_paid"] or Decimal("0")
+        total_discount = discount_stats["total_discount"] or Decimal("0")
 
         return {
             "total_invoiced": total_invoiced,

@@ -12,6 +12,24 @@ import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
+
+def custom_exception_handler(exc, context):
+    """Map Django validation errors to HTTP 400 responses.
+
+    DRF 3.15+ no longer converts ``django.core.exceptions.ValidationError``
+    raised by model ``full_clean()`` calls into a 400 by default; without this
+    handler such errors would surface as 500s.
+    """
+    from django.core.exceptions import ValidationError as DjangoValidationError
+    from rest_framework import exceptions
+    from rest_framework.views import exception_handler
+
+    if isinstance(exc, DjangoValidationError):
+        exc = exceptions.ValidationError(
+            detail=getattr(exc, "message_dict", None) or exc.messages
+        )
+    return exception_handler(exc, context)
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
@@ -238,6 +256,7 @@ REST_FRAMEWORK = {
         "public_apply": "20/hour",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+    "EXCEPTION_HANDLER": "config.settings.base.custom_exception_handler",
 }
 # drf-spectacular settings
 SPECTACULAR_SETTINGS = {
