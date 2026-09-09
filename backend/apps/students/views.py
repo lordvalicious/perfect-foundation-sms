@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from decimal import Decimal
 
-from apps.accounts.access import assert_campus_allowed, campus_access
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed, campus_access
 from apps.accounts.permissions import (
     IsAdminOrReadOnly,
     IsAdminRole,
@@ -747,18 +747,6 @@ class StudentDocumentListCreateView(generics.ListCreateAPIView):
             "uploaded_by",
         )
 
-        user = self.request.user
-
-        if not is_manager(user):
-            if is_parent(user):
-                queryset = queryset.filter(
-                    parent_scope_filter(user)
-                )
-            else:
-                queryset = queryset.filter(
-                    teacher_scope_filter(user)
-                )
-
         student = self.request.query_params.get("student")
 
         if student:
@@ -769,10 +757,28 @@ class StudentDocumentListCreateView(generics.ListCreateAPIView):
         if document_type:
             queryset = queryset.filter(document_type=document_type)
 
-        return queryset
+        return apply_campus_scope(
+            queryset,
+            self.request,
+            "student__enrollments__campus_id",
+            institution_field="institution_id",
+        )
 
     def perform_create(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+        institution = getattr(self.request, "institution", None)
+        student = serializer.validated_data.get("student")
+        if student:
+            # Verify student is within user's allowed scope
+            allowed_queryset = apply_campus_scope(
+                Student.objects.all(),
+                self.request,
+                "enrollments__campus_id",
+                institution_field="institution_id",
+            )
+            if not allowed_queryset.filter(pk=student.pk).exists():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Student is outside your allowed scope.")
+        serializer.save(uploaded_by=self.request.user, institution=institution)
 
 
 class StudentDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -785,22 +791,16 @@ class StudentDocumentDetailView(generics.RetrieveUpdateDestroyAPIView):
             "uploaded_by",
         )
 
-        user = self.request.user
-
-        if not is_manager(user):
-            if is_parent(user):
-                queryset = queryset.filter(
-                    parent_scope_filter(user)
-                )
-            else:
-                queryset = queryset.filter(
-                    teacher_scope_filter(user)
-                )
-
-        return queryset
+        return apply_campus_scope(
+            queryset,
+            self.request,
+            "student__enrollments__campus_id",
+            institution_field="institution_id",
+        )
 
     def perform_update(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+        institution = getattr(self.request, "institution", None)
+        serializer.save(uploaded_by=self.request.user, institution=institution)
 
 
 class EnrollmentListCreateView(generics.ListCreateAPIView):

@@ -315,7 +315,7 @@ def apply_campus_scope(queryset, request, campus_field="campus_id", institution_
 
     ``campus_field`` is the ORM path to the campus relation, e.g.
     ``"campus_id"``, ``"unit__campus_id"``, ``"class_obj__unit__campus_id"``
-    or ``"primary_campus_id"``.
+    or ``"primary_campus_id"``.  When ``None``, campus scoping is skipped.
 
     ``institution_field`` is the ORM path to the institution relation, e.g.
     ``"institution_id"`` or ``"school_id"``.  When ``None``, institution
@@ -337,7 +337,10 @@ def apply_campus_scope(queryset, request, campus_field="campus_id", institution_
                 | Q(**{f"{institution_field}__isnull": True})
             )
 
-    # --- Campus scoping (existing) ---
+    # --- Campus scoping (skip if campus_field is None) ---
+    if campus_field is None:
+        return queryset
+
     access = campus_access(request)
 
     if access["global"]:

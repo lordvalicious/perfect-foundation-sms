@@ -42,6 +42,7 @@ def _describe(conflict_type, day, resource_id, resource, pair):
         "entry_ids": [a.id, b.id],
         "periods": [a.period.name, b.period.name],
         "times": [_fmt_time(a.period), _fmt_time(b.period)],
+        "campus_id": a.campus_id,
         "campus": a.campus.name,
         "classes": [
             f"{a.class_obj.name}/{a.section.name}",
