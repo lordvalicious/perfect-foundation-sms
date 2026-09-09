@@ -181,7 +181,16 @@ class AdmissionApplicationAcceptView(APIView):
         if application.section_id is None:
             return Response({"detail": "A section is required before acceptance."}, status=400)
         admission_number = request.data.get("admission_number") or application.application_number
-        if Student.objects.filter(admission_number=admission_number).exists():
+        # Scope admission number uniqueness to the active institution.
+        institution = get_institution(request)
+        if institution is not None:
+            exists = Student.objects.filter(
+                admission_number=admission_number,
+                institution=institution,
+            ).exists()
+        else:
+            exists = Student.objects.filter(admission_number=admission_number).exists()
+        if exists:
             return Response({"detail": "This admission number is already in use."}, status=400)
         student = Student.objects.create(
             admission_number=admission_number,
@@ -1633,14 +1642,34 @@ class StudentTransferCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        student = user.primary_institution.students.first() if user.primary_institution else None
-        # In a real implementation, the student would be identified from the
-        # request context or session. For now, we'll use a placeholder.
-        # TODO: Identify the correct student from the request.
+        # Identify the student from the user's primary institution membership.
+        # Use the first active enrollment to determine the student being transferred.
+        student = None
+        if user.primary_institution is not None:
+            from apps.students.models import Student, Enrollment
+            student = (
+                Student.objects
+                .filter(institution=user.primary_institution, status="active")
+                .order_by("-enrollment__created_at")
+                .select_related("primary_campus")
+                .first()
+            )
+            if student is None:
+                # Try to find by active enrollment
+                student = (
+                    Enrollment.objects
+                    .filter(institution=user.primary_institution, status="active")
+                    .values_list("student_id", flat=True)
+                    .distinct()
+                    .first()
+                )
+                if student is not None:
+                    from apps.students.models import Student as StudentModel
+                    student = StudentModel.objects.get(pk=student)
         
         if not student:
             return Response(
-                {"detail": "Student not found in request context."},
+                {"detail": "No student found in request context. Please specify the student ID."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         
@@ -1672,7 +1701,7 @@ class StudentTransferCreateView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
         
-        # Create the transfer record - student will be resolved later.
+        # Create the transfer record.
         transfer = StudentTransfer.objects.create(
             student=student,
             from_campus=student.primary_campus if student and student.primary_campus else None,
