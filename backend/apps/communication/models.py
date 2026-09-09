@@ -1,6 +1,9 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth import get_user_model
 from django.db import models
 from django.utils import timezone
+
+User = get_user_model()
 
 JOB_TYPE_CHOICES = [
     ("notification", "Notification"),
@@ -314,7 +317,7 @@ class Announcement(models.Model):
 
             student_user_ids = set(
                 User.objects.filter(
-                    student_profile_id__in=enrollment_students
+                    student_profile__id__in=enrollment_students,
                 ).values_list("id", flat=True)
             )
 
@@ -329,9 +332,23 @@ class Announcement(models.Model):
 
             guardian_user_ids = set(
                 User.objects.filter(
-                    guardian_profile_id__in=guardian_ids
+                    guardian_profile__id__in=guardian_ids
                 ).values_list("id", flat=True)
             )
+
+            if self.institution_id:
+                student_user_ids &= set(
+                    User.objects.filter(
+                        memberships__institution_id=self.institution_id,
+                        memberships__status="active",
+                    ).values_list("id", flat=True)
+                )
+                guardian_user_ids &= set(
+                    User.objects.filter(
+                        memberships__institution_id=self.institution_id,
+                        memberships__status="active",
+                    ).values_list("id", flat=True)
+                )
 
             return list(
                 student_user_ids | guardian_user_ids

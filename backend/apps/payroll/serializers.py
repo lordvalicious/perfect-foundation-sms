@@ -4,6 +4,9 @@ from .models import PayrollRecord, Payslip, SalaryStructure
 
 
 class SalaryStructureSerializer(serializers.ModelSerializer):
+    institution = serializers.PrimaryKeyRelatedField(
+        read_only=True,
+    )
     teacher_name = serializers.CharField(
         source="employee.full_name",
         read_only=True,
@@ -23,8 +26,11 @@ class SalaryStructureSerializer(serializers.ModelSerializer):
         model = SalaryStructure
         fields = [
             "id",
+            "institution",
             "employee",
             "teacher_name",
+            "name",
+            "code",
             "basic_salary",
             "total_allowances",
             "gross_salary",
@@ -58,6 +64,7 @@ class PayrollRecordSerializer(serializers.ModelSerializer):
             "teacher_number",
             "salary_structure",
             "structure_basic",
+            "payroll_period",
             "month",
             "year",
             "working_days",
