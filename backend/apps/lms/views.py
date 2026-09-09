@@ -111,30 +111,54 @@ class LessonListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_queryset(self):
-        course = get_object_or_404(Course, pk=self.kwargs["course_id"])
+        course_id = self.kwargs.get("course_id")
+        if not course_id:
+            return Lesson.objects.none()
+
+        # Get the course and verify institution scoping
+        course = get_object_or_404(
+            Course.objects.filter(
+                institution__isnull=False
+            ),
+            pk=course_id
+        )
+
+        # Check institution access for non-superusers
+        user = self.request.user
+        if not user.is_superuser:
+            teacher = getattr(user, "teacher_profile", None)
+            if teacher is not None:
+                # Teacher can only access courses they teach
+                if course.teacher_id != teacher.id:
+                    raise PermissionDenied("You do not have access to this course.")
+            # Students can only access published courses they're enrolled in
+            from apps.students.models import Student
+            student = getattr(user, "student_profile", None)
+            if student is not None:
+                enrolled_courses = student.enrollments.filter(
+                    status="active"
+                ).values_list("class_obj_id", flat=True)
+                if course.class_obj_id not in enrolled_courses:
+                    if not course.is_published:
+                        raise PermissionDenied("Course not available.")
+
         return course.lessons.all()
 
     def perform_create(self, serializer):
-        course = get_object_or_404(Course, pk=self.kwargs["course_id"])
-        teacher = _user_teacher(self.request)
+        course_id = self.kwargs.get("course_id")
+        if not course_id:
+            raise PermissionDenied("Course ID is required.")
 
-        if (
-            teacher is None
-            or course.teacher_id != teacher.id
-        ) and not self.request.user.is_superuser:
-            raise PermissionDenied(
-                "Only the course's teacher can add lessons."
-            )
+        course = get_object_or_404(Course, pk=course_id)
 
-        next_order = (
-            Lesson.objects.filter(course=course)
-            .order_by("-order")
-            .values_list("order", flat=True)
-            .first()
-            or 0
-        ) + 1
+        # Verify instructor access
+        user = self.request.user
+        teacher = getattr(user, "teacher_profile", None)
+        if teacher is not None and course.teacher_id != teacher.id:
+            if not user.is_superuser:
+                raise PermissionDenied("Only the course's teacher can add lessons.")
 
-        serializer.save(course=course, order=next_order)
+        serializer.save(course=course)
 
 
 class MarkLessonCompleteView(APIView):
@@ -145,6 +169,27 @@ class MarkLessonCompleteView(APIView):
 
         if student is None:
             raise PermissionDenied("Only students complete lessons.")
+
+        # Get the lesson and verify institution scoping
+        course_id_val = Lesson.objects.values("course_id").get(pk=lesson_id)["course_id"]
+        course = get_object_or_404(
+            Course.objects.filter(institution__isnull=False),
+            pk=course_id_val
+        )
+
+        # Check institution access for non-superusers
+        user = request.user
+        if not user.is_superuser:
+            teacher = getattr(user, "teacher_profile", None)
+            if teacher is not None and lesson.course.teacher_id != teacher.id:
+                raise PermissionDenied("You do not have access to this lesson.")
+            from apps.students.models import Student
+            student_model = getattr(user, "student_profile", None)
+            if student_model is not None:
+                if not student_model.enrollments.filter(
+                    status="active", class_obj_id=course.class_obj_id
+                ).exists():
+                    raise PermissionDenied("You are not enrolled in this course.")
 
         lesson = get_object_or_404(Lesson, pk=lesson_id)
 
