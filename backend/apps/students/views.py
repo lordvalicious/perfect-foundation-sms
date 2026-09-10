@@ -183,13 +183,20 @@ class AdmissionApplicationAcceptView(APIView):
         admission_number = request.data.get("admission_number") or application.application_number
         # Scope admission number uniqueness to the active institution.
         institution = get_institution(request)
+        if institution is None:
+            from apps.accounts.managers import get_current_institution
+            institution = get_current_institution()
         if institution is not None:
             exists = Student.objects.filter(
                 admission_number=admission_number,
                 institution=institution,
             ).exists()
         else:
-            exists = Student.objects.filter(admission_number=admission_number).exists()
+            # No institution available — reject to prevent cross-school IDOR.
+            return Response(
+                {"detail": "Unable to determine institution for admission number check."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         if exists:
             return Response({"detail": "This admission number is already in use."}, status=400)
         student = Student.objects.create(

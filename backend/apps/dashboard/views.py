@@ -30,7 +30,11 @@ from apps.teachers.models import Teacher
 
 def _institution_overview_counts(request):
     """Institution- and campus-scoped headcounts for manager users."""
+    from apps.accounts.managers import get_current_institution
+    
     institution = getattr(request, "institution", None)
+    if institution is None:
+        institution = get_current_institution()
 
     students = Student.objects.all()
     teachers = Teacher.objects.all()
@@ -225,7 +229,10 @@ def dashboard_attendance(request):
         queryset = queryset.filter(student_id__in=student_ids)
     else:
         # Manager roles: scope by institution and campus
-        institution = get_institution(request)
+        institution = getattr(request, "institution", None)
+        if institution is None:
+            from apps.accounts.managers import get_current_institution
+            institution = get_current_institution()
         if institution is not None:
             queryset = queryset.filter(campus__school=institution)
 

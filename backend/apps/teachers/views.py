@@ -29,6 +29,15 @@ class TeacherListCreateView(generics.ListCreateAPIView):
                 Q(institution=self.request.institution)
                 | Q(membership__institution=self.request.institution)
             )
+        else:
+            # If no institution on request, scope by user's active membership
+            from apps.accounts.managers import get_current_institution
+            institution = get_current_institution()
+            if institution is not None:
+                queryset = queryset.filter(
+                    Q(institution=institution)
+                    | Q(membership__institution=institution)
+                )
 
         if not is_manager(user):
             profile = get_teacher_profile(user)
@@ -60,7 +69,17 @@ class TeacherListCreateView(generics.ListCreateAPIView):
         campus = self.request.query_params.get("campus")
 
         if campus:
-            queryset = queryset.filter(campus__iexact=campus)
+            from apps.accounts.managers import get_current_institution
+
+            institution = get_current_institution()
+            if institution is not None:
+                from apps.schools.models import Campus
+
+                campus_qs = Campus.objects.filter(
+                    school=institution, iexact=campus
+                )
+                if campus_qs.exists():
+                    queryset = queryset.filter(campus__iexact=campus)
 
         queryset = restrict_to_allowed_campuses(
             queryset,

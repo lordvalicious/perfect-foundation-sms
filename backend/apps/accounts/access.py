@@ -241,6 +241,10 @@ def assert_campus_allowed(user, campus_id):
     if not campus_id:
         raise PermissionDenied("Invalid campus.")
 
+    # Extract pk if a Campus model instance was passed instead of an ID.
+    if hasattr(campus_id, "pk"):
+        campus_id = campus_id.pk
+
     try:
         campus_id = int(campus_id)
     except (TypeError, ValueError):
