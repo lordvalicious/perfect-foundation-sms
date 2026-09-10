@@ -45,7 +45,7 @@ class BookListView(generics.ListCreateAPIView):
 
         campus = serializer.validated_data.get("campus")
         if campus:
-            assert_campus_allowed(self.request.user, campus)
+            assert_campus_allowed(self.request.user, campus.pk)
         serializer.save()
 
 
@@ -60,7 +60,7 @@ class BookDetailView(generics.RetrieveUpdateDestroyAPIView):
 
         campus = serializer.validated_data.get("campus", serializer.instance.campus)
         if campus:
-            assert_campus_allowed(self.request.user, campus)
+            assert_campus_allowed(self.request.user, campus.pk)
         serializer.save()
 
 

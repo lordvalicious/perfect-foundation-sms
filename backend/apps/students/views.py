@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from decimal import Decimal
 
-from apps.accounts.access import apply_campus_scope, assert_campus_allowed, campus_access
+from apps.accounts.access import apply_campus_scope, assert_campus_allowed, campus_access, get_institution
 from apps.accounts.permissions import (
     IsAdminOrReadOnly,
     IsAdminRole,

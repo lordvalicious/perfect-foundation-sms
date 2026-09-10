@@ -6,7 +6,7 @@ from django.http import JsonResponse
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import apply_campus_scope, get_institution
 from apps.accounts.scopes import (
     get_guardian_profile,
     get_student_profile,

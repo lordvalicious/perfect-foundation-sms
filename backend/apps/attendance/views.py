@@ -195,7 +195,7 @@ class AttendanceBulkMarkView(APIView):
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-        if day > str(date_cls.today()):
+        if day > date_cls.today():
             return Response(
                 {"detail": "Attendance cannot be marked for a future date."},
                 status=status.HTTP_400_BAD_REQUEST,
@@ -532,7 +532,7 @@ class AttendanceMarkView(APIView):
 
         academic_year = data.get("academic_year")
 
-        if day > str(date_cls.today()):
+        if day > date_cls.today():
             return Response(
                 {"detail": "Attendance cannot be marked for a future date."},
                 status=status.HTTP_400_BAD_REQUEST,

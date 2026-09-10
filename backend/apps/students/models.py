@@ -811,7 +811,7 @@ class Student(SoftDeleteMixin):
             user=user,
             graduation_date=graduation_date,
             reason=reason,
-            **{"final_grade": self.final_grade, "final_percentage": self.final_percentage}  # if available
+            **alumni_kwargs,
         )
         
         return alumni
@@ -1417,6 +1417,14 @@ class TransferCertificate(SoftDeleteMixin):
 
     objects = SoftDeleteManager()
 
+    institution = models.ForeignKey(
+        "schools.School",
+        on_delete=models.CASCADE,
+        related_name="transfer_certificates",
+        null=True,
+        blank=True,
+    )
+
     STATUS_CHOICES = [
         ("draft", "Draft"),
         ("issued", "Issued"),
@@ -1790,6 +1798,9 @@ class StudentAlumni(SoftDeleteMixin):
         # Get current enrollment info
         active_enrollment = student.enrollments.filter(status="active").first()
 
+        # Pop reason for lifecycle event — StudentAlumni has no reason field
+        reason = kwargs.pop("reason", "Graduated")
+
         alumni = cls.objects.create(
             student=student,
             institution=student.institution,
@@ -1808,7 +1819,7 @@ class StudentAlumni(SoftDeleteMixin):
             student=student,
             event_type="graduated",
             effective_date=graduation_date,
-            reason=kwargs.get("reason", "Graduated"),
+            reason=reason,
             recorded_by=user,
         )
 

@@ -358,6 +358,12 @@ class GuardianCreateSerializer(serializers.ModelSerializer):
         elif user is None:
             validated_data["user"] = None
 
+        request = self.context.get("request")
+        if "institution" not in validated_data:
+            institution = getattr(request, "institution", None) if request else None
+            if institution is not None:
+                validated_data["institution"] = institution
+
         return super().create(validated_data)
 
 
