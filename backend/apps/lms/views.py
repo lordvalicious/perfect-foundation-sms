@@ -255,3 +255,67 @@ class MyProgressView(APIView):
             })
 
         return Response(data)
+
+
+class LessonDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = LessonSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        course_id = self.kwargs.get("course_id")
+        if not course_id:
+            return Lesson.objects.none()
+
+        # Get the course and verify institution scoping
+        course = get_object_or_404(
+            Course.objects.filter(
+                institution__isnull=False
+            ),
+            pk=course_id
+        )
+
+        # Check institution access for non-superusers
+        user = self.request.user
+        if not user.is_superuser:
+            teacher = getattr(user, "teacher_profile", None)
+            if teacher is not None:
+                if course.teacher_id != teacher.id:
+                    raise PermissionDenied("You do not have access to this course.")
+            from apps.students.models import Student
+            student = getattr(user, "student_profile", None)
+            if student is not None:
+                enrolled_courses = student.enrollments.filter(
+                    status="active"
+                ).values_list("class_obj_id", flat=True)
+                if course.class_obj_id not in enrolled_courses:
+                    if not course.is_published:
+                        raise PermissionDenied("Course not available.")
+
+        return course.lessons.all()
+
+    def perform_update(self, serializer):
+        course_id = self.kwargs.get("course_id")
+        if not course_id:
+            raise PermissionDenied("Course ID is required.")
+
+        course = get_object_or_404(Course, pk=course_id)
+
+        # Verify instructor access
+        user = self.request.user
+        teacher = getattr(user, "teacher_profile", None)
+        if teacher is not None and course.teacher_id != teacher.id:
+            if not user.is_superuser:
+                raise PermissionDenied("Only the course's teacher can edit lessons.")
+
+        serializer.save(course=course)
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        course = instance.course
+        teacher = getattr(user, "teacher_profile", None)
+        if teacher is not None and course.teacher_id != teacher.id:
+            if not user.is_superuser:
+                raise PermissionDenied("Only the course's teacher can delete lessons.")
+        instance.delete()

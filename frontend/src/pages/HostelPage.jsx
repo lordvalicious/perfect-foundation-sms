@@ -9,6 +9,7 @@ const CAMPUSES_URL = "/api/schools/campuses/";
 export default function HostelPage() {
   const [tab, setTab] = useState("hostels");
   const [rows, setRows] = useState([]);
+  const [hostels, setHostels] = useState([]);
   const [students, setStudents] = useState([]);
   const [roomOptions, setRoomOptions] = useState([]);
   const [campuses, setCampuses] = useState([]);
@@ -38,6 +39,18 @@ export default function HostelPage() {
   useEffect(() => {
     loadCampuses();
   }, [loadCampuses]);
+
+  const loadHostels = useCallback(() => {
+    fetch(`${BASE}hostels/`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { results: [] }))
+      .then((data) => setHostels(data.results || data))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadCampuses();
+    loadHostels();
+  }, [loadCampuses, loadHostels]);
 
   const [roomForm, setRoomForm] = useState({
     hostel: "",
@@ -231,7 +244,7 @@ export default function HostelPage() {
                     }
                   >
                     <option value="">Hostel...</option>
-                    {rows.map((h) => (
+                    {hostels.map((h) => (
                       <option key={h.id} value={h.id}>{h.name}</option>
                     ))}
                   </select>

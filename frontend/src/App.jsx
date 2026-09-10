@@ -125,6 +125,9 @@ const TenantsPage = lazy(() => import("./pages/TenantsPage"));
 const HelpdeskPage = lazy(() => import("./pages/HelpdeskPage"));
 const VisitorsPage = lazy(() => import("./pages/VisitorsPage"));
 const DigitalIdsPage = lazy(() => import("./pages/DigitalIdsPage"));
+const WorkflowDefinitionAdminPage = lazy(() => import("./pages/WorkflowDefinitionAdminPage"));
+const WorkflowInstanceDetailPage = lazy(() => import("./pages/WorkflowInstanceDetailPage"));
+const PendingApprovalsPage = lazy(() => import("./pages/PendingApprovalsPage"));
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -1248,6 +1251,24 @@ function Shell() {
         <Route path="/digital-ids" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "staff"]}>
             <DigitalIdsPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/workflow/definitions" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"]}>
+            <WorkflowDefinitionAdminPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/workflow/instances/:id" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"]}>
+            <WorkflowInstanceDetailPage />
+          </RequireRoles>
+        } />
+
+        <Route path="/workflow/approvals" element={
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"]}>
+            <PendingApprovalsPage />
           </RequireRoles>
         } />
 

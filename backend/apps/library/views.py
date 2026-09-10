@@ -7,8 +7,8 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import IsAccountantRole, IsLibrarianRole
 from apps.accounts.access import apply_campus_scope
 
-from .models import Book, BookIssue, BookReservation
-from .serializers import BookIssueSerializer, BookSerializer, BookReservationSerializer, BookReservationCreateSerializer
+from .models import Book, BookCopy, BookIssue, BookReservation
+from .serializers import BookCopySerializer, BookIssueSerializer, BookSerializer, BookReservationSerializer, BookReservationCreateSerializer
 
 
 class BookListView(generics.ListCreateAPIView):
@@ -245,3 +245,46 @@ class BookReservationCancelView(APIView):
         return Response(
             {"detail": "Reservation cancelled."}
         )
+
+
+class BookCopyListCreateView(generics.ListCreateAPIView):
+    serializer_class = BookCopySerializer
+    permission_classes = [IsLibrarianRole]
+
+    def get_queryset(self):
+        queryset = BookCopy.objects.select_related("book", "book__campus")
+
+        book = self.request.query_params.get("book")
+        if book:
+            queryset = queryset.filter(book_id=book)
+
+        status_filter = self.request.query_params.get("status")
+        if status_filter:
+            queryset = queryset.filter(status=status_filter)
+
+        return apply_campus_scope(queryset, self.request, "book__campus_id")
+
+    def perform_create(self, serializer):
+        book = serializer.validated_data["book"]
+        if not apply_campus_scope(
+            Book.objects.filter(pk=book.pk), self.request, "campus_id"
+        ).exists():
+            raise PermissionDenied("The book is outside your campus scope.")
+        serializer.save()
+
+
+class BookCopyDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = BookCopySerializer
+    permission_classes = [IsLibrarianRole]
+
+    def get_queryset(self):
+        return apply_campus_scope(
+            BookCopy.objects.select_related("book", "book__campus"),
+            self.request,
+            "book__campus_id",
+        )
+
+    def perform_update(self, serializer):
+        if not self.get_queryset().filter(pk=serializer.instance.pk).exists():
+            raise PermissionDenied("The book copy is outside your campus scope.")
+        serializer.save()

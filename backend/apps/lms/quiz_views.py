@@ -271,3 +271,53 @@ class MyQuizAttemptView(APIView):
             return Response(None, status=204)
 
         return Response(QuizAttemptSerializer(attempt).data)
+
+
+class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = QuestionSerializer
+
+    def get_permissions(self):
+        return [IsAuthenticated()]
+
+    def get_queryset(self):
+        quiz_id = self.kwargs.get("quiz_id")
+        if not quiz_id:
+            return Question.objects.none()
+
+        quiz = get_object_or_404(
+            Quiz.objects.select_related("course"),
+            pk=quiz_id
+        )
+
+        # Check institution access for non-superusers
+        user = self.request.user
+        if not user.is_superuser:
+            teacher = _user_teacher(request)
+            if teacher is not None and quiz.course.teacher_id != teacher.id:
+                raise PermissionDenied("You do not have access to this quiz.")
+
+        return quiz.questions.all()
+
+    def perform_update(self, serializer):
+        quiz_id = self.kwargs.get("quiz_id")
+        if not quiz_id:
+            raise PermissionDenied("Quiz ID is required.")
+
+        quiz = get_object_or_404(Quiz, pk=quiz_id)
+
+        # Verify instructor access
+        teacher = _user_teacher(self.request)
+        if teacher is not None and quiz.course.teacher_id != teacher.id:
+            if not self.request.user.is_superuser:
+                raise PermissionDenied("Only the course's teacher can edit questions.")
+
+        serializer.save(quiz=quiz)
+
+    def perform_destroy(self, instance):
+        user = self.request.user
+        quiz = instance.quiz
+        teacher = _user_teacher(user)
+        if teacher is not None and quiz.course.teacher_id != teacher.id:
+            if not user.is_superuser:
+                raise PermissionDenied("Only the course's teacher can delete questions.")
+        instance.delete()

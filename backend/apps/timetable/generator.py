@@ -15,6 +15,9 @@ TeacherAssignments and SubjectOfferings:
 
 Unplaceable lessons (e.g. a teacher overloaded beyond capacity) are
 reported back rather than failing the whole run.
+
+Optional class_id and section_id parameters allow generating for
+specific classes/sections instead of the entire campus.
 """
 
 import random
@@ -31,6 +34,8 @@ def generate_timetable(
     days=None,
     replace=True,
     seed=None,
+    class_id=None,
+    section_id=None,
 ):
     """Generate entries for one campus + academic year.
 
@@ -61,13 +66,26 @@ def generate_timetable(
     if not periods:
         raise ValueError("No teaching periods configured.")
 
+    # Filter assignments by class/section if provided
+    assignment_filters = {
+        "campus": campus,
+        "academic_year": academic_year,
+        "status": "active",
+    }
+
+    if class_id:
+        from apps.schools.models import Class
+        class_obj = Class.objects.filter(pk=class_id).first()
+        if not class_obj:
+            raise ValueError(f"Class {class_id} not found.")
+        assignment_filters["class_obj"] = class_obj
+
+    if section_id:
+        assignment_filters["section_id"] = section_id
+
     assignments = list(
         TeacherAssignment.objects
-        .filter(
-            campus=campus,
-            academic_year=academic_year,
-            status="active",
-        )
+        .filter(**assignment_filters)
         .select_related("class_obj", "section", "subject", "teacher")
     )
 
@@ -134,10 +152,20 @@ def generate_timetable(
 
     with transaction.atomic():
         if replace:
-            TimetableEntry.objects.filter(
-                campus=campus,
-                academic_year=academic_year,
-            ).delete()
+            delete_filters = {
+                "campus": campus,
+                "academic_year": academic_year,
+            }
+            if class_id:
+                from apps.schools.models import Class
+                class_obj = Class.objects.filter(pk=class_id).first()
+                if class_obj:
+                    delete_filters["class_obj"] = class_obj
+
+            if section_id:
+                delete_filters["section_id"] = section_id
+
+            TimetableEntry.objects.filter(**delete_filters).delete()
 
         for key in sorted(section_map):
             info = section_map[key]

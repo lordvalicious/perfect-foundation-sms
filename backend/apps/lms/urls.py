@@ -5,6 +5,7 @@ from .quiz_views import (
     QuizAttemptListView,
     QuizDetailView,
     QuizListCreateView,
+    QuestionDetailView,
     QuizQuestionCreateView,
     QuizQuestionDeleteView,
     QuizQuestionListView,
@@ -13,6 +14,7 @@ from .quiz_views import (
 from .views import (
     CourseDetailView,
     CourseListCreateView,
+    LessonDetailView,
     LessonListCreateView,
     MarkLessonCompleteView,
     MyProgressView,
@@ -33,6 +35,11 @@ urlpatterns = [
         "courses/<int:course_id>/lessons/",
         LessonListCreateView.as_view(),
         name="lesson-list",
+    ),
+    path(
+        "courses/<int:course_id>/lessons/<int:pk>/",
+        LessonDetailView.as_view(),
+        name="lesson-detail",
     ),
     path(
         "lessons/<int:lesson_id>/complete/",
@@ -58,6 +65,16 @@ urlpatterns = [
         "quizzes/<int:quiz_id>/questions/",
         QuizQuestionListView.as_view(),
         name="quiz-question-list",
+    ),
+    path(
+        "quizzes/<int:quiz_id>/questions/new/",
+        QuizQuestionCreateView.as_view(),
+        name="quiz-question-create",
+    ),
+    path(
+        "questions/<int:pk>/",
+        QuestionDetailView.as_view(),
+        name="quiz-question-detail",
     ),
     path(
         "quizzes/<int:quiz_id>/questions/new/",

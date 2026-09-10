@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.accounts.access import is_global
-from apps.schools.models import AcademicYear, Campus
+from apps.schools.models import AcademicYear, Campus, Class, Section
 
 
 class TimetableGenerateView(APIView):
@@ -16,6 +16,8 @@ class TimetableGenerateView(APIView):
         academic_year: int       (optional, default latest active)
         lessons_per_subject: int (optional, default 5)
         days: [str]              (optional)
+        class_id: int            (optional, generate for specific class)
+        section_id: int          (optional, generate for specific section)
         confirm: true            REQUIRED — generation replaces entries.
     """
 
@@ -33,7 +35,7 @@ class TimetableGenerateView(APIView):
                 {
                     "detail": (
                         "Pass confirm:true — generation replaces the "
-                        "existing timetable for the campus."
+                        "existing timetable for the campus/class/section."
                     )
                 },
                 status=400,
@@ -84,6 +86,24 @@ class TimetableGenerateView(APIView):
                 status=400,
             )
 
+        # Optional class/section scoping
+        class_id = request.data.get("class_id")
+        section_id = request.data.get("section_id")
+
+        if class_id:
+            from apps.schools.models import Class
+            if not Class.objects.filter(pk=class_id, campus=campus).exists():
+                return Response(
+                    {"detail": "Class not found in this campus."}, status=404
+                )
+
+        if section_id:
+            from apps.schools.models import Section
+            if not Section.objects.filter(pk=section_id, class_obj__campus=campus).exists():
+                return Response(
+                    {"detail": "Section not found in this campus."}, status=404
+                )
+
         try:
             lessons = max(1, min(int(request.data.get("lessons_per_subject", 5)), 20))
         except (TypeError, ValueError):
@@ -100,6 +120,8 @@ class TimetableGenerateView(APIView):
                 lessons_per_subject=lessons,
                 days=[str(day).lower() for day in days],
                 replace=True,
+                class_id=class_id,
+                section_id=section_id,
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=400)

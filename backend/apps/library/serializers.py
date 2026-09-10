@@ -4,9 +4,20 @@ from .models import Book, BookCopy, BookIssue, BookReservation
 
 
 class BookCopySerializer(serializers.ModelSerializer):
+    book_title = serializers.CharField(source="book.title", read_only=True)
+    campus_name = serializers.CharField(source="book.campus.name", read_only=True, default="")
+
     class Meta:
         model = BookCopy
-        fields = ["id", "barcode", "status"]
+        fields = ["id", "book", "book_title", "barcode", "status", "campus_name", "created_at"]
+        read_only_fields = ["barcode", "created_at"]
+
+    def create(self, validated_data):
+        book_copy = BookCopy.objects.create(**validated_data)
+        if not book_copy.barcode:
+            book_copy.barcode = f"{book_copy.book.pk:04d}-{book_copy.pk or ''}".rstrip("-")
+            book_copy.save(update_fields=["barcode"])
+        return book_copy
 
 
 class BookSerializer(serializers.ModelSerializer):
