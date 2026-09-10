@@ -215,7 +215,7 @@ class StudentGuardian(models.Model):
             models.UniqueConstraint(
                 fields=["student", "guardian"],
                 name="unique_student_guardian_link",
-            )
+            ),
         ]
         ordering = ["-is_primary", "guardian__name"]
 
@@ -524,7 +524,16 @@ class Student(SoftDeleteMixin):
 
     admission_number = models.CharField(
         max_length=50,
+        help_text="School-scoped admission number. Must be unique within the same institution.",
     )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "admission_number"],
+                name="unique_admission_number_per_institution",
+            ),
+        ]
 
     user = models.OneToOneField(
         "accounts.User",

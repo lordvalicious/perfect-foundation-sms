@@ -1634,6 +1634,7 @@ class StudentTransferCreateView(APIView):
         user = request.user
         to_campus_id = request.data.get("to_campus_id")
         reason = request.data.get("reason", "").strip()
+        student_id = request.data.get("student_id")
         
         if not to_campus_id:
             return Response(
@@ -1649,11 +1650,20 @@ class StudentTransferCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
-        # Identify the student from the user's primary institution membership.
-        # Use the first active enrollment to determine the student being transferred.
+        # Identify the student: use provided student_id, otherwise auto-detect
+        from apps.students.models import Student, Enrollment
+        
         student = None
-        if user.primary_institution is not None:
-            from apps.students.models import Student, Enrollment
+        if student_id:
+            try:
+                student = Student.objects.get(pk=student_id)
+            except Student.DoesNotExist:
+                return Response(
+                    {"detail": "Student not found."},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+        if student is None:
+            # Auto-detect: use the first active enrollment from the user's primary institution
             student = (
                 Student.objects
                 .filter(institution=user.primary_institution, status="active")
@@ -1671,12 +1681,11 @@ class StudentTransferCreateView(APIView):
                     .first()
                 )
                 if student is not None:
-                    from apps.students.models import Student as StudentModel
-                    student = StudentModel.objects.get(pk=student)
+                    student = Student.objects.get(pk=student)
         
         if not student:
             return Response(
-                {"detail": "No student found in request context. Please specify the student ID."},
+                {"detail": "No student found in request context."},
                 status=status.HTTP_404_NOT_FOUND,
             )
         
@@ -1709,9 +1718,15 @@ class StudentTransferCreateView(APIView):
                 )
         
         # Create the transfer record.
+        # Determine from_campus: use the student's primary_campus, or the campus
+        # from their most recent active enrollment.
+        from_campus = student.primary_campus
+        if from_campus is None and student.enrollments.exists():
+            from_campus = student.enrollments.first().campus
+        
         transfer = StudentTransfer.objects.create(
             student=student,
-            from_campus=student.primary_campus if student and student.primary_campus else None,
+            from_campus=from_campus,
             to_campus=to_campus,
             status="pending",
             reason=reason,
