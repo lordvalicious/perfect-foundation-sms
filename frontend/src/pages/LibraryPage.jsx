@@ -50,6 +50,10 @@ export default function LibraryPage() {
   const [form, setForm] = useState(EMPTY_BOOK_FORM);
   const [campuses, setCampuses] = useState([]);
 
+  const [copiesBook, setCopiesBook] = useState(null);
+  const [copiesError, setCopiesError] = useState("");
+  const [copySaving, setCopySaving] = useState(false);
+
   const loadCampuses = useCallback(() => {
     fetch(CAMPUSES_URL, { credentials: "include" })
       .then((res) => (res.ok ? res.json() : []))
@@ -222,6 +226,67 @@ export default function LibraryPage() {
     }
   };
 
+  const openCopies = (book) => {
+    setCopiesError("");
+    setCopiesBook(book);
+  };
+
+  const refreshCopiesBook = () => {
+    if (!copiesBook) return;
+    apiFetch(`${BOOKS_URL}${copiesBook.id}/`)
+      .then((data) => setCopiesBook((current) => (current ? { ...data } : current)))
+      .catch(() => {});
+  };
+
+  const closeCopies = () => {
+    setCopiesBook(null);
+    setCopySaving(false);
+    setCopiesError("");
+  };
+
+  const addCopy = async () => {
+    if (!copiesBook) return;
+    setCopySaving(true);
+    setCopiesError("");
+
+    try {
+      await apiFetch(
+        `${BOOKS_URL}${copiesBook.id}/copies/`,
+        {
+          method: "POST",
+          headers: jsonHeaders(),
+          body: JSON.stringify({ book: copiesBook.id }),
+        },
+        "Unable to add a copy."
+      );
+      loadBooks();
+      refreshCopiesBook();
+    } catch (err) {
+      setCopiesError(err.message);
+    } finally {
+      setCopySaving(false);
+    }
+  };
+
+  const deleteCopy = async (copy) => {
+    if (!copiesBook) return;
+    if (!window.confirm(`Delete copy "${copy.barcode || copy.id}"? This cannot be undone.`)) return;
+
+    setCopiesError("");
+
+    try {
+      await apiFetch(
+        `${BOOKS_URL}${copiesBook.id}/copies/${copy.id}/`,
+        { method: "DELETE", headers: jsonHeaders() },
+        "Unable to delete the copy."
+      );
+      loadBooks();
+      refreshCopiesBook();
+    } catch (err) {
+      setCopiesError(err.message);
+    }
+  };
+
   return (
     <section className="content">
       <PageHeader
@@ -346,6 +411,14 @@ export default function LibraryPage() {
                           >
                             <Pencil size={13} />
                             Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="table-action"
+                            onClick={() => openCopies(book)}
+                          >
+                            <BookCopy size={13} />
+                            Copies
                           </button>
                           <button
                             type="button"
@@ -550,6 +623,83 @@ export default function LibraryPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {copiesBook && (
+        <div
+          className="modal-overlay"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeCopies();
+          }}
+        >
+          <div className="teacher-modal">
+            <div className="modal-header">
+              <div>
+                <h3>Copies — {copiesBook.title}</h3>
+                <p>Manage the individual physical copies of this book.</p>
+              </div>
+              <button className="modal-close" onClick={closeCopies}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {copiesError && <div className="state-card error">{copiesError}</div>}
+
+            <div className="form-section">
+              <div className="filter-row" style={{ marginBottom: 12 }}>
+                <button
+                  type="button"
+                  className="primary-button"
+                  disabled={copySaving}
+                  onClick={addCopy}
+                >
+                  <Plus size={15} />
+                  {copySaving ? "Adding..." : "Add Copy"}
+                </button>
+              </div>
+
+              {(copiesBook.copies || []).length === 0 ? (
+                <p className="muted">No copies exist for this book yet.</p>
+              ) : (
+                <div className="table-wrapper">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>BARCODE</th>
+                        <th>STATUS</th>
+                        <th>ADDED</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(copiesBook.copies || []).map((copy) => (
+                        <tr key={copy.id}>
+                          <td><code>{copy.barcode || "—"}</code></td>
+                          <td>
+                            <span className="status-badge active">
+                              {copy.status || "available"}
+                            </span>
+                          </td>
+                          <td>{formatDate(copy.created_at)}</td>
+                          <td style={{ whiteSpace: "nowrap" }}>
+                            <button
+                              type="button"
+                              className="table-action danger"
+                              onClick={() => deleteCopy(copy)}
+                            >
+                              <Trash2 size={13} />
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

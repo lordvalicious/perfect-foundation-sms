@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CalendarDays, Sparkles } from "lucide-react";
 import { useApiList } from "./useApiList";
 import { useAuth } from "../auth";
+import { useSchool } from "../schoolContext";
 import {
   PageHeader,
   PanelHeader,
@@ -14,13 +15,52 @@ import { apiFetch, authHeaders } from "../api";
 const PERIODS_API_URL = "/api/timetable/periods/";
 const ENTRIES_API_URL = "/api/timetable/entries/";
 const GENERATE_URL = "/api/timetable/generate/";
+const CLASSES_URL = "/api/schools/classes/";
+const SECTIONS_URL = "/api/schools/sections/";
 
 function AutoGeneratePanel() {
+  const { campusList } = useSchool();
   const [campus, setCampus] = useState("");
+  const [classes, setClasses] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [classId, setClassId] = useState("");
+  const [sectionId, setSectionId] = useState("");
   const [lessons, setLessons] = useState(5);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!campus) {
+      setClasses([]);
+      setClassId("");
+      setSections([]);
+      setSectionId("");
+      return;
+    }
+
+    apiFetch(`${CLASSES_URL}?campus=${campus}`)
+      .then((data) => setClasses(data.results || data || []))
+      .catch(() => setClasses([]));
+
+    setClassId("");
+    setSections([]);
+    setSectionId("");
+  }, [campus]);
+
+  useEffect(() => {
+    if (!classId) {
+      setSections([]);
+      setSectionId("");
+      return;
+    }
+
+    apiFetch(`${SECTIONS_URL}?class=${classId}`)
+      .then((data) => setSections(data.results || data || []))
+      .catch(() => setSections([]));
+
+    setSectionId("");
+  }, [classId]);
 
   const run = () => {
     if (!campus) return;
@@ -33,8 +73,10 @@ function AutoGeneratePanel() {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({
-        campus: isNaN(Number(campus)) ? campus : Number(campus),
+        campus: Number(campus),
         lessons_per_subject: Number(lessons),
+        ...(classId ? { class_id: Number(classId) } : {}),
+        ...(sectionId ? { section_id: Number(sectionId) } : {}),
         confirm: true,
       }),
     })
@@ -43,19 +85,46 @@ function AutoGeneratePanel() {
       .finally(() => setBusy(false));
   };
 
+  const scopeLabel = classId
+    ? `class ${classes.find((c) => String(c.id) === String(classId))?.name || classId}${sectionId ? `, section ${sections.find((s) => String(s.id) === String(sectionId))?.name || sectionId}` : ""}`
+    : `campus ${campusList.find((c) => String(c.id) === String(campus))?.name || campus}`;
+
   return (
     <div className="panel">
       <PanelHeader
         title="Auto-generate"
-        subtitle="Rebuilds the weekly timetable from teacher assignments. Existing entries for the campus are replaced."
+        subtitle="Rebuilds the weekly timetable from teacher assignments. Existing entries for the selected campus/class/section are replaced."
       />
 
       <div className="filter-row">
-        <input
-          placeholder="Campus name..."
-          value={campus}
-          onChange={(e) => setCampus(e.target.value)}
-        />
+        <select value={campus} onChange={(e) => setCampus(e.target.value)} required>
+          <option value="">Select campus...</option>
+          {campusList.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <select
+          value={classId}
+          onChange={(e) => setClassId(e.target.value)}
+          disabled={!campus}
+        >
+          <option value="">{campus ? "All classes" : "Class (alpha first)"}</option>
+          {classes.map((c) => (
+            <option key={c.id} value={c.id}>{c.name}</option>
+          ))}
+        </select>
+
+        <select
+          value={sectionId}
+          onChange={(e) => setSectionId(e.target.value)}
+          disabled={!classId}
+        >
+          <option value="">{classId ? "All sections" : "Section (all)"}</option>
+          {sections.map((s) => (
+            <option key={s.id} value={s.id}>{s.name}</option>
+          ))}
+        </select>
 
         <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
           Lessons/subject/week
@@ -76,7 +145,7 @@ function AutoGeneratePanel() {
           onClick={() => {
             if (
               window.confirm(
-                `Replace the current timetable for "${campus}"?`
+                `Replace the current timetable for "${scopeLabel}"?`
               )
             ) {
               run();

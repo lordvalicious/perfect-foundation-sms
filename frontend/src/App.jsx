@@ -353,10 +353,12 @@ const navigation = [
   { label: "Events", module: "events", path: "/events", icon: CalendarClock, roles: [] },
   { label: "Alumni", module: "alumni", path: "/alumni", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Hostel", module: "hostel", path: "/hostel", icon: BedDouble, roles: ["super_admin", "admin", "principal", "academic"] },
-  { label: "Online Courses", path: "/lms", icon: MonitorPlay, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student"] },
+  { label: "Online Courses", module: "lms", path: "/lms", icon: MonitorPlay, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student"] },
   { label: "Helpdesk", module: "helpdesk", path: "/helpdesk", icon: LifeBuoy, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "teacher", "staff"] },
   { label: "Visitors", module: "visitors", path: "/visitors", icon: ShieldCheck, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "staff"] },
   { label: "Digital IDs", module: "digital_ids", path: "/digital-ids", icon: IdCard, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "staff"] },
+  { label: "Pending Approvals", path: "/workflow/approvals", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"] },
+  { label: "Workflow Definitions", path: "/workflow/definitions", icon: ScrollText, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"] },
 ];
 
 const systemNavigation = [
@@ -404,7 +406,7 @@ const navGroups = [
   },
   {
     label: "Support & Security",
-    items: ["/helpdesk", "/visitors", "/digital-ids"]
+    items: ["/helpdesk", "/visitors", "/digital-ids", "/workflow/approvals", "/workflow/definitions"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -845,7 +847,7 @@ function EmailVerifyBanner() {
       } else {
         setMessage(data.detail || "Verification link sent. Check your inbox.");
       }
-    } catch (err) {
+    } catch {
       setError("Could not reach the server.");
     } finally {
       setSending(false);
@@ -1171,6 +1173,8 @@ function Shell() {
             <ReportsPage />
           </RequireRoles>
         } />
+
+        <Route path="/reports-center" element={<Navigate to="/reports" replace />} />
 
         <Route path="/report-builder" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>

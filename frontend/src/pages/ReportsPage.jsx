@@ -244,7 +244,7 @@ export default function ReportsPage() {
   const [campuses, setCampuses] = useState([]);
   const [selectedCampus, setSelectedCampus] = useState("");
   const [queries, setQueries] = useState({});
-  const { currentSchool, schoolScopeVersion } = useSchool();
+  const { currentSchool } = useSchool();
   const [atRisk, setAtRisk] = useState(null);
   const [arLoading, setArLoading] = useState(false);
   const [arError, setArError] = useState("");
@@ -269,7 +269,7 @@ export default function ReportsPage() {
       .then(setAtRisk)
       .catch((err) => setArError(String(err)))
       .finally(() => setArLoading(false));
-  }, [arFilters]);
+  }, [arFilters, currentSchool?.id]);
 
   const needsExam = EXAM_REPORTS.includes(active);
   const needsStudent = STUDENT_REPORTS.includes(active);

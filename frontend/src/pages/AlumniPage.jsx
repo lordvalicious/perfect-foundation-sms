@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { GraduationCap, Pencil, Plus, Trash2 } from "lucide-react";
+import { GraduationCap, Pencil, Plus, Trash2, X } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
 
@@ -19,6 +19,7 @@ export default function AlumniPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [viewing, setViewing] = useState(null);
   const [form, setForm] = useState({
     full_name: "",
     batch_year: new Date().getFullYear(),
@@ -273,6 +274,13 @@ export default function AlumniPage() {
                         <button
                           type="button"
                           className="table-action"
+                          onClick={() => setViewing(row)}
+                        >
+                          View
+                        </button>
+                        <button
+                          type="button"
+                          className="table-action"
                           onClick={() => openEdit(row)}
                         >
                           <Pencil size={13} /> Edit
@@ -293,6 +301,64 @@ export default function AlumniPage() {
           )}
         </StateArea>
       </div>
+
+      {viewing && (
+        <div
+          className="modal-overlay"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setViewing(null);
+          }}
+        >
+          <div className="teacher-modal">
+            <div className="modal-header">
+              <div>
+                <h3>{viewing.full_name}</h3>
+                <p>Alumni record detail</p>
+              </div>
+              <button className="modal-close" onClick={() => setViewing(null)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="form-section">
+              <div className="table-wrapper">
+                <table className="data-table">
+                  <tbody>
+                    <tr><th className="detail-label">Batch Year</th><td>{viewing.batch_year || "—"}</td></tr>
+                    <tr><th className="detail-label">Campus</th><td>{viewing.campus_name || "—"}</td></tr>
+                    <tr><th className="detail-label">Occupation</th><td>{viewing.occupation || "—"}</td></tr>
+                    <tr><th className="detail-label">Organization</th><td>{viewing.organization || "—"}</td></tr>
+                    <tr><th className="detail-label">Email</th><td>{viewing.email || "—"}</td></tr>
+                    <tr><th className="detail-label">Phone</th><td>{viewing.phone || "—"}</td></tr>
+                    <tr><th className="detail-label">City</th><td>{viewing.city || "—"}</td></tr>
+                    <tr><th className="detail-label">Notes</th><td>{viewing.notes || "—"}</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => {
+                  openEdit(viewing);
+                  setViewing(null);
+                }}
+              >
+                <Pencil size={15} /> Edit
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setViewing(null)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

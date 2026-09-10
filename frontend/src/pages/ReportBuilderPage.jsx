@@ -80,7 +80,6 @@ function TemplateFormModal({ template, onClose, onSaved }) {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const { currentSchool } = useSchool();
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -200,6 +199,7 @@ function ReportPreviewModal({ reportType, filters, onClose }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const { currentSchool } = useSchool();
 
   useEffect(() => {
     let cancelled = false;
@@ -214,7 +214,7 @@ function ReportPreviewModal({ reportType, filters, onClose }) {
       .finally(() => { if (!cancelled) setLoading(false); });
 
     return () => { cancelled = true; };
-  }, [reportType, filters]);
+  }, [reportType, filters, currentSchool?.id]);
 
   const handleExportCSV = () => {
     const params = new URLSearchParams(filters);

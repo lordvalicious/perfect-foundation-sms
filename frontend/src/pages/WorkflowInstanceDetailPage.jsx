@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { PageHeader, StateArea } from "./ui";
 import { WorkflowStateCard } from "../components/WorkflowStateCard";
@@ -13,7 +13,7 @@ export default function WorkflowInstanceDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const fetchInstance = async () => {
+  const fetchInstance = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(`${API_URL}/${id}/`, { credentials: "include" });
@@ -28,11 +28,11 @@ export default function WorkflowInstanceDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     fetchInstance();
-  }, [id]);
+  }, [fetchInstance]);
 
   return (
     <div className="space-y-6">

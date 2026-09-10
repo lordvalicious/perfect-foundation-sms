@@ -1,4 +1,4 @@
-import { Edit, Trash2, FileText, Check } from "lucide-react";
+import { Edit, Trash2, FileText } from "lucide-react";
 
 /**
  * Table of workflow definitions with CRUD actions.

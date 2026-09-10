@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
 import { CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
 
 /**
  * Displays the current state of a workflow instance with visual indicator.
  */
-export function WorkflowStateCard({ instance, definition }) {
+export function WorkflowStateCard({ instance }) {
   const getStateColor = (state) => {
     if (state === "approved") return "bg-green-50 border-green-200";
     if (state === "rejected") return "bg-red-50 border-red-200";

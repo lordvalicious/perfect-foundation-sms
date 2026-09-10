@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { PageHeader, StateArea } from "./ui";
 import { ApprovalCard } from "../components/ApprovalCard";
 import { ApprovalDecisionModal } from "../components/ApprovalDecisionModal";
@@ -13,7 +13,22 @@ export default function PendingApprovalsPage() {
   const [selectedApproval, setSelectedApproval] = useState(null);
   const [decidingLoading, setDecidingLoading] = useState(false);
 
-  const fetchApprovals = async () => {
+  const fetchInstances = useCallback(async (ids) => {
+    try {
+      const promises = ids.map((id) =>
+        fetch(`/api/workflow/instances/${id}/`, { credentials: "include" })
+          .then((r) => r.json())
+          .then((data) => [id, data])
+      );
+      const results = await Promise.all(promises);
+      const map = Object.fromEntries(results);
+      setInstances(map);
+    } catch (err) {
+      console.error("Failed to fetch instances:", err);
+    }
+  }, []);
+
+  const fetchApprovals = useCallback(async () => {
     try {
       setLoading(true);
       const response = await fetch(API_URL, { credentials: "include" });
@@ -35,29 +50,14 @@ export default function PendingApprovalsPage() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const fetchInstances = async (ids) => {
-    try {
-      const promises = ids.map((id) =>
-        fetch(`/api/workflow/instances/${id}/`, { credentials: "include" })
-          .then((r) => r.json())
-          .then((data) => [id, data])
-      );
-      const results = await Promise.all(promises);
-      const map = Object.fromEntries(results);
-      setInstances(map);
-    } catch (err) {
-      console.error("Failed to fetch instances:", err);
-    }
-  };
+  }, [fetchInstances]);
 
   useEffect(() => {
     fetchApprovals();
     // Poll for updates every 30 seconds
     const interval = setInterval(fetchApprovals, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchApprovals]);
 
   const handleDecideClick = (approval) => {
     setSelectedApproval(approval);
