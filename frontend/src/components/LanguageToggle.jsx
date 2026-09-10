@@ -10,6 +10,7 @@ export default function LanguageToggle() {
       style={{ fontWeight: 700, fontSize: 12 }}
       onClick={() => setLang(lang === "en" ? "ur" : "en")}
       title={lang === "en" ? "اردو میں دیکھیں" : "Switch to English"}
+      aria-label={lang === "en" ? "اردو میں دیکھیں" : "Switch to English"}
     >
       <Languages size={16} />
       {lang === "en" ? "اردو" : "EN"}

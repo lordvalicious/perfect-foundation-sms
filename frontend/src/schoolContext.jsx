@@ -29,6 +29,13 @@ export function SchoolProvider({ children }) {
   const [isSwitching, setIsSwitching] = useState(false);
   const [error, setError] = useState("");
   const [schoolScopeVersion, setSchoolScopeVersion] = useState(0);
+  const [branding, setBranding] = useState({
+    school_name: "",
+    short_name: "",
+    motto: "",
+    primary_color: "",
+    logo_url: "",
+  });
 
   // Sequence + abort tokens guard against stale responses overwriting the
   // current school during rapid switching (last-write-wins per latest request).
@@ -174,6 +181,54 @@ export function SchoolProvider({ children }) {
     fetchActiveInstitution("initial");
   }, [fetchActiveInstitution]);
 
+  // White-label: apply the school's saved branding to the shell (document
+  // title, brand accent color, mobile theme-color). Cosmetic only — failures
+  // fall back to the institution name and are never surfaced as errors.
+  useEffect(() => {
+    const name = currentSchool?.name || "School Management System";
+    if (!currentSchool?.id) return undefined;
+    let cancelled = false;
+
+    apiFetch("/api/schools/branding/", {}, "Could not load branding.")
+      .then((data) => {
+        if (cancelled) return;
+        const next = {
+          school_name: data.school_name || name,
+          short_name: data.short_name || "",
+          motto: data.motto || "",
+          primary_color: data.primary_color || "",
+          logo_url: data.logo_url || "",
+        };
+        setBranding(next);
+        document.title = next.school_name;
+        const color =
+          typeof next.primary_color === "string" && next.primary_color
+            ? next.primary_color
+            : "";
+        if (color) {
+          document.documentElement.style.setProperty("--brand-color", color);
+          let meta = document.querySelector('meta[name="theme-color"]');
+          if (!meta) {
+            meta = document.createElement("meta");
+            meta.setAttribute("name", "theme-color");
+            document.head.appendChild(meta);
+          }
+          meta.setAttribute("content", color);
+        } else {
+          document.documentElement.style.removeProperty("--brand-color");
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setBranding((p) => ({ ...p, school_name: name }));
+        document.title = name;
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentSchool]);
+
   const switchSchool = useCallback(
     async (institutionId) => {
       if (abortRef.current) abortRef.current.abort();
@@ -277,6 +332,7 @@ export function SchoolProvider({ children }) {
       isSwitching,
       error,
       schoolScopeVersion,
+      branding,
       switchSchool,
       setActiveCampusId,
       refreshSchool,
@@ -293,6 +349,7 @@ export function SchoolProvider({ children }) {
       isSwitching,
       error,
       schoolScopeVersion,
+      branding,
       switchSchool,
       setActiveCampusId,
       refreshSchool,

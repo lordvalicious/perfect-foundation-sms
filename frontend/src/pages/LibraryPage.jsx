@@ -3,6 +3,7 @@ import { BookMarked, Search, BookCopy, RotateCcw, Plus, Pencil, Trash2, X } from
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatDate, formatCurrency } from "./format";
 import { apiFetch, jsonHeaders } from "../api";
+import { useToast } from "../toast";
 
 const BOOKS_URL = "/api/library/books/";
 const ISSUES_URL = "/api/library/issues/";
@@ -37,6 +38,7 @@ const EMPTY_BOOK_FORM = {
 };
 
 export default function LibraryPage() {
+  const toast = useToast();
   const [tab, setTab] = useState("books");
   const [books, setBooks] = useState(null);
   const [issues, setIssues] = useState(null);
@@ -133,10 +135,12 @@ export default function LibraryPage() {
       );
 
       setMessage("Book returned successfully.");
+      toast.success("Book returned successfully.");
       setIssues(null);
       loadIssues();
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     } finally {
       setReturning(null);
     }
@@ -203,9 +207,11 @@ export default function LibraryPage() {
 
       closeForm();
       setMessage(isEditing ? "Book updated successfully." : "Book created successfully.");
+      toast.success(isEditing ? "Book updated successfully." : "Book created successfully.");
       loadBooks();
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
@@ -223,9 +229,11 @@ export default function LibraryPage() {
       }, "Unable to delete book.");
 
       setMessage("Book deleted successfully.");
+      toast.success(`"${book.title}" deleted.`);
       loadBooks();
     } catch (err) {
       setError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -264,8 +272,10 @@ export default function LibraryPage() {
       );
       loadBooks();
       refreshCopiesBook();
+      toast.success("Copy added.");
     } catch (err) {
       setCopiesError(err.message);
+      toast.error(err.message);
     } finally {
       setCopySaving(false);
     }
@@ -285,8 +295,10 @@ export default function LibraryPage() {
       );
       loadBooks();
       refreshCopiesBook();
+      toast.success(`Copy ${copy.barcode || copy.id} deleted.`);
     } catch (err) {
       setCopiesError(err.message);
+      toast.error(err.message);
     }
   };
 
@@ -527,6 +539,9 @@ export default function LibraryPage() {
       {showForm && (
         <div
           className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={editing ? "Edit Book" : "Add Book"}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeForm();
           }}
@@ -537,7 +552,7 @@ export default function LibraryPage() {
                 <h3>{editing ? "Edit Book" : "Add Book"}</h3>
                 <p>{editing ? "Update the book details." : "Add a new book to the catalog."}</p>
               </div>
-              <button className="modal-close" onClick={closeForm} disabled={saving}>
+              <button className="modal-close" aria-label="Close" onClick={closeForm} disabled={saving}>
                 <X size={18} />
               </button>
             </div>
@@ -633,6 +648,9 @@ export default function LibraryPage() {
       {copiesBook && (
         <div
           className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Copies — ${copiesBook.title}`}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget) closeCopies();
           }}
@@ -643,7 +661,7 @@ export default function LibraryPage() {
                 <h3>Copies — {copiesBook.title}</h3>
                 <p>Manage the individual physical copies of this book.</p>
               </div>
-              <button className="modal-close" onClick={closeCopies}>
+              <button className="modal-close" aria-label="Close" onClick={closeCopies}>
                 <X size={18} />
               </button>
             </div>

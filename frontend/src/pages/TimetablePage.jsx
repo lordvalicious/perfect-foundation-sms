@@ -11,6 +11,7 @@ import {
   StatusBadge,
 } from "./ui";
 import { apiFetch, authHeaders } from "../api";
+import { useToast } from "../toast";
 
 const PERIODS_API_URL = "/api/timetable/periods/";
 const ENTRIES_API_URL = "/api/timetable/entries/";
@@ -19,6 +20,7 @@ const CLASSES_URL = "/api/schools/classes/";
 const SECTIONS_URL = "/api/schools/sections/";
 
 function AutoGeneratePanel() {
+  const toast = useToast();
   const { campusList } = useSchool();
   const [campus, setCampus] = useState("");
   const [classes, setClasses] = useState([]);
@@ -80,9 +82,21 @@ function AutoGeneratePanel() {
         confirm: true,
       }),
     })
-      .then(setResult)
-      .catch((err) => setError(err.message))
-      .finally(() => setBusy(false));
+.then((data) => {
+      setResult(data);
+      const total = data.sections_total || data.sections || 0;
+      const summary = `Timetable generated: ${data.created} entries across ${data.sections}/${total} sections.`;
+      toast.success(
+        data.unplaced_count > 0
+          ? `${summary} ${data.unplaced_count} lessons unplaced (teacher conflicts).`
+          : summary
+      );
+    })
+    .catch((err) => {
+      setError(err.message);
+      toast.error(err.message);
+    })
+    .finally(() => setBusy(false));
   };
 
   const scopeLabel = classId

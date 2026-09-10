@@ -72,6 +72,7 @@ import { LanguageProvider, useLang } from "./i18n";
 import LanguageToggle from "./components/LanguageToggle";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { SkeletonBlock } from "./pages/ui";
+import { ToastProvider } from "./toast";
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const AttendancePage = lazy(() => import("./pages/AttendancePage"));
 const FinancePage = lazy(() => import("./pages/FinancePage"));
@@ -171,6 +172,7 @@ function GlobalSearch() {
         <input
           type="text"
           placeholder="Search..."
+          aria-label="Search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onFocus={() => { if (results.length) setOpen(true); }}
@@ -231,7 +233,7 @@ function NotificationsBell() {
 
   return (
     <div className="notifications-wrap">
-      <button className="icon-button" title="Notifications" onClick={() => setOpen((v) => !v)}>
+      <button className="icon-button" title="Notifications" aria-label="Notifications" onClick={() => setOpen((v) => !v)}>
         <Bell size={18} />
         {unread > 0 && <span className="notification-dot">{unread}</span>}
       </button>
@@ -302,7 +304,7 @@ function ThemeToggle() {
   };
 
   return (
-    <button className="theme-toggle" onClick={toggle} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
+    <button className="theme-toggle" onClick={toggle} title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`} aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}>
       {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
     </button>
   );
@@ -430,7 +432,22 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
   const navMeasureRef = useRef(null);
   const [hiddenGroupsCount, setHiddenGroupsCount] = useState(0);
   const { t } = useLang();
-  const { currentSchool, availableSchools, activeCampus, campusList, setActiveCampusId, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole } = useSchool();
+  const { currentSchool, availableSchools, activeCampus, campusList, setActiveCampusId, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole, branding } = useSchool();
+
+  // Keyboard users: Escape closes the topmost open modal so every dialog in
+  // the app becomes keyboard-dismissable without per-dialog handlers.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape" || mobileNavOpen) return;
+      const overlays = document.querySelectorAll(".modal-overlay");
+      if (overlays.length === 0) return;
+      const top = overlays[overlays.length - 1];
+      const closeBtn = top.querySelector(".modal-close");
+      if (closeBtn) closeBtn.click();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mobileNavOpen]);
 
   // Drive the mobile slide-in drawer. The CSS contract (App.css) shows the
   // drawer/backdrop only when <body> carries .nav-open.
@@ -552,9 +569,17 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
 
   return (
     <div className="app">
+      <a className="skip-link" href="#main-content">Skip to content</a>
+
       <header className="topbar">
         <div className="topbar-left">
-          <div className="brand-logo">S</div>
+<div className="brand-logo" title={branding.school_name || currentSchool?.name}>
+            {branding.logo_url ? (
+              <img className="brand-logo-img" src={branding.logo_url} alt="" />
+            ) : (
+              (branding.short_name || branding.school_name || currentSchool?.name || "S").charAt(0).toUpperCase()
+            )}
+          </div>
           {currentSchool && (
             <div className="school-indicator">
               {modules.isPlatformAdmin ? (
@@ -655,7 +680,7 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
                 </NavLink>
               ) : (
                 <div className="nav-group" key={entry.key}>
-                  <button className="nav-group-trigger">
+                  <button className="nav-group-trigger" aria-haspopup="true">
                     {entry.group.label}
                     <ChevronDown className="chevron" size={14} />
                   </button>
@@ -677,7 +702,7 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
             )}
             {overflowNavEntries.length > 0 && (
               <div className="nav-group">
-                <button className="nav-group-trigger">
+                <button className="nav-group-trigger" aria-haspopup="true">
                   <Menu size={13} />
                   More
                   <ChevronDown className="chevron" size={14} />
@@ -714,7 +739,7 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
                 </NavLink>
               ) : (
                 <div className="nav-group" key={entry.key}>
-                  <button className="nav-group-trigger">
+                  <button className="nav-group-trigger" aria-haspopup="true">
                     {entry.group.label}
                     <ChevronDown className="chevron" size={14} />
                   </button>
@@ -744,6 +769,8 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
             className="mobile-nav-toggle"
             onClick={() => setMobileNavOpen((v) => !v)}
             title="Menu"
+            aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
+            aria-expanded={mobileNavOpen}
           >
             {mobileNavOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
@@ -752,7 +779,7 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
 
       <EmailVerifyBanner />
 
-      <main className="main">{children}</main>
+      <main className="main" id="main-content">{children}</main>
 
       {mobileNavOpen && (
         <div className="mobile-nav-backdrop" onClick={() => setMobileNavOpen(false)} />
@@ -816,7 +843,7 @@ function TopbarProfile() {
           <span>{roleLabel || "Member"}</span>
         </div>
       </div>
-      <button className="logout-button" title="Sign out" onClick={logout}>
+      <button className="logout-button" title="Sign out" aria-label="Sign out" onClick={logout}>
         <LogOut size={16} />
       </button>
     </>
@@ -909,7 +936,7 @@ function MobileNavFooter() {
           <span>{roleLabel || "Member"}</span>
         </div>
       </div>
-      <button className="logout-button" title="Sign out" onClick={logout}>
+      <button className="logout-button" title="Sign out" aria-label="Sign out" onClick={logout}>
         <LogOut size={16} />
       </button>
     </div>
@@ -956,7 +983,7 @@ function Shell() {
   if (loading || (user && schoolLoading)) {
     return (
       <div className="auth-loading">
-        <div className="brand-logo">S</div>
+        <div className="brand-logo">{(currentSchool?.name || "S").charAt(0).toUpperCase()}</div>
         <span>Loading...</span>
       </div>
     );
@@ -1325,6 +1352,7 @@ function RouteFallback() {
 function App() {
   return (
     <LanguageProvider>
+      <ToastProvider>
       <AuthProvider>
         <SchoolProvider>
           <BrowserRouter>
@@ -1332,6 +1360,7 @@ function App() {
           </BrowserRouter>
         </SchoolProvider>
       </AuthProvider>
+      </ToastProvider>
     </LanguageProvider>
   );
 }

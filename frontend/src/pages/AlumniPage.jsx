@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from "react";
 import { GraduationCap, Pencil, Plus, Trash2, X } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
+import { useToast } from "../toast";
 
 const BASE = "/api/alumni/";
 
 export default function AlumniPage() {
+  const toast = useToast();
   const [rows, setRows] = useState([]);
   const [campuses, setCampuses] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -87,8 +89,10 @@ export default function AlumniPage() {
         "Could not delete the alumni record."
       );
       load();
+      toast.success(`Alumni record for "${row.full_name}" deleted.`);
     } catch (err) {
       setFormError(err.message);
+      toast.error(err.message);
     } finally {
       setSaving(false);
     }
@@ -110,8 +114,12 @@ export default function AlumniPage() {
         setEditing(null);
         setShowForm(false);
         load();
+        toast.success(isEditing ? "Alumni record updated." : "Alumni record added.");
       })
-      .catch((err) => setFormError(err.message))
+      .catch((err) => {
+        setFormError(err.message);
+        toast.error(err.message);
+      })
       .finally(() => setSaving(false));
   };
 
@@ -142,6 +150,7 @@ export default function AlumniPage() {
           <form onSubmit={submit} className="filter-row">
             <input
               required
+              aria-label="Full name"
               placeholder="Full name *"
               value={form.full_name}
               onChange={(e) => setForm({ ...form, full_name: e.target.value })}
@@ -150,6 +159,7 @@ export default function AlumniPage() {
             <input
               required
               type="number"
+              aria-label="Batch year"
               placeholder="Batch year *"
               value={form.batch_year}
               onChange={(e) => setForm({ ...form, batch_year: e.target.value })}
@@ -166,12 +176,14 @@ export default function AlumniPage() {
             </select>
 
             <input
+              aria-label="Occupation"
               placeholder="Occupation"
               value={form.occupation}
               onChange={(e) => setForm({ ...form, occupation: e.target.value })}
             />
 
             <input
+              aria-label="Email"
               placeholder="Email"
               type="email"
               value={form.email}
@@ -179,12 +191,14 @@ export default function AlumniPage() {
             />
 
             <input
+              aria-label="Phone"
               placeholder="Phone"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
 
             <input
+              aria-label="City"
               placeholder="City"
               value={form.city}
               onChange={(e) => setForm({ ...form, city: e.target.value })}
@@ -212,6 +226,7 @@ export default function AlumniPage() {
           <div className="filter-row">
             <input
               className="filter-search"
+              aria-label="Search alumni"
               placeholder="Search by name, organization or city..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
@@ -219,6 +234,7 @@ export default function AlumniPage() {
 
             <input
               type="number"
+              aria-label="Filter by batch year"
               placeholder="Batch year"
               value={batchYear}
               onChange={(e) => setBatchYear(e.target.value)}
@@ -305,6 +321,9 @@ export default function AlumniPage() {
       {viewing && (
         <div
           className="modal-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={`Alumni record — ${viewing.full_name}`}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) setViewing(null);
           }}
@@ -315,7 +334,7 @@ export default function AlumniPage() {
                 <h3>{viewing.full_name}</h3>
                 <p>Alumni record detail</p>
               </div>
-              <button className="modal-close" onClick={() => setViewing(null)}>
+              <button className="modal-close" aria-label="Close" onClick={() => setViewing(null)}>
                 <X size={18} />
               </button>
             </div>
