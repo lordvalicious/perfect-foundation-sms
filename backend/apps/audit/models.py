@@ -31,6 +31,11 @@ class AuditLog(models.Model):
         ("student_transfer_initiated", "Student Transfer Initiated"),
         ("student_transfer_approved", "Student Transfer Approved"),
         ("student_transfer_rejected", "Student Transfer Rejected"),
+        ("subscription_changed", "Subscription Changed"),
+        ("feature_flag_changed", "Feature Flag Changed"),
+        ("role_change", "Role Changed"),
+        ("brute_force_detected", "Brute Force Detected"),
+        ("api_key_created", "API Key Created"),
     ]
 
     institution = models.ForeignKey(

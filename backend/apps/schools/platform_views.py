@@ -1,6 +1,14 @@
-"""Platform administration: manage schools/tenants and their modules."""
+"""Platform administration: manage schools/tenants and their modules.
 
-from django.db.models import Count, Q
+Every tenant write goes through ``provision_school_with_admin`` (accounts
+services) so school + settings + admin + membership + role are created inside
+ONE transaction — partial provisioning can never leak out.
+"""
+
+from django.db import transaction
+from django.db.models import Count
+from django.db.utils import IntegrityError
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -21,27 +29,35 @@ class IsPlatformAdmin(BasePermission):
         return user.is_superuser or user.has_any_role(["super_admin"])
 
 
-def _school_stats(school):
+def _school_stats_map():
+    """Aggregated stats for all schools in 2 queries (no per-school N+1)."""
     from apps.students.models import Student
 
-    return {
-        "campuses": Campus.objects.filter(school=school).count(),
-        "students": Student.objects.filter(
-            enrollments__campus__school=school,
+    campus_counts = dict(
+        Campus.objects.values("school_id")
+        .annotate(n=Count("id"))
+        .values_list("school_id", "n")
+    )
+    student_counts = dict(
+        Student.objects.filter(
             enrollments__status="active",
-        ).distinct().count(),
-    }
+            enrollments__campus__school__isnull=False,
+        )
+        .values("enrollments__campus__school_id")
+        .annotate(n=Count("id", distinct=True))
+        .values_list("enrollments__campus__school_id", "n")
+    )
+    return campus_counts, student_counts
 
 
 class TenantListCreateView(APIView):
     permission_classes = [IsAuthenticated, IsPlatformAdmin]
 
     def get(self, request):
+        campus_counts, student_counts = _school_stats_map()
         rows = []
 
         for school in School.objects.all().order_by("name"):
-            stats = _school_stats(school)
-
             rows.append({
                 "id": school.id,
                 "name": school.name,
@@ -58,7 +74,10 @@ class TenantListCreateView(APIView):
                 ),
                 "city": school.city,
                 "enabled_modules": school.enabled_modules or [],
-                "stats": stats,
+                "stats": {
+                    "campuses": campus_counts.get(school.id, 0),
+                    "students": student_counts.get(school.id, 0),
+                },
                 "created_at": school.created_at.isoformat(),
             })
 
@@ -75,7 +94,6 @@ class TenantListCreateView(APIView):
                 {"detail": "name is required."}, status=400
             )
 
-        code = (request.data.get("code") or "").strip() or None
         enabled = request.data.get("enabled_modules")
 
         if enabled is not None and not isinstance(enabled, list):
@@ -94,47 +112,103 @@ class TenantListCreateView(APIView):
                 status=400,
             )
 
-        school = School.objects.create(
-            name=name,
-            code=code,
-            status="active",
-            city=(request.data.get("city") or "").strip(),
-            enabled_modules=enabled or [],
-        )
-
-        SchoolSettings.objects.get_or_create(school=school)
+        school_data = {
+            "name": name,
+            "code": (request.data.get("code") or "").strip() or None,
+            "city": (request.data.get("city") or "").strip(),
+            "institution_type": request.data.get("institution_type") or "school",
+            "timezone": request.data.get("timezone") or "UTC",
+            "enabled_modules": enabled or [],
+            "status": "active",
+        }
 
         campus_name = (request.data.get("first_campus") or "").strip()
-
-        if campus_name:
-            from .models import Campus
-
-            Campus.objects.create(
-                school=school,
-                name=campus_name,
-                status="active",
-            )
-
-        # Create school admin if admin data provided
         admin_data = request.data.get("admin")
+
+        from apps.accounts.services import provision_school_with_admin
+        from apps.audit.models import record_audit
+
         if admin_data:
-            admin_user, admin_password = self._create_school_admin(school, admin_data)
-            if admin_user:
+            try:
+                school, admin_user, admin_username, password = (
+                    provision_school_with_admin(school_data, admin_data)
+                )
+            except (IntegrityError, RuntimeError, DjangoValidationError) as exc:
+                record_audit(
+                    request=request,
+                    action="school_create_failed",
+                    model_name="School",
+                    object_repr=name,
+                    details={"reason": "Admin provisioning failed; school rolled back."},
+                )
+                message = getattr(exc, "messages", [str(exc)])
                 return Response(
                     {
-                        "id": school.id,
-                        "name": school.name,
-                        "code": school.code,
-                        "detail": "Tenant created with admin user.",
-                        "admin": {
-                            "id": admin_user.id,
-                            "username": admin_user.username,
-                            "email": admin_user.email,
-                            "password": admin_password,
-                        },
+                        "detail": (
+                            "School creation rolled back: the admin account "
+                            "could not be provisioned. Check that the "
+                            "email/username is available and the password is "
+                            "valid, then retry."
+                        ),
+                        "errors": message if not isinstance(message, str) else None,
                     },
-                    status=201,
+                    status=400,
                 )
+            if campus_name:
+                Campus.objects.create(
+                    school=school, name=campus_name, status="active"
+                )
+            record_audit(
+                request=request,
+                action="school_create",
+                model_name="School",
+                object_id=str(school.pk),
+                object_repr=school.name,
+                details={"school_code": school.code},
+            )
+            return Response(
+                {
+                    "id": school.id,
+                    "name": school.name,
+                    "code": school.code,
+                    "detail": "Tenant created with admin user.",
+                    "admin": {
+                        "id": admin_user.id,
+                        "username": admin_username,
+                        "email": admin_user.email,
+                        "password": password,
+                    },
+                    "stats": {
+                        "campuses": Campus.objects.filter(school=school).count(),
+                        "students": 0,
+                    },
+                },
+                status=201,
+            )
+
+        # No admin requested: create school + settings + optional first campus
+        # atomically (no admin user to provision).
+        try:
+            with transaction.atomic():
+                school = School.objects.create(**school_data)
+                SchoolSettings.objects.get_or_create(school=school)
+                if campus_name:
+                    Campus.objects.create(
+                        school=school, name=campus_name, status="active"
+                    )
+        except IntegrityError as exc:
+            return Response(
+                {"detail": f"Could not create tenant: {exc}"}, status=400
+            )
+
+        record_audit(
+            request=request,
+            action="school_create",
+            model_name="School",
+            object_id=str(school.pk),
+            object_repr=school.name,
+            details={"school_code": school.code},
+        )
 
         return Response(
             {
@@ -142,56 +216,13 @@ class TenantListCreateView(APIView):
                 "name": school.name,
                 "code": school.code,
                 "detail": "Tenant created.",
+                "stats": {
+                    "campuses": Campus.objects.filter(school=school).count(),
+                    "students": 0,
+                },
             },
             status=201,
         )
-
-    def _create_school_admin(self, school, admin_data):
-        """Create a user account and assign ADMIN role linked to the school."""
-        from django.db import transaction
-        from django.db.utils import IntegrityError
-        from rest_framework.exceptions import ValidationError
-        from apps.accounts.services import create_user_with_username
-        from apps.accounts.models import Role, InstitutionMembership, RoleAssignment
-
-        username = (admin_data.get("username") or "").strip()
-        email = (admin_data.get("email") or "").strip()
-        password = admin_data.get("password") or ""
-        first_name = (admin_data.get("first_name") or "").strip()
-        last_name = (admin_data.get("last_name") or "").strip()
-        phone = (admin_data.get("phone") or "").strip()
-
-        if not username or not email or not password:
-            return None, None
-
-        try:
-            with transaction.atomic():
-                user, generated_username, generated_password = create_user_with_username(
-                    base=username,
-                    institution=school,
-                    email=email,
-                    password=password,
-                    first_name=first_name or "School",
-                    last_name=last_name or school.name,
-                    must_change_password=False,
-                )
-                if phone:
-                    user.phone = phone
-                    user.save(update_fields=["phone"])
-
-                membership, _ = InstitutionMembership.objects.get_or_create(
-                    user=user,
-                    institution=school,
-                    defaults={"status": "active"},
-                )
-                RoleAssignment.objects.get_or_create(
-                    membership=membership,
-                    role=Role.ADMIN,
-                )
-
-                return user, generated_password
-        except IntegrityError:
-            return None, None
 
 
 class TenantDetailView(APIView):
@@ -207,6 +238,7 @@ class TenantDetailView(APIView):
             return Response({"detail": "Not found."}, status=404)
 
         changes = {}
+        pending_pause = None
 
         for field in ("name", "city", "status"):
             value = request.data.get(field)
@@ -216,13 +248,15 @@ class TenantDetailView(APIView):
                 changes[field] = True
 
         if "is_paused" in request.data:
-            paused = bool(request.data.get("is_paused"))
-
-            if paused:
-                school.pause(request.user)
+            raw = request.data.get("is_paused")
+            if isinstance(raw, str):
+                paused = raw.strip().lower() in ("1", "true", "yes", "on")
             else:
-                school.activate()
+                paused = bool(raw)
             changes["is_paused"] = True
+            # Applied below, only after admin provisioning succeeds, so a
+            # failed admin payload never persists a partial edit.
+            pending_pause = paused
 
         if "code" in request.data:
             school.code = (
@@ -250,19 +284,64 @@ class TenantDetailView(APIView):
             school.enabled_modules = enabled
             changes["enabled_modules"] = True
 
-        # Create admin user if admin data provided
+        # Create admin user if admin data provided (transactional, so a bad
+        # admin payload never leaves an orphaned/partially-edited school).
         admin_data = request.data.get("admin")
         admin_created = None
         if admin_data:
-            admin_user, admin_password = self._create_school_admin(school, admin_data)
-            if admin_user:
+            from apps.accounts.models import InstitutionMembership, Role, RoleAssignment
+            from apps.accounts.services import create_user_with_username
+
+            try:
+                with transaction.atomic():
+                    base_username = (
+                        (admin_data.get("username") or "").strip()
+                        or f"admin-{school.code.lower()}"
+                    )
+                    admin_user, admin_username, password = create_user_with_username(
+                        base=base_username,
+                        institution=school,
+                        email=admin_data.get("email") or None,
+                        password=admin_data.get("password") or None,
+                        first_name=(admin_data.get("first_name") or "School"),
+                        last_name=(admin_data.get("last_name") or school.name),
+                    )
+                    if admin_data.get("phone"):
+                        admin_user.phone = admin_data["phone"]
+                        admin_user.save(update_fields=["phone"])
+                    membership, _ = InstitutionMembership.objects.get_or_create(
+                        user=admin_user,
+                        institution=school,
+                        defaults={"status": "active"},
+                    )
+                    RoleAssignment.objects.get_or_create(
+                        membership=membership,
+                        role=Role.ADMIN,
+                    )
                 admin_created = {
                     "id": admin_user.id,
-                    "username": admin_user.username,
+                    "username": admin_username,
                     "email": admin_user.email,
-                    "password": admin_password,
+                    "password": password,
                 }
                 changes["admin_created"] = True
+            except (IntegrityError, RuntimeError, DjangoValidationError):
+                return Response(
+                    {
+                        "detail": (
+                            "Admin provisioning failed and was rolled back. "
+                            "Check email/username availability and password "
+                            "strength."
+                        )
+                    },
+                    status=400,
+                )
+
+        if pending_pause is not None:
+            if pending_pause:
+                school.pause(request.user)
+            else:
+                school.activate()
 
         school.save()
 

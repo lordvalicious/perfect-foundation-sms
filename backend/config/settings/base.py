@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "apps.visitors",
     "apps.digital_ids",
     "apps.core",
+    "apps.saas",
     # "django_ratelimit",  # Temporarily disabled - requires Redis for production
 
     "corsheaders",
@@ -97,6 +98,7 @@ MIDDLEWARE = [
     "apps.accounts.middleware.ActiveInstitutionMiddleware",
     "apps.accounts.campus_middleware.CampusAccessMiddleware",
     "apps.schools.middleware.ModuleAccessMiddleware",
+    "apps.saas.middleware.UsageTrackingMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "apps.audit.middleware.LoginAttemptAuditMiddleware",
@@ -231,7 +233,9 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_THROTTLE_RATES": {
         "anon": "60/min",
-        "user": "2000/day",
+        # A school ERP dashboard legitimately issues several API calls per
+        # page load; 2000/day caused false throttling for busy admins.
+        "user": "10000/day",
         "login": "60/hour",
         "password_reset": "10/hour",
         "email_verify": "10/hour",

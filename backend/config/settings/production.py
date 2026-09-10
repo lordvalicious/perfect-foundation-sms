@@ -81,6 +81,20 @@ SECURE_HSTS_SECONDS = 31536000
 SECURE_HSTS_INCLUDE_SUBDOMAINS = True
 SECURE_HSTS_PRELOAD = True
 
+# =============================================================================
+# Hardening: env-controlled referrer/cross-origin policy. The browser caches
+# HSTS for a year, so these are gated behind env flags for a clean rollout.
+# =============================================================================
+SECURE_REFERRER_POLICY = os.environ.get(
+    "DJANGO_SECURE_REFERRER_POLICY", "same-origin"
+).strip() or "same-origin"
+
+if os.environ.get("DJANGO_SECURE_CROSS_ORIGIN_OPENER_POLICY") == "same-origin":
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = "same-origin"
+
+if os.environ.get("SECURE_CONTENT_TYPE_NOSNIFF", "1") == "1":
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",

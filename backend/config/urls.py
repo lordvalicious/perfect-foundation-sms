@@ -1,13 +1,37 @@
 from django.conf import settings  # type: ignore[reportMissingModuleSource]
 from django.contrib import admin  # type: ignore[reportMissingModuleSource]
+from django.db import connection
 from django.http import JsonResponse
 from django.urls import include, path, re_path  # type: ignore[reportMissingModuleSource]
+from django.utils import timezone
 from apps.core.views import home_view, run_migrations_view
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 
 def health_check(request):
-    return JsonResponse({"status": "ok"})
+    """Liveness + (best-effort) DB connectivity probe.
+
+    ``?probe=db`` runs a ``SELECT 1`` so orchestrators can fail over a
+    degraded database node; any error is reported without a stack trace.
+    """
+    db_ok = True
+    db_error = None
+
+    if request.GET.get("probe") == "db":
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.fetchone()
+        except Exception as exc:  # noqa: BLE001
+            db_ok = False
+            db_error = f"{type(exc).__name__}"
+
+    payload = {
+        "status": "ok" if db_ok else "degraded",
+        "database": {"ok": db_ok, "error": db_error},
+        "utc_now": timezone.now().isoformat(),
+    }
+    return JsonResponse(payload, status=200 if db_ok else 503)
 
 
 urlpatterns = [
@@ -190,6 +214,11 @@ urlpatterns = [
     path(
         "api/digital-ids/",
         include("apps.digital_ids.urls"),
+    ),
+
+    path(
+        "api/saas/",
+        include("apps.saas.urls"),
     ),
 ]
 
