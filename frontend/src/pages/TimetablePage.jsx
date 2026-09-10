@@ -84,8 +84,9 @@ function AutoGeneratePanel() {
     })
 .then((data) => {
       setResult(data);
-      const total = data.sections_total || data.sections || 0;
-      const summary = `Timetable generated: ${data.created} entries across ${data.sections}/${total} sections.`;
+      const placed = data.sections || 0;
+      const total = data.sections_total || placed;
+      const summary = `Timetable generated: ${data.created} entries across ${placed}/${total} sections.`;
       toast.success(
         data.unplaced_count > 0
           ? `${summary} ${data.unplaced_count} lessons unplaced (teacher conflicts).`

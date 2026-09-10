@@ -573,7 +573,7 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
 
       <header className="topbar">
         <div className="topbar-left">
-<div className="brand-logo" title={branding.school_name || currentSchool?.name}>
+          <div className="brand-logo" title={branding.school_name || currentSchool?.name}>
             {branding.logo_url ? (
               <img className="brand-logo-img" src={branding.logo_url} alt="" />
             ) : (

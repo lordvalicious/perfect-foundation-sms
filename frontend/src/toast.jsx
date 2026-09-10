@@ -6,7 +6,7 @@
      success(), error(), info().
    - Stacking, auto-dismiss, click-to-dismiss, keyboard focusable close. */
 
-import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 
 const ToastContext = createContext({
   success: () => {},
@@ -34,12 +34,15 @@ export function ToastProvider({ children }) {
     [dismiss]
   );
 
-  const api = {
-    success: (text) => push({ type: "success", text }),
-    error: (text) => push({ type: "error", text, duration: 6000 }),
-    info: (text) => push({ type: "info", text }),
-    push,
-  };
+  const api = useMemo(
+    () => ({
+      success: (text) => push({ type: "success", text }),
+      error: (text) => push({ type: "error", text, duration: 6000 }),
+      info: (text) => push({ type: "info", text }),
+      push,
+    }),
+    [push]
+  );
 
   return (
     <ToastContext.Provider value={api}>

@@ -216,6 +216,8 @@ export function SchoolProvider({ children }) {
           meta.setAttribute("content", color);
         } else {
           document.documentElement.style.removeProperty("--brand-color");
+          const meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute("content", "");
         }
       })
       .catch(() => {

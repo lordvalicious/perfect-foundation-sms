@@ -72,6 +72,21 @@ was introduced; backend permissions remain the security boundary.
 - Brand color is applied only to the brand mark + browser chrome; the core design
   system palette is preserved so light/dark contrast rules keep working.
 
+## Follow-up review (post-commit)
+Review pass after the initial commit found and fixed:
+- Memoized the `useToast()` API object so toasts don't re-render consumers on every
+  provider re-render.
+- Hardened the timetable generate toast against a missing `sections` field
+  (`data.sections || 0`).
+- Cleared `meta[name="theme-color"]` when switching to a school with no brand color
+  (previously the previous school's tint persisted).
+- Added explicit `:focus-visible` outline for `.toast-close`.
+- Fixed a formatting slip in the brand mark JSX.
+- Confirmed no conflicting global Escape handlers exist besides the two guarded ones
+  in `App.jsx` (modal-close + mobile drawer), and that toasts (z-index 5000) layer
+  above modals (z-index 200).
+- Re-verified: `npm run lint` 0/0, `npm run build` PASS.
+
 ## Files changed
 - `frontend/src/toast.jsx` (new)
 - `frontend/src/App.jsx`
