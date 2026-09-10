@@ -39,7 +39,7 @@ function AutoGeneratePanel() {
       return;
     }
 
-    apiFetch(`${CLASSES_URL}?campus=${campus}`)
+    apiFetch(CLASSES_URL)
       .then((data) => setClasses(data.results || data || []))
       .catch(() => setClasses([]));
 
@@ -110,9 +110,11 @@ function AutoGeneratePanel() {
           disabled={!campus}
         >
           <option value="">{campus ? "All classes" : "Class (alpha first)"}</option>
-          {classes.map((c) => (
-            <option key={c.id} value={c.id}>{c.name}</option>
-          ))}
+          {classes
+            .filter((c) => String(c.campus) === String(campus))
+            .map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
         </select>
 
         <select

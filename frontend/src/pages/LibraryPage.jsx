@@ -8,6 +8,9 @@ const BOOKS_URL = "/api/library/books/";
 const ISSUES_URL = "/api/library/issues/";
 const CAMPUSES_URL = "/api/schools/campuses/";
 
+const copyStatusClass = (status) =>
+  ({ available: "active", issued: "info", lost: "warn", damaged: "inactive" })[status] || "info";
+
 const BOOK_CATEGORY_CHOICES = [
   { value: "fiction", label: "Fiction" },
   { value: "non_fiction", label: "Non-Fiction" },
@@ -678,7 +681,7 @@ export default function LibraryPage() {
                         <tr key={copy.id}>
                           <td><code>{copy.barcode || "—"}</code></td>
                           <td>
-                            <span className="status-badge active">
+                            <span className={`status-badge ${copyStatusClass(copy.status)}`}>
                               {copy.status || "available"}
                             </span>
                           </td>
