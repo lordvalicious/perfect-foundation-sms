@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
+import { useSchool } from "../schoolContext";
 
 export function useApiList(url) {
+  const { schoolScopeVersion } = useSchool();
   const [rows, setRows] = useState([]);
   const [count, setCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -63,7 +65,7 @@ export function useApiList(url) {
 
   useEffect(() => {
     load(new URLSearchParams({ page: 1 }));
-  }, [load]);
+  }, [load, schoolScopeVersion]);
 
   return {
     rows,

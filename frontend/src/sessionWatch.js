@@ -8,11 +8,15 @@
  * logout. The AuthProvider subscribes to this event and clears the in-memory
  * user so the Shell redirects to login.
  *
+ * For legitimate 403 responses (valid session but forbidden), a `pf:forbidden`
+ * event is dispatched so a global handler can surface a toast notification.
+ *
  * This is a UX convenience (session expiry). It is NOT a security mechanism —
  * the backend remains the sole authority on authorization.
  */
 
 const INIT_EVENT = "pf:unauthorized";
+const FORBIDDEN_EVENT = "pf:forbidden";
 
 // Endpoints that legitimately return 401 (bad credentials, pre-auth) must not
 // trigger a forced "session expired" redirect.
@@ -33,23 +37,15 @@ export function installSessionWatch() {
   installed = true;
 
   const originalFetch = window.fetch.bind(window);
-  let probing = false;
 
   const fireExpired = () => {
     window.dispatchEvent(new CustomEvent(INIT_EVENT));
   };
 
-  const probeSession = () => {
-    if (probing) return;
-    probing = true;
-    originalFetch(SESSION_PROBE, { credentials: "include" })
-      .then((response) => {
-        if (!response.ok) fireExpired();
-      })
-      .catch(() => {})
-      .finally(() => {
-        probing = false;
-      });
+  const fireForbidden = (url) => {
+    window.dispatchEvent(
+      new CustomEvent(FORBIDDEN_EVENT, { detail: { url } })
+    );
   };
 
   window.fetch = function (input, init) {
@@ -71,7 +67,27 @@ export function installSessionWatch() {
         if (response.status === 401) {
           fireExpired();
         } else if (response.status === 403) {
-          probeSession();
+          // Store URL for potential forbidden event
+          const requestUrl = url;
+          let probingNow = false;
+          const checkSession = () => {
+            if (probingNow) return;
+            probingNow = true;
+            originalFetch(SESSION_PROBE, { credentials: "include" })
+              .then((response) => {
+                if (!response.ok) {
+                  fireExpired();
+                } else {
+                  // Session valid but request was forbidden
+                  fireForbidden(requestUrl);
+                }
+              })
+              .catch(() => {})
+              .finally(() => {
+                probingNow = false;
+              });
+          };
+          checkSession();
         }
       });
     }
@@ -83,4 +99,9 @@ export function installSessionWatch() {
 export function onSessionExpired(handler) {
   window.addEventListener(INIT_EVENT, handler);
   return () => window.removeEventListener(INIT_EVENT, handler);
+}
+
+export function onForbidden(handler) {
+  window.addEventListener(FORBIDDEN_EVENT, handler);
+  return () => window.removeEventListener(FORBIDDEN_EVENT, handler);
 }

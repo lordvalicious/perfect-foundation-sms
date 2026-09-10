@@ -6,6 +6,8 @@ import {
   useRef,
   useState,
 } from "react";
+import { useToast } from "./toast";
+import { onForbidden } from "./sessionWatch";
 import {
   BrowserRouter,
   Routes,
@@ -1349,17 +1351,31 @@ function RouteFallback() {
   );
 }
 
+function ForbiddenHandler() {
+  const toast = useToast();
+
+  useEffect(() => {
+    return onForbidden((e) => {
+      const url = e.detail?.url || "an API endpoint";
+      toast.error(`You don't have permission to access ${url}.`);
+    });
+  }, [toast]);
+
+  return null;
+}
+
 function App() {
   return (
     <LanguageProvider>
       <ToastProvider>
-      <AuthProvider>
-        <SchoolProvider>
-          <BrowserRouter>
-            <Shell />
-          </BrowserRouter>
-        </SchoolProvider>
-      </AuthProvider>
+        <ForbiddenHandler />
+        <AuthProvider>
+          <SchoolProvider>
+            <BrowserRouter>
+              <Shell />
+            </BrowserRouter>
+          </SchoolProvider>
+        </AuthProvider>
       </ToastProvider>
     </LanguageProvider>
   );
