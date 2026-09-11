@@ -190,6 +190,50 @@ export default function PayrollPage() {
     }
   };
 
+  const handleApprove = async (recordId) => {
+    setProcessing(recordId);
+    setMessage("");
+    setError("");
+
+    try {
+      await apiFetch(
+        `${BASE}records/${recordId}/approve/`,
+        { method: "POST", headers: jsonHeaders() },
+        "Could not approve the payroll record."
+      );
+
+      setMessage("Payroll record approved.");
+      setData((previous) => ({ ...previous, records: undefined }));
+      load("records");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
+  const handlePay = async (recordId) => {
+    setProcessing(recordId);
+    setMessage("");
+    setError("");
+
+    try {
+      await apiFetch(
+        `${BASE}records/${recordId}/pay/`,
+        { method: "POST", headers: jsonHeaders() },
+        "Could not mark the payroll record as paid."
+      );
+
+      setMessage("Payroll record marked as paid.");
+      setData((previous) => ({ ...previous, records: undefined }));
+      load("records");
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setProcessing(null);
+    }
+  };
+
   // Modal handlers
   const openStructureModal = (mode, item = null) => {
     if (mode === "create") {
@@ -222,15 +266,6 @@ export default function PayrollPage() {
     setFormError("");
   };
 
-  const handleStructureComponentChange = (index, field, value) => {
-    setStructureForm((prev) => ({
-      ...prev,
-      components: prev.components.map((comp, i) =>
-        i === index ? { ...comp, [field]: value } : comp
-      ),
-    }));
-  };
-
   const addComponent = () => {
     setStructureForm((prev) => ({
       ...prev,
@@ -249,13 +284,6 @@ export default function PayrollPage() {
           sequence: prev.components.length,
         },
       ],
-    }));
-  };
-
-  const removeComponent = (index) => {
-    setStructureForm((prev) => ({
-      ...prev,
-      components: prev.components.filter((_, i) => i !== index),
     }));
   };
 
@@ -398,7 +426,7 @@ export default function PayrollPage() {
         status: recordForm.status,
       };
 
-      const response = await fetch(`${BASE}records/${isEditing ? `${modal.item.id}/` : ""}`, {
+      const response = await fetch(url, {
         method: isEditing ? "PATCH" : "POST",
         credentials: "include",
         headers: jsonHeaders(),
@@ -456,15 +484,176 @@ export default function PayrollPage() {
     }
   };
 
-  const handleStructureChange = (field, value) => {
-    setStructureForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleRecordChange = (field, value) => {
-    setRecordForm((prev) => ({ ...prev, [field]: value }));
-  };
 
   const rows = data[tab] || [];
+
+  // Render functions for table bodies
+  const renderStructures = useCallback(() => (
+    rows.map((structure) => (
+      <tr key={structure.id}>
+        <td>
+          <strong>{structure.teacher_name || "—"}</strong>
+        </td>
+
+        <td>{formatCurrency(structure.basic_salary)}</td>
+
+        <td>{formatCurrency(structure.total_allowances)}</td>
+
+        <td>
+          <strong>{formatCurrency(structure.gross_salary)}</strong>
+        </td>
+
+        <td>{formatDate(structure.effective_date)}</td>
+
+        <td>
+          <span className={`status-badge ${structure.status === "active" ? "active" : "inactive"}`}>
+            {structure.status ? structure.status.charAt(0).toUpperCase() + structure.status.slice(1) : "—"}
+          </span>
+        </td>
+
+        <td>
+          <button
+            type="button"
+            className="table-action"
+            onClick={() => openStructureModal("edit", structure)}
+            title="Edit"
+          >
+            <Edit size={14} />
+          </button>
+          <button
+            type="button"
+            className="table-action danger"
+            onClick={() => handleDelete("structure", structure.id)}
+            title="Delete"
+          >
+            <Trash2 size={14} />
+          </button>
+        </td>
+      </tr>
+    ))
+  ), [rows, openStructureModal, handleDelete]);
+
+  const renderRecords = useCallback(() => (
+    rows.map((record) => (
+      <tr key={record.id}>
+        <td>
+          <strong>{record.teacher_name || "—"}</strong>
+        </td>
+
+        <td>{record.teacher_number || "—"}</td>
+
+        <td>
+          {record.month ? MONTHS[record.month - 1] : "—"} {record.year || ""}
+        </td>
+
+        <td>{record.working_days ?? "—"}</td>
+
+        <td>{record.paid_days ?? "—"}</td>
+
+        <td>{formatCurrency(record.gross_salary)}</td>
+
+        <td>{formatCurrency(record.total_deductions)}</td>
+
+        <td>
+          <strong>{formatCurrency(record.net_salary)}</strong>
+        </td>
+
+        <td>
+          <span className={`status-badge ${record.status === "paid" ? "active" : record.status === "approved" ? "warn" : record.status === "processed" ? "info" : "inactive"}`}>
+            {record.status ? record.status.charAt(0).toUpperCase() + record.status.slice(1) : "—"}
+          </span>
+        </td>
+
+        <td>
+          {record.status !== "paid" && (
+            <>
+              <button
+                type="button"
+                className="table-action"
+                onClick={() => openRecordModal("edit", record)}
+                title="Edit"
+              >
+                <Edit size={14} />
+              </button>
+              {record.status === "draft" && (
+                <button
+                  type="button"
+                  className="table-action"
+                  disabled={processing === record.id}
+                  onClick={() => handleProcess(record.id)}
+                  title="Process"
+                >
+                  {processing === record.id ? <Loader2 size={14} className="spin" /> : "Process"}
+                </button>
+              )}
+              {record.status === "processed" && (
+                <button
+                  type="button"
+                  className="table-action"
+                  disabled={processing === record.id}
+                  onClick={() => handleApprove(record.id)}
+                  title="Approve"
+                >
+                  {processing === record.id ? <Loader2 size={14} className="spin" /> : "Approve"}
+                </button>
+              )}
+              {record.status === "approved" && (
+                <button
+                  type="button"
+                  className="table-action"
+                  disabled={processing === record.id}
+                  onClick={() => handlePay(record.id)}
+                  title="Mark Paid"
+                >
+                  {processing === record.id ? <Loader2 size={14} className="spin" /> : "Pay"}
+                </button>
+              )}
+            </>
+          )}
+          {record.status === "paid" && (
+            <button
+              type="button"
+              className="table-action"
+              title="Download Payslip"
+              onClick={() =>
+                apiDownload(
+                  `${BASE}records/${record.id}/payslip.pdf`,
+                  `payslip_${record.teacher_number || record.id}_${record.year}_${String(record.month).padStart(2, "0")}.pdf`
+                ).catch(() => alert("Could not download payslip."))
+              }
+              title="Download Payslip"
+            >
+              Payslip PDF
+            </button>
+          )}
+          {(record.status === "draft" || record.status === "processed") && (
+            <button
+              type="button"
+              className="table-action danger"
+              onClick={() => handleDelete("record", record.id)}
+              title="Delete"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </td>
+      </tr>
+    ))
+  ), [rows, processing, handleProcess, handleApprove, handlePay, openRecordModal, handleDelete]);
+
+  const renderPayslips = useCallback(() => (
+    rows.map((payslip) => (
+      <tr key={payslip.id}>
+        <td>
+          <strong>{payslip.teacher_name || "—"}</strong>
+        </td>
+
+        <td>{payslip.period || "—"}</td>
+
+        <td>{formatDate(payslip.issued_at)}</td>
+      </tr>
+    ))
+  ), [rows]);
 
   return (
     <section className="content">
@@ -555,103 +744,9 @@ export default function PayrollPage() {
                 </thead>
 
                 <tbody>
-                  {tab === "structures" &&
-                    rows.map((structure) => (
-                      <tr key={structure.id}>
-                        <td>
-                          <strong>{structure.teacher_name || "—"}</strong>
-                        </td>
-
-                        <td>{formatCurrency(structure.basic_salary)}</td>
-
-                        <td>{formatCurrency(structure.total_allowances)}</td>
-
-                        <td>
-                          <strong>{formatCurrency(structure.gross_salary)}</strong>
-                        </td>
-
-                        <td>{formatDate(structure.effective_date)}</td>
-
-                        <td>
-                          <span className={`status-badge ${structure.status === "active" ? "active" : "inactive"}`}>
-                            {structure.status ? structure.status.charAt(0).toUpperCase() + structure.status.slice(1) : "—"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-
-                  {tab === "records" &&
-                    rows.map((record) => (
-                      <tr key={record.id}>
-                        <td>
-                          <strong>{record.teacher_name || "—"}</strong>
-                        </td>
-
-                        <td>{record.teacher_number || "—"}</td>
-
-                        <td>
-                          {record.month ? MONTHS[record.month - 1] : "—"} {record.year || ""}
-                        </td>
-
-                        <td>{record.working_days ?? "—"}</td>
-
-                        <td>{record.paid_days ?? "—"}</td>
-
-                        <td>{formatCurrency(record.gross_salary)}</td>
-
-                        <td>{formatCurrency(record.total_deductions)}</td>
-
-                        <td>
-                          <strong>{formatCurrency(record.net_salary)}</strong>
-                        </td>
-
-                        <td>
-                          <span className={`status-badge ${record.status === "paid" ? "active" : "warn"}`}>
-                            {record.status ? record.status.charAt(0).toUpperCase() + record.status.slice(1) : "—"}
-                          </span>
-                        </td>
-
-                        <td>
-                          {record.status !== "paid" && (
-                            <button
-                              type="button"
-                              className="table-action"
-                              disabled={processing === record.id}
-                              onClick={() => handleProcess(record.id)}
-                            >
-                              {processing === record.id ? "Processing..." : "Mark Paid"}
-                            </button>
-                          )}
-                          {record.status === "paid" && (
-                            <button
-                              type="button"
-                              className="table-action"
-                              onClick={() =>
-                                apiDownload(
-                                  `${BASE}records/${record.id}/payslip.pdf`,
-                                  `payslip_${record.teacher_number || record.id}_${record.year}_${String(record.month).padStart(2, "0")}.pdf`
-                                ).catch(() => alert("Could not download payslip."))
-                              }
-                            >
-                              Payslip PDF
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-
-                  {tab === "payslips" &&
-                    rows.map((payslip) => (
-                      <tr key={payslip.id}>
-                        <td>
-                          <strong>{payslip.teacher_name || "—"}</strong>
-                        </td>
-
-                        <td>{payslip.period || "—"}</td>
-
-                        <td>{formatDate(payslip.issued_at)}</td>
-                      </tr>
-                    ))}
+                  {tab === "structures" && renderStructures()}
+                  {tab === "records" && renderRecords()}
+                  {tab === "payslips" && renderPayslips()}
                 </tbody>
               </table>
             </div>
