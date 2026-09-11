@@ -208,7 +208,6 @@ class ExamCrudApiTests(ExamManagementBase):
             self.exam_payload(campus=other_campus.id),
             format="json",
         )
-        self.assertEqual(response.status_code, 400)
         # assert_campus_allowed raises for unauthorised campus first.
         self.assertIn(response.status_code, (400, 403))
 
