@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   Search,
@@ -16,6 +16,7 @@ import {
   EmptyState,
   Pagination,
   StatusBadge,
+  SkeletonBlock,
 } from "./ui";
 import { formatCurrency, formatDate } from "./format";
 import { useLang } from "../i18n";
@@ -161,7 +162,21 @@ function DashboardCards({ data }) {
   );
 }
 
-function BreakdownCharts({ data }) {
+function BreakdownCharts({ data, error, onRetry }) {
+  if (error) {
+    return (
+      <div className="state-card error">
+        <strong>Finance breakdown unavailable</strong>
+        <span>{error}</span>
+        {onRetry && (
+          <button type="button" className="secondary-button" onClick={onRetry}>
+            Try Again
+          </button>
+        )}
+      </div>
+    );
+  }
+
   if (!data) {
     return (
       <div className="state-card">Loading finance breakdown...</div>
@@ -892,8 +907,12 @@ function AccountingOverview() {
   const [report, setReport] = useState(null);
   const [receivables, setReceivables] = useState(null);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError("");
+
     Promise.all([
       fetch("/api/finance/accounts/", { credentials: "include" }),
       fetch("/api/finance/reports/income-expense/", { credentials: "include" }),
@@ -912,10 +931,29 @@ function AccountingOverview() {
         setReport(reportData);
         setReceivables(receivablesData);
       })
-      .catch((requestError) => setError(requestError.message));
+      .catch((requestError) => setError(requestError.message))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (error) return null;
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  if (error) {
+    return (
+      <div className="state-card error">
+        <strong>Accounting overview unavailable</strong>
+        <span>{error}</span>
+        <button type="button" className="secondary-button" onClick={load}>
+          Try Again
+        </button>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return <SkeletonBlock rows={3} text="Loading accounting overview..." />;
+  }
 
   return (
     <div className="panel">
@@ -948,6 +986,7 @@ export default function FinancePage() {
 
   const [dashboard, setDashboard] = useState(null);
   const [breakdown, setBreakdown] = useState(null);
+  const [breakdownError, setBreakdownError] = useState("");
 
   const [paymentInvoice, setPaymentInvoice] = useState(null);
 
@@ -955,12 +994,23 @@ export default function FinancePage() {
     fetch(DASHBOARD_FINANCE_URL, { credentials: "include" })
       .then((response) => (response.ok ? response.json() : null))
       .then(setDashboard)
-      .catch(() => {});
+      .catch(() => setDashboard(null));
 
     fetch(DASHBOARD_BREAKDOWN_URL, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then(setBreakdown)
-      .catch(() => {});
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Finance breakdown is unavailable right now.");
+        }
+        return response.json();
+      })
+      .then((data) => {
+        setBreakdown(data);
+        setBreakdownError("");
+      })
+      .catch((err) => {
+        setBreakdown(null);
+        setBreakdownError(err.message);
+      });
   };
 
   const applyInvoices = (pageNumber = 1) => {
@@ -1004,7 +1054,7 @@ export default function FinancePage() {
 
       <DashboardCards data={dashboard} />
 
-      <BreakdownCharts data={breakdown} />
+      <BreakdownCharts data={breakdown} error={breakdownError} onRetry={loadDashboard} />
 
       <AccountingOverview />
 

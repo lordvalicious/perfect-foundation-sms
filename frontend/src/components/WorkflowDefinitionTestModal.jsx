@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
 import { Modal } from "./Modal";
+import { apiFetch } from "../api";
 
 /**
  * Modal for testing workflow transitions.
@@ -14,25 +15,17 @@ export function WorkflowDefinitionTestModal({ definition, onClose, loading = fal
   const handleTest = async () => {
     setTestLoading(true);
     try {
-      const response = await fetch(`/api/workflow/definitions/${definition.id}/test/`, {
+      const data = await apiFetch(`/api/workflow/definitions/${definition.id}/test/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify({
           from_state: fromState,
           action: action,
         }),
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setTestResult(data);
-      } else {
-        const error = await response.json();
-        setTestResult({ error: error.detail || "Test failed" });
-      }
+      setTestResult(data);
     } catch (err) {
       setTestResult({ error: err.message });
     } finally {

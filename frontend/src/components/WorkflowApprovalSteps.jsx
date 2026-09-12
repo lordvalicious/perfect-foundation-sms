@@ -5,17 +5,17 @@ import { CheckCircle, Clock, XCircle } from "lucide-react";
  */
 export function WorkflowApprovalSteps({ approvals }) {
   const getStatusIcon = (status) => {
-    if (status === "approved") return <CheckCircle className="w-5 h-5 text-green-600" />;
-    if (status === "rejected") return <XCircle className="w-5 h-5 text-red-600" />;
-    if (status === "pending") return <Clock className="w-5 h-5 text-yellow-600" />;
-    return <CheckCircle className="w-5 h-5 text-gray-400" />; // skipped
+    if (status === "approved") return <CheckCircle size={16} style={{ color: "var(--success, #16a34a)" }} />;
+    if (status === "rejected") return <XCircle size={16} style={{ color: "var(--danger, #dc2626)" }} />;
+    if (status === "pending") return <Clock size={16} style={{ color: "var(--warning, #d97706)" }} />;
+    return null; // skipped
   };
 
-  const getStatusBg = (status) => {
-    if (status === "approved") return "bg-green-50";
-    if (status === "rejected") return "bg-red-50";
-    if (status === "pending") return "bg-yellow-50";
-    return "bg-gray-50";
+  const tone = (status) => {
+    if (status === "approved") return "active";
+    if (status === "rejected") return "inactive";
+    if (status === "pending") return "warn";
+    return "info";
   };
 
   const formatRole = (role) => {
@@ -23,37 +23,50 @@ export function WorkflowApprovalSteps({ approvals }) {
   };
 
   return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-gray-900">Approval Queue</h3>
-      <div className="space-y-2">
+    <div className="panel">
+      <div className="panel-header">
+        <div>
+          <h3 className="panel-title">Approval Queue</h3>
+          <p className="stat-label">Sequential approval steps</p>
+        </div>
+      </div>
+
+      <div className="panel-body">
         {approvals.length === 0 ? (
-          <p className="text-sm text-gray-500">No approvals required</p>
+          <div className="state-card">No approvals required</div>
         ) : (
-          approvals.map((approval, index) => (
-            <div key={approval.id} className={`border rounded p-3 ${getStatusBg(approval.status)}`}>
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3">
+          <div className="overview-list">
+            {approvals.map((approval, index) => (
+              <div
+                key={approval.id}
+                style={{ alignItems: "flex-start" }}
+              >
+                <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {getStatusIcon(approval.status)}
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      Step {index + 1}: {formatRole(approval.role)}
-                    </p>
-                    <p className="text-xs text-gray-600 mt-1">
-                      Status: <span className="font-medium capitalize">{approval.status}</span>
-                    </p>
-                    {approval.approver_name && (
-                      <p className="text-xs text-gray-600">
-                        {approval.status === "pending" ? "Waiting for" : "Approved by"}: {approval.approver_name}
-                      </p>
-                    )}
-                    {approval.comment && (
-                      <p className="text-xs text-gray-700 mt-2 italic">"{approval.comment}"</p>
-                    )}
-                  </div>
-                </div>
+                  <strong>
+                    Step {index + 1}: {formatRole(approval.role)}
+                  </strong>
+                </span>
+
+                <span style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end" }}>
+                  <span className={`status-badge ${tone(approval.status)}`}>
+                    {approval.status}
+                  </span>
+                  {approval.approver_name && (
+                    <span>
+                      {approval.status === "pending" ? "Waiting for" : "Approved by"}:{" "}
+                      {approval.approver_name}
+                    </span>
+                  )}
+                  {approval.comment && (
+                    <span style={{ fontStyle: "italic" }}>
+                      "{approval.comment}"
+                    </span>
+                  )}
+                </span>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
     </div>

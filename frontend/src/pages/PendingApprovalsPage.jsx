@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
-import { PageHeader, StateArea } from "./ui";
+import { ClipboardCheck } from "lucide-react";
+import { PageHeader, StateArea, EmptyState } from "./ui";
 import { ApprovalCard } from "../components/ApprovalCard";
 import { ApprovalDecisionModal } from "../components/ApprovalDecisionModal";
+import { apiFetch } from "../api";
 
 const API_URL = "/api/workflow/approvals/";
+const INSTANCE_URL = "/api/workflow/instances/";
 
 export default function PendingApprovalsPage() {
   const [approvals, setApprovals] = useState([]);
@@ -15,35 +18,37 @@ export default function PendingApprovalsPage() {
 
   const fetchInstances = useCallback(async (ids) => {
     try {
-      const promises = ids.map((id) =>
-        fetch(`/api/workflow/instances/${id}/`, { credentials: "include" })
-          .then((r) => r.json())
-          .then((data) => [id, data])
-      );
+      const promises = ids.map(async (id) => {
+        try {
+          const data = await apiFetch(`${INSTANCE_URL}${id}/`);
+          return [id, data];
+        } catch {
+          return [id, null];
+        }
+      });
       const results = await Promise.all(promises);
       const map = Object.fromEntries(results);
-      setInstances(map);
-    } catch (err) {
-      console.error("Failed to fetch instances:", err);
+      setInstances((current) => ({ ...current, ...map }));
+    } catch {
+      // One or more instance lookups failed; approvals still render.
+      setError((current) =>
+        current || "Some workflow details could not be loaded. Pull-to-refresh to retry."
+      );
     }
   }, []);
 
   const fetchApprovals = useCallback(async () => {
     try {
+      setError("");
       setLoading(true);
-      const response = await fetch(API_URL, { credentials: "include" });
-      if (response.ok) {
-        const data = await response.json();
-        const appsList = Array.isArray(data) ? data : data.results || [];
-        setApprovals(appsList);
+      const data = await apiFetch(API_URL);
+      const appsList = Array.isArray(data) ? data : data.results || [];
+      setApprovals(appsList);
 
-        // Fetch related instances
-        if (appsList.length > 0) {
-          const instanceIds = [...new Set(appsList.map((a) => a.instance))];
-          await fetchInstances(instanceIds);
-        }
-      } else {
-        setError("Failed to fetch pending approvals");
+      // Fetch related instances
+      if (appsList.length > 0) {
+        const instanceIds = [...new Set(appsList.map((a) => a.instance))];
+        await fetchInstances(instanceIds);
       }
     } catch (err) {
       setError(err.message);
@@ -64,29 +69,21 @@ export default function PendingApprovalsPage() {
   };
 
   const handleDecide = async (decision, comment) => {
+    if (!selectedApproval) return;
     try {
       setDecidingLoading(true);
-      const response = await fetch(
+      await apiFetch(
         `/api/workflow/approvals/${selectedApproval.id}/decide/`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            decision,
-            comment,
-          }),
+          body: JSON.stringify({ decision, comment }),
         }
       );
 
-      if (response.ok) {
-        // Refresh data
-        await fetchApprovals();
-        setSelectedApproval(null);
-      } else {
-        const data = await response.json();
-        setError(data.detail || "Failed to submit decision");
-      }
+      // Refresh data
+      await fetchApprovals();
+      setSelectedApproval(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -97,28 +94,31 @@ export default function PendingApprovalsPage() {
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
 
   return (
-    <div className="space-y-6">
+    <section className="content">
       <PageHeader
+        crumb="Home / Workflows / Pending Approvals"
         title="Pending Approvals"
-        description={`You have ${pendingApprovals.length} approval(s) waiting for your decision`}
+        subtitle={`${pendingApprovals.length} approval(s) waiting for your decision`}
       />
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
-          {error}
-        </div>
-      )}
-
-      <StateArea loading={loading}>
+      <StateArea
+        loading={loading}
+        error={error}
+        onRetry={fetchApprovals}
+        errorTitle="Unable to load approvals."
+        errorText={error}
+      >
         {pendingApprovals.length === 0 ? (
-          <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">No pending approvals</p>
-            <p className="text-gray-400 text-sm mt-1">
-              All approvals have been decided or none are waiting for you
-            </p>
-          </div>
+          <EmptyState
+            icon={ClipboardCheck}
+            title="No pending approvals"
+            message="All approvals have been decided or none are waiting for you."
+          />
         ) : (
-          <div className="grid gap-4">
+          <div
+            className="dashboard-grid two"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", alignItems: "start" }}
+          >
             {pendingApprovals.map((approval) => (
               <ApprovalCard
                 key={approval.id}
@@ -140,6 +140,6 @@ export default function PendingApprovalsPage() {
           loading={decidingLoading}
         />
       )}
-    </div>
+    </section>
   );
 }

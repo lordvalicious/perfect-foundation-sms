@@ -1,14 +1,29 @@
-import { Clock, CheckCircle, XCircle } from "lucide-react";
+import { Clock, CheckCircle, XCircle, ArrowRight } from "lucide-react";
+import { Link } from "react-router-dom";
 
 /**
  * Card displaying a single pending approval for the approvals list.
  */
 export function ApprovalCard({ approval, instance, onDecide, loading = false }) {
+  const tone =
+    approval.status === "approved"
+      ? "active"
+      : approval.status === "rejected"
+        ? "inactive"
+        : approval.status === "pending"
+          ? "warn"
+          : "info";
+
   const getStatusIcon = (status) => {
-    if (status === "pending") return <Clock className="w-5 h-5 text-yellow-600" />;
-    if (status === "approved") return <CheckCircle className="w-5 h-5 text-green-600" />;
-    if (status === "rejected") return <XCircle className="w-5 h-5 text-red-600" />;
-    return null;
+    const color =
+      status === "approved"
+        ? "var(--success, #16a34a)"
+        : status === "rejected"
+          ? "var(--danger, #dc2626)"
+          : "var(--warning, #d97706)";
+    if (status === "approved") return <CheckCircle size={18} style={{ color }} />;
+    if (status === "rejected") return <XCircle size={18} style={{ color }} />;
+    return <Clock size={18} style={{ color }} />;
   };
 
   const formatRole = (role) => {
@@ -16,62 +31,77 @@ export function ApprovalCard({ approval, instance, onDecide, loading = false }) 
   };
 
   const formatDate = (dateStr) => {
+    if (!dateStr) return "—";
     return new Date(dateStr).toLocaleString();
   };
 
+  const canViewInstance = Boolean(approval.instance && Object.keys(instance).length > 0);
+
   return (
-    <div className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-start gap-3">
-          {getStatusIcon(approval.status)}
-          <div>
-            <h3 className="text-sm font-semibold text-gray-900">
-              {instance.definition_name}
-            </h3>
-            <p className="text-xs text-gray-600 mt-1">
-              Step {approval.sequence + 1}: {formatRole(approval.role)}
-            </p>
-          </div>
-        </div>
-        <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${
-          approval.status === "pending" ? "bg-yellow-100 text-yellow-800" :
-          approval.status === "approved" ? "bg-green-100 text-green-800" :
-          approval.status === "rejected" ? "bg-red-100 text-red-800" :
-          "bg-gray-100 text-gray-800"
-        }`}>
-          {approval.status}
-        </span>
-      </div>
-
-      <div className="mb-3 space-y-1 text-xs text-gray-600">
-        <p>
-          <span className="font-medium">Submitted by:</span> {instance.created_by_name}
-        </p>
-        <p>
-          <span className="font-medium">Submitted at:</span> {formatDate(instance.created_at)}
-        </p>
-        {approval.decided_at && (
-          <p>
-            <span className="font-medium">Decided at:</span> {formatDate(approval.decided_at)}
-          </p>
-        )}
-      </div>
-
-      {approval.comment && (
-        <div className="mb-3 p-2 bg-gray-50 rounded">
-          <p className="text-xs text-gray-700 italic">"{approval.comment}"</p>
-        </div>
-      )}
-
-      {approval.status === "pending" && (
-        <button
-          onClick={() => onDecide(approval)}
-          className="w-full px-3 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:opacity-50"
-          disabled={loading}
+    <div className="panel">
+      <div className="panel-body">
+        <div
+          className="overview-list"
+          style={{ marginBottom: 12 }}
         >
-          {loading ? "Processing..." : "Review & Decide"}
-        </button>
-      )}
+          <div>
+            <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {getStatusIcon(approval.status)}
+              <strong>
+                {instance.definition_name || instance.name || "Workflow"}
+              </strong>
+            </span>
+            <span className={`status-badge ${tone}`}>
+              {approval.status}
+            </span>
+          </div>
+
+          <div>
+            <span>
+              Step {(approval.sequence || 0) + 1}: {formatRole(approval.role)}
+            </span>
+          </div>
+
+          <div>
+            <span>Submitted by: {instance.created_by_name || "—"}</span>
+            <span>Submitted at: {formatDate(instance.created_at)}</span>
+          </div>
+
+          {approval.decided_at && (
+            <div>
+              <span>Decided at: {formatDate(approval.decided_at)}</span>
+            </div>
+          )}
+        </div>
+
+        {approval.comment && (
+          <div className="state-card" style={{ padding: "10px 14px" }}>
+            <span style={{ fontStyle: "italic" }}>"{approval.comment}"</span>
+          </div>
+        )}
+
+        <div className="filter-row" style={{ justifyContent: "flex-end" }}>
+          {canViewInstance && (
+            <Link
+              to={`/workflow/instances/${approval.instance}/`}
+              className="secondary-button"
+            >
+              View details <ArrowRight size={14} />
+            </Link>
+          )}
+
+          {approval.status === "pending" && (
+            <button
+              type="button"
+              className="primary-button"
+              onClick={() => onDecide(approval)}
+              disabled={loading}
+            >
+              {loading ? "Processing..." : "Review & Decide"}
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

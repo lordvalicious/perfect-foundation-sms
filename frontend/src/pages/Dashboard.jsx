@@ -16,6 +16,7 @@ import {
   Sparkles,
   TrendingUp,
   Clock,
+  HeartHandshake,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -101,7 +102,7 @@ function greetingForHour(hour) {
 
 function Dashboard() {
   const navigate = useNavigate();
-  const { currentSchool } = useSchool();
+  const { currentSchool, scopedHasRole } = useSchool();
   const [dashboard, setDashboard] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -307,13 +308,58 @@ function Dashboard() {
   });
   const greeting = greetingForHour(now.getHours());
 
+  const allQuickActions = [
+    {
+      label: "Students",
+      path: "/students",
+      icon: Users,
+      roles: ["super_admin", "admin", "principal", "academic", "accountant", "teacher", "student"],
+    },
+    {
+      label: "Admissions",
+      path: "/admissions",
+      icon: GraduationCap,
+      roles: ["super_admin", "admin", "principal", "academic"],
+    },
+    {
+      label: "Finance",
+      path: "/finance",
+      icon: Wallet,
+      roles: ["super_admin", "admin", "principal", "academic", "accountant"],
+    },
+    {
+      label: "Attendance",
+      path: "/attendance",
+      icon: ClipboardCheck,
+      roles: ["super_admin", "admin", "principal", "academic", "teacher"],
+    },
+    {
+      label: "Exams",
+      path: "/exams",
+      icon: FileText,
+      roles: ["super_admin", "admin", "principal", "academic", "teacher"],
+    },
+    {
+      label: "Reports",
+      path: "/reports",
+      icon: BarChart3,
+      roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"],
+    },
+  ];
+
+  // Role-aware quick actions: only show shortcuts the current user can open,
+  // and surface dedicated entry points for parents and students.
+  const portalActions = [];
+  if (scopedHasRole(["parent"])) {
+    portalActions.push({ label: "Parent Portal", path: "/parent-portal", icon: HeartHandshake, roles: null });
+  }
+  if (scopedHasRole(["student"])) {
+    portalActions.push({ label: "Homework", path: "/homework", icon: BookOpen, roles: null });
+  }
+
   const quickActions = [
-    { label: "Students", path: "/students", icon: Users },
-    { label: "Admissions", path: "/admissions", icon: GraduationCap },
-    { label: "Finance", path: "/finance", icon: Wallet },
-    { label: "Attendance", path: "/attendance", icon: ClipboardCheck },
-    { label: "Exams", path: "/exams", icon: FileText },
-    { label: "Reports", path: "/reports", icon: BarChart3 },
+    ...portalActions,
+    ...allQuickActions.filter((action) => scopedHasRole(action.roles)),
   ];
 
 

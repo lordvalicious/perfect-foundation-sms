@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Plus } from "lucide-react";
-import { PageHeader } from "./ui";
+import { PageHeader, StateArea } from "./ui";
 import { WorkflowDefinitionList } from "../components/WorkflowDefinitionList";
 import { WorkflowDefinitionForm } from "../components/WorkflowDefinitionForm";
 import { WorkflowDefinitionTestModal } from "../components/WorkflowDefinitionTestModal";
+import { Modal } from "../components/Modal";
+import { apiFetch } from "../api";
 
 const API_URL = "/api/workflow/definitions/";
 
@@ -14,28 +16,25 @@ export default function WorkflowDefinitionAdminPage() {
   const [showForm, setShowForm] = useState(false);
   const [showTest, setShowTest] = useState(false);
   const [selectedDefinition, setSelectedDefinition] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
   const [formLoading, setFormLoading] = useState(false);
 
-  const fetchDefinitions = async () => {
+  const fetchDefinitions = useCallback(async () => {
     try {
+      setError("");
       setLoading(true);
-      const response = await fetch(API_URL, { credentials: "include" });
-      if (response.ok) {
-        const data = await response.json();
-        setDefinitions(Array.isArray(data) ? data : data.results || []);
-      } else {
-        setError("Failed to fetch workflow definitions");
-      }
+      const data = await apiFetch(API_URL);
+      setDefinitions(Array.isArray(data) ? data : data.results || []);
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDefinitions();
-  }, []);
+  }, [fetchDefinitions]);
 
   const handleCreate = () => {
     setSelectedDefinition(null);
@@ -47,21 +46,18 @@ export default function WorkflowDefinitionAdminPage() {
     setShowForm(true);
   };
 
-  const handleDelete = async (definition) => {
-    if (!confirm(`Delete workflow "${definition.name}"?`)) return;
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
 
     try {
       setFormLoading(true);
-      const response = await fetch(`${API_URL}${definition.id}/`, {
+      await apiFetch(`${API_URL}${deleteTarget.id}/`, {
         method: "DELETE",
-        credentials: "include",
       });
-
-      if (response.ok) {
-        setDefinitions(definitions.filter((d) => d.id !== definition.id));
-      } else {
-        setError("Failed to delete workflow definition");
-      }
+      setDefinitions((current) =>
+        current.filter((d) => d.id !== deleteTarget.id)
+      );
+      setDeleteTarget(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -82,28 +78,21 @@ export default function WorkflowDefinitionAdminPage() {
         ? `${API_URL}${selectedDefinition.id}/`
         : `${API_URL}create/`;
 
-      const response = await fetch(url, {
+      const saved = await apiFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        credentials: "include",
         body: JSON.stringify(formData),
       });
 
-      if (response.ok) {
-        const saved = await response.json();
-        if (selectedDefinition) {
-          setDefinitions(
-            definitions.map((d) => (d.id === saved.id ? saved : d))
-          );
-        } else {
-          setDefinitions([...definitions, saved]);
-        }
-        setShowForm(false);
-        setSelectedDefinition(null);
+      if (selectedDefinition) {
+        setDefinitions((current) =>
+          current.map((d) => (d.id === saved.id ? saved : d))
+        );
       } else {
-        const data = await response.json();
-        setError(data.detail || "Failed to save workflow definition");
+        setDefinitions((current) => [...current, saved]);
       }
+      setShowForm(false);
+      setSelectedDefinition(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -112,45 +101,49 @@ export default function WorkflowDefinitionAdminPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <section className="content">
       <PageHeader
+        crumb="Home / Workflows / Definitions"
         title="Workflow Definitions"
-        description="Manage business process workflows and approval queues"
-      />
-
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
-          {error}
-        </div>
-      )}
-
-      <div className="bg-white border border-gray-200 rounded-lg shadow-sm">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900">Definitions</h2>
+        subtitle="Define business process workflows and their approval queues."
+        action={
           <button
+            type="button"
+            className="primary-button"
             onClick={handleCreate}
-            className="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 flex items-center gap-2"
             disabled={loading || formLoading}
           >
-            <Plus className="w-4 h-4" />
-            New Workflow
+            <Plus size={15} /> New Workflow
           </button>
-        </div>
+        }
+      />
 
-        {loading ? (
-          <div className="p-8 text-center text-gray-500">Loading...</div>
-        ) : (
-          <div className="p-4">
+      <StateArea
+        loading={loading}
+        error={error}
+        onRetry={fetchDefinitions}
+        errorTitle="Unable to load workflow definitions."
+        errorText={error}
+      >
+        <div className="panel">
+          <div className="panel-header">
+            <div>
+              <h3 className="panel-title">Definitions</h3>
+              <p className="stat-label">{definitions.length} configured</p>
+            </div>
+          </div>
+
+          <div className="panel-body">
             <WorkflowDefinitionList
               definitions={definitions}
               onEdit={handleEdit}
-              onDelete={handleDelete}
+              onDelete={setDeleteTarget}
               onTest={handleTest}
               loading={formLoading}
             />
           </div>
-        )}
-      </div>
+        </div>
+      </StateArea>
 
       {showForm && (
         <WorkflowDefinitionForm
@@ -168,6 +161,45 @@ export default function WorkflowDefinitionAdminPage() {
           loading={formLoading}
         />
       )}
-    </div>
+
+      {deleteTarget && (
+        <Modal
+          isOpen={true}
+          onClose={() => !formLoading && setDeleteTarget(null)}
+          title="Delete workflow"
+          size="md"
+          closeOnEscape={!formLoading}
+          closeOnOverlayClick={!formLoading}
+        >
+          <div className="state-card">
+            <span>
+              Delete workflow{" "}
+              <strong>{deleteTarget.name}</strong>? This action cannot be
+              undone.
+            </span>
+          </div>
+
+          <div className="modal-footer" style={{ marginTop: 12 }}>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={() => setDeleteTarget(null)}
+              disabled={formLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="primary-button"
+              style={{ background: "var(--danger, #dc2626)" }}
+              onClick={handleDelete}
+              disabled={formLoading}
+            >
+              {formLoading ? "Deleting..." : "Delete"}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </section>
   );
 }
