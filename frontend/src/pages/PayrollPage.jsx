@@ -11,6 +11,7 @@ import {
 import { PageHeader, PanelHeader, StateArea, EmptyState } from "./ui";
 import { formatCurrency, formatDate } from "./format";
 import { apiFetch, apiDownload, jsonHeaders, buildErrorMessage } from "../api";
+import { Modal } from "../components/Modal";
 
 const BASE = "/api/payroll/";
 
@@ -755,244 +756,239 @@ export default function PayrollPage() {
       </div>
 
       {/* Structure Modal */}
-      {modal?.type === "structure" && (
-        <div className="modal-overlay" onClick={closeStructureModal}>
-          <div className="modal teacher-modal" style={{ maxWidth: 700 }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{modal.mode === "create" ? "Add Salary Structure" : "Edit Salary Structure"}</h3>
-              <button type="button" className="modal-close" onClick={closeStructureModal} disabled={saving}>×</button>
-            </div>
-            <div className="modal-body" style={{ maxHeight: "70vh", overflow: "auto" }}>
-              {formError && <div className="state-card error"><strong>Error:</strong> {formError}</div>}
-              <form onSubmit={handleStructureSubmit}>
-                <div className="form-section">
-                  <h4>Basic Information</h4>
-                  <div className="form-grid">
-                    <label>
-                      Employee *
-                      <select name="employee" value={structureForm.employee} onChange={(e) => setStructureForm({ ...structureForm, employee: e.target.value })} required>
-                        <option value="">Select employee</option>
-                        {employees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>{emp.full_name || emp.employee_number} ({emp.employee_number})</option>
-                        ))}
-                      </select>
-                    </label>
+      <Modal
+        isOpen={modal?.type === "structure"}
+        onClose={closeStructureModal}
+        title={modal?.mode === "create" ? "Add Salary Structure" : "Edit Salary Structure"}
+        size="lg"
+        closeOnOverlayClick
+        closeOnEscape
+      >
+        <form onSubmit={handleStructureSubmit}>
+          <div className="form-section">
+            <h4>Basic Information</h4>
+            <div className="form-grid">
+              <label>
+                Employee *
+                <select name="employee" value={structureForm.employee} onChange={(e) => setStructureForm({ ...structureForm, employee: e.target.value })} required>
+                  <option value="">Select employee</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.full_name || emp.employee_number} ({emp.employee_number})</option>
+                  ))}
+                </select>
+              </label>
 
-                    <label>
-                      Name *
-                      <input name="name" value={structureForm.name} onChange={(e) => setStructureForm({ ...structureForm, name: e.target.value })} required placeholder="e.g. Primary Teacher Structure" />
-                    </label>
+              <label>
+                Name *
+                <input name="name" value={structureForm.name} onChange={(e) => setStructureForm({ ...structureForm, name: e.target.value })} required placeholder="e.g. Primary Teacher Structure" />
+              </label>
 
-                    <label>
-                      Code *
-                      <input name="code" value={structureForm.code} onChange={(e) => setStructureForm({ ...structureForm, code: e.target.value.toUpperCase() })} required placeholder="e.g. TS-PRIMARY" maxLength={20} />
-                    </label>
+              <label>
+                Code *
+                <input name="code" value={structureForm.code} onChange={(e) => setStructureForm({ ...structureForm, code: e.target.value.toUpperCase() })} required placeholder="e.g. TS-PRIMARY" maxLength={20} />
+              </label>
 
-                    <label>
-                      Basic Salary *
-                      <input type="number" name="basic_salary" step="0.01" min="0" value={structureForm.basic_salary} onChange={(e) => setStructureForm({ ...structureForm, basic_salary: e.target.value })} required placeholder="0.00" />
-                    </label>
+              <label>
+                Basic Salary *
+                <input type="number" name="basic_salary" step="0.01" min="0" value={structureForm.basic_salary} onChange={(e) => setStructureForm({ ...structureForm, basic_salary: e.target.value })} required placeholder="0.00" />
+              </label>
 
-                    <label>
-                      Effective Date *
-                      <input type="date" name="effective_date" value={structureForm.effective_date} onChange={(e) => setStructureForm({ ...structureForm, effective_date: e.target.value })} required />
-                    </label>
+              <label>
+                Effective Date *
+                <input type="date" name="effective_date" value={structureForm.effective_date} onChange={(e) => setStructureForm({ ...structureForm, effective_date: e.target.value })} required />
+              </label>
 
-                    <label>
-                      Status *
-                      <select name="status" value={structureForm.status} onChange={(e) => setStructureForm({ ...structureForm, status: e.target.value })}>
-                        {STRUCTURE_STATUS_CHOICES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="form-section">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                    <h4>Components (Allowances & Deductions)</h4>
-                    <button type="button" className="secondary-button" onClick={addComponent} disabled={saving}>
-                      <Plus size={14} /> Add Component
-                    </button>
-                  </div>
-
-                  {structureForm.components.length === 0 ? (
-                    <p className="muted" style={{ textAlign: "center", padding: 20 }}>No components added yet. Click "Add Component" to add allowances or deductions.</p>
-                  ) : (
-                    <div className="table-wrapper">
-                      <table className="data-table">
-                        <thead>
-                          <tr>
-                            <th>TYPE</th>
-                            <th>NAME</th>
-                            <th>CODE</th>
-                            <th>CALC. TYPE</th>
-                            <th>AMOUNT</th>
-                            <th>%</th>
-                            <th>TAXABLE</th>
-                            <th>ACTIVE</th>
-                            <th>SEQ</th>
-                            <th></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {structureForm.components.map((comp, i) => (
-                            <tr key={i}>
-                              <td>
-                                <select value={comp.component_type} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, component_type: e.target.value } : c) })} disabled={saving}>
-                                  {COMPONENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                </select>
-                              </td>
-                              <td><input value={comp.name} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, name: e.target.value } : c) })} placeholder="Name" disabled={saving} /></td>
-                              <td><input value={comp.code} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, code: e.target.value.toUpperCase() } : c) })} placeholder="Code" maxLength={20} disabled={saving} /></td>
-                              <td>
-                                <select value={comp.calculation_type} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, calculation_type: e.target.value } : c) })} disabled={saving}>
-                                  {CALCULATION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-                                </select>
-                              </td>
-                              <td><input type="number" step="0.01" min="0" value={comp.amount} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, amount: e.target.value } : c) })} disabled={saving} /></td>
-                              <td><input type="number" step="0.01" min="0" max="100" value={comp.percentage} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, percentage: e.target.value } : c) })} disabled={saving} /></td>
-                              <td>
-                                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                  <input type="checkbox" checked={comp.is_taxable} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, is_taxable: e.target.checked } : c) })} disabled={saving} />
-                                </label>
-                              </td>
-                              <td>
-                                <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                                  <input type="checkbox" checked={comp.is_active} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, is_active: e.target.checked } : c) })} disabled={saving} />
-                                </label>
-                              </td>
-                              <td><input type="number" min="0" value={comp.sequence} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, sequence: Number(e.target.value) } : c) })} style={{ width: 60 }} disabled={saving} /></td>
-                              <td>
-                                <button type="button" className="table-action danger" onClick={() => setStructureForm({ ...structureForm, components: structureForm.components.filter((_, j) => j !== i) })} disabled={saving} title="Remove">
-                                  <Trash2 size={14} />
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="secondary-button" onClick={closeStructureModal} disabled={saving}>Cancel</button>
-              <button type="button" className="primary-button" onClick={handleStructureSubmit} disabled={saving}>
-                {saving ? <Loader2 size={14} className="spin" /> : modal.mode === "create" ? "Create" : "Save"}
-              </button>
+              <label>
+                Status *
+                <select name="status" value={structureForm.status} onChange={(e) => setStructureForm({ ...structureForm, status: e.target.value })}>
+                  {STRUCTURE_STATUS_CHOICES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </label>
             </div>
           </div>
-        </div>
-      )}
+
+          <div className="form-section">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+              <h4>Components (Allowances & Deductions)</h4>
+              <button type="button" className="secondary-button" onClick={addComponent} disabled={saving}>
+                <Plus size={14} /> Add Component
+              </button>
+            </div>
+
+            {structureForm.components.length === 0 ? (
+              <p className="muted" style={{ textAlign: "center", padding: 20 }}>No components added yet. Click "Add Component" to add allowances or deductions.</p>
+            ) : (
+              <div className="table-wrapper">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>TYPE</th>
+                      <th>NAME</th>
+                      <th>CODE</th>
+                      <th>CALC. TYPE</th>
+                      <th>AMOUNT</th>
+                      <th>%</th>
+                      <th>TAXABLE</th>
+                      <th>ACTIVE</th>
+                      <th>SEQ</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {structureForm.components.map((comp, i) => (
+                      <tr key={i}>
+                        <td>
+                          <select value={comp.component_type} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, component_type: e.target.value } : c) })} disabled={saving}>
+                            {COMPONENT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                        </td>
+                        <td><input value={comp.name} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, name: e.target.value } : c) })} placeholder="Name" disabled={saving} /></td>
+                        <td><input value={comp.code} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, code: e.target.value.toUpperCase() } : c) })} placeholder="Code" maxLength={20} disabled={saving} /></td>
+                        <td>
+                          <select value={comp.calculation_type} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, calculation_type: e.target.value } : c) })} disabled={saving}>
+                            {CALCULATION_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                          </select>
+                        </td>
+                        <td><input type="number" step="0.01" min="0" value={comp.amount} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, amount: e.target.value } : c) })} disabled={saving} /></td>
+                        <td><input type="number" step="0.01" min="0" max="100" value={comp.percentage} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, percentage: e.target.value } : c) })} disabled={saving} /></td>
+                        <td>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input type="checkbox" checked={comp.is_taxable} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, is_taxable: e.target.checked } : c) })} disabled={saving} />
+                          </label>
+                        </td>
+                        <td>
+                          <label style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <input type="checkbox" checked={comp.is_active} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, is_active: e.target.checked } : c) })} disabled={saving} />
+                          </label>
+                        </td>
+                        <td><input type="number" min="0" value={comp.sequence} onChange={(e) => setStructureForm({ ...structureForm, components: structureForm.components.map((c, j) => j === i ? { ...c, sequence: Number(e.target.value) } : c) })} style={{ width: 60 }} disabled={saving} /></td>
+                        <td>
+                          <button type="button" className="table-action danger" onClick={() => setStructureForm({ ...structureForm, components: structureForm.components.filter((_, j) => j !== i) })} disabled={saving} title="Remove">
+                            <Trash2 size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={closeStructureModal} disabled={saving}>Cancel</button>
+            <button type="button" className="primary-button" onClick={handleStructureSubmit} disabled={saving}>
+              {saving ? <Loader2 size={14} className="spin" /> : modal.mode === "create" ? "Create" : "Save"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Record Modal */}
-      {modal?.type === "record" && (
-        <div className="modal-overlay" onClick={closeRecordModal}>
-          <div className="modal teacher-modal" style={{ maxWidth: 600 }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3>{modal.mode === "create" ? "Add Payroll Record" : "Edit Payroll Record"}</h3>
-              <button type="button" className="modal-close" onClick={closeRecordModal} disabled={saving}>×</button>
-            </div>
-            <div className="modal-body" style={{ maxHeight: "70vh", overflow: "auto" }}>
-              {formError && <div className="state-card error"><strong>Error:</strong> {formError}</div>}
-              <form onSubmit={handleRecordSubmit}>
-                <div className="form-section">
-                  <h4>Basic Information</h4>
-                  <div className="form-grid">
-                    <label>
-                      Employee *
-                      <select name="employee" value={recordForm.employee} onChange={(e) => setRecordForm({ ...recordForm, employee: e.target.value })} required>
-                        <option value="">Select employee</option>
-                        {employees.map((emp) => (
-                          <option key={emp.id} value={emp.id}>{emp.full_name || emp.employee_number} ({emp.employee_number})</option>
-                        ))}
-                      </select>
-                    </label>
+      <Modal
+        isOpen={modal?.type === "record"}
+        onClose={closeRecordModal}
+        title={modal?.mode === "create" ? "Add Payroll Record" : "Edit Payroll Record"}
+        size="lg"
+        closeOnOverlayClick
+        closeOnEscape
+      >
+        {formError && <div className="state-card error"><strong>Error:</strong> {formError}</div>}
+        <form onSubmit={handleRecordSubmit}>
+          <div className="form-section">
+            <h4>Basic Information</h4>
+            <div className="form-grid">
+              <label>
+                Employee *
+                <select name="employee" value={recordForm.employee} onChange={(e) => setRecordForm({ ...recordForm, employee: e.target.value })} required>
+                  <option value="">Select employee</option>
+                  {employees.map((emp) => (
+                    <option key={emp.id} value={emp.id}>{emp.full_name || emp.employee_number} ({emp.employee_number})</option>
+                  ))}
+                </select>
+              </label>
 
-                    <label>
-                      Campus
-                      <select name="campus" value={recordForm.campus} onChange={(e) => setRecordForm({ ...recordForm, campus: e.target.value })}>
-                        <option value="">Select campus (optional)</option>
-                      </select>
-                    </label>
+              <label>
+                Campus
+                <select name="campus" value={recordForm.campus} onChange={(e) => setRecordForm({ ...recordForm, campus: e.target.value })}>
+                  <option value="">Select campus (optional)</option>
+                </select>
+              </label>
 
-                    <label>
-                      Salary Structure *
-                      <select name="salary_structure" value={recordForm.salary_structure} onChange={(e) => setRecordForm({ ...recordForm, salary_structure: e.target.value })} required>
-                        <option value="">Select structure</option>
-                        {salaryStructures.map((s) => (
-                          <option key={s.id} value={s.id}>{s.name} ({s.code}) - {s.employee?.full_name || s.employee}</option>
-                        ))}
-                      </select>
-                    </label>
+              <label>
+                Salary Structure *
+                <select name="salary_structure" value={recordForm.salary_structure} onChange={(e) => setRecordForm({ ...recordForm, salary_structure: e.target.value })} required>
+                  <option value="">Select structure</option>
+                  {salaryStructures.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name} ({s.code}) - {s.employee?.full_name || s.employee}</option>
+                  ))}
+                </select>
+              </label>
 
-                    <label>
-                      Payroll Period *
-                      <select name="payroll_period" value={recordForm.payroll_period} onChange={(e) => setRecordForm({ ...recordForm, payroll_period: e.target.value })} required>
-                        <option value="">Select period</option>
-                        {payrollPeriods.map((p) => (
-                          <option key={p.id} value={p.id}>{p.name} ({formatDate(p.start_date)} to {formatDate(p.end_date)})</option>
-                        ))}
-                      </select>
-                    </label>
+              <label>
+                Payroll Period *
+                <select name="payroll_period" value={recordForm.payroll_period} onChange={(e) => setRecordForm({ ...recordForm, payroll_period: e.target.value })} required>
+                  <option value="">Select period</option>
+                  {payrollPeriods.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name} ({formatDate(p.start_date)} to {formatDate(p.end_date)})</option>
+                  ))}
+                </select>
+              </label>
 
-                    <label>
-                      Month *
-                      <select name="month" value={recordForm.month} onChange={(e) => setRecordForm({ ...recordForm, month: e.target.value })} required>
-                        {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
-                      </select>
-                    </label>
+              <label>
+                Month *
+                <select name="month" value={recordForm.month} onChange={(e) => setRecordForm({ ...recordForm, month: e.target.value })} required>
+                  {MONTHS.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
+                </select>
+              </label>
 
-                    <label>
-                      Year *
-                      <input type="number" name="year" min="2020" max="2030" value={recordForm.year} onChange={(e) => setRecordForm({ ...recordForm, year: e.target.value })} required />
-                    </label>
+              <label>
+                Year *
+                <input type="number" name="year" min="2020" max="2030" value={recordForm.year} onChange={(e) => setRecordForm({ ...recordForm, year: e.target.value })} required />
+              </label>
 
-                    <label>
-                      Working Days
-                      <input type="number" name="working_days" min="0" max="31" value={recordForm.working_days} onChange={(e) => setRecordForm({ ...recordForm, working_days: e.target.value })} placeholder="0" />
-                    </label>
+              <label>
+                Working Days
+                <input type="number" name="working_days" min="0" max="31" value={recordForm.working_days} onChange={(e) => setRecordForm({ ...recordForm, working_days: e.target.value })} placeholder="0" />
+              </label>
 
-                    <label>
-                      Paid Days
-                      <input type="number" name="paid_days" min="0" max="31" value={recordForm.paid_days} onChange={(e) => setRecordForm({ ...recordForm, paid_days: e.target.value })} placeholder="0" />
-                    </label>
+              <label>
+                Paid Days
+                <input type="number" name="paid_days" min="0" max="31" value={recordForm.paid_days} onChange={(e) => setRecordForm({ ...recordForm, paid_days: e.target.value })} placeholder="0" />
+              </label>
 
-                    <label>
-                      Leave Days
-                      <input type="number" name="leave_days" step="0.5" min="0" value={recordForm.leave_days} onChange={(e) => setRecordForm({ ...recordForm, leave_days: e.target.value })} placeholder="0" />
-                    </label>
+              <label>
+                Leave Days
+                <input type="number" name="leave_days" step="0.5" min="0" value={recordForm.leave_days} onChange={(e) => setRecordForm({ ...recordForm, leave_days: e.target.value })} placeholder="0" />
+              </label>
 
-                    <label>
-                      Overtime Hours
-                      <input type="number" name="overtime_hours" step="0.5" min="0" value={recordForm.overtime_hours} onChange={(e) => setRecordForm({ ...recordForm, overtime_hours: e.target.value })} placeholder="0" />
-                    </label>
+              <label>
+                Overtime Hours
+                <input type="number" name="overtime_hours" step="0.5" min="0" value={recordForm.overtime_hours} onChange={(e) => setRecordForm({ ...recordForm, overtime_hours: e.target.value })} placeholder="0" />
+              </label>
 
-                    <label>
-                      Overtime Amount
-                      <input type="number" step="0.01" min="0" name="overtime_amount" value={recordForm.overtime_amount} onChange={(e) => setRecordForm({ ...recordForm, overtime_amount: e.target.value })} placeholder="0.00" />
-                    </label>
+              <label>
+                Overtime Amount
+                <input type="number" step="0.01" min="0" name="overtime_amount" value={recordForm.overtime_amount} onChange={(e) => setRecordForm({ ...recordForm, overtime_amount: e.target.value })} placeholder="0.00" />
+              </label>
 
-                    <label>
-                      Status *
-                      <select name="status" value={recordForm.status} onChange={(e) => setRecordForm({ ...recordForm, status: e.target.value })}>
-                        {RECORD_STATUS_CHOICES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-                      </select>
-                    </label>
-                  </div>
-                </div>
-              </form>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="secondary-button" onClick={closeRecordModal} disabled={saving}>Cancel</button>
-              <button type="button" className="primary-button" onClick={(e) => { e.preventDefault(); handleRecordSubmit(e); }} disabled={saving}>
-                {saving ? <Loader2 size={14} className="spin" /> : modal.mode === "create" ? "Create" : "Save"}
-              </button>
-            </div>
+              <label>
+                Status *
+                <select name="status" value={recordForm.status} onChange={(e) => setRecordForm({ ...recordForm, status: e.target.value })}>
+                  {RECORD_STATUS_CHOICES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              </label>
+</div>
           </div>
-        </div>
-      )}
+
+          <div className="modal-footer">
+            <button type="button" className="secondary-button" onClick={closeRecordModal} disabled={saving}>Cancel</button>
+            <button type="button" className="primary-button" onClick={(e) => { e.preventDefault(); handleRecordSubmit(e); }} disabled={saving}>
+              {saving ? <Loader2 size={14} className="spin" /> : modal.mode === "create" ? "Create" : "Save"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </section>
   );
 }
