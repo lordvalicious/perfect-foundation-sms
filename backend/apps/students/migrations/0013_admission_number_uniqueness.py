@@ -19,11 +19,4 @@ class Migration(migrations.Migration):
                 max_length=50,
             ),
         ),
-        migrations.AddConstraint(
-            model_name='student',
-            constraint=models.UniqueConstraint(
-                fields=['institution', 'admission_number'],
-                name='unique_admission_number_per_institution',
-            ),
-        ),
     ]
