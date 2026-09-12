@@ -1345,6 +1345,10 @@ class Permission(models.Model):
         ("send", "Send"),
         ("backup", "Backup"),
         ("maintenance", "Maintenance"),
+        ("ask", "Ask"),
+        ("search", "Search"),
+        ("anomaly", "Anomaly"),
+        ("communicate", "Communicate"),
     ]
     
     # Resource categories for organization
@@ -1370,6 +1374,7 @@ class Permission(models.Model):
         ("role", "Role Management"),
         ("permission", "Permission Management"),
         ("system", "System Administration"),
+        ("insight", "AI & Insights"),
     ]
     
     codename = models.CharField(max_length=100, unique=True)
@@ -1627,6 +1632,17 @@ class Permission(models.Model):
             ("system.audit.view", "View Audit Logs", "system", "view"),
             ("system.backup", "Manage Backups", "system", "backup"),
             ("system.maintenance", "System Maintenance", "system", "maintenance"),
+
+            # AI & Insights permissions
+            ("insight.view", "View AI Insights", "insight", "view"),
+            ("insight.ask", "Use AI Assistant", "insight", "ask"),
+            ("insight.search", "Use AI Search", "insight", "search"),
+            ("insight.student.view", "AI Student Insights", "insight", "view"),
+            ("insight.attendance.view", "AI Attendance Insights", "insight", "view"),
+            ("insight.academic.view", "AI Academic Insights", "insight", "view"),
+            ("insight.finance.view", "AI Finance Insights", "insight", "view"),
+            ("insight.anomaly", "AI Anomaly Detection", "insight", "anomaly"),
+            ("insight.communicate", "AI Communication Drafts", "insight", "communicate"),
         ]
 
 

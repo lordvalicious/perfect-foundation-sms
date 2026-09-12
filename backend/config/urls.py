@@ -62,6 +62,11 @@ urlpatterns = [
     ),
 
     path(
+        "api/ai/",
+        include("apps.ai.urls"),
+    ),
+
+    path(
         "api/students/",
         include("apps.students.urls"),
     ),

@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     "apps.communication",
     "apps.audit",
     "apps.dashboard",
+    "apps.ai",
 
     "apps.library",
     "apps.transport",

@@ -36,6 +36,11 @@ class AuditLog(models.Model):
         ("role_change", "Role Changed"),
         ("brute_force_detected", "Brute Force Detected"),
         ("api_key_created", "API Key Created"),
+        ("ai_ask", "AI Ask"),
+        ("ai_search", "AI Search"),
+        ("ai_insight", "AI Insight"),
+        ("ai_anomaly", "AI Anomaly Scan"),
+        ("ai_draft", "AI Communication Draft"),
     ]
 
     institution = models.ForeignKey(
