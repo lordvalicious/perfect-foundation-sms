@@ -7,34 +7,69 @@ import {
 } from "react";
 import {
   Bot,
-  Plus,
   Send,
-  Trash2,
   Sparkles,
   Building2,
   MapPin,
   ShieldCheck,
   RefreshCw,
-  MessageSquare,
+  Search,
+  AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { PageHeader, EmptyState, SkeletonBlock } from "./ui";
-import { formatDate } from "./format";
 import { useSchool } from "../schoolContext";
 import { useToast } from "../toast";
 import {
-  getAssistantStatus,
-  listConversations,
-  createConversation,
-  getConversation,
-  sendMessage,
-  deleteConversation,
-  executeAction,
+  fetchAssistantOverview,
+  askQuestion,
+  searchEntities,
+  getAnomalies,
+  createCommunicationDraft,
 } from "../assistantApi";
 
+const ASK_PROMPTS = [
+  {
+    id: "attendance",
+    label: "Attendance",
+    capability: "attendance_insights",
+    query: "How is attendance going?",
+  },
+  {
+    id: "finance",
+    label: "Fees & overdue",
+    capability: "finance_insights",
+    query: "Show me overdue fees",
+  },
+  {
+    id: "academic",
+    label: "Latest exam",
+    capability: "academic_insights",
+    query: "How did the latest exam go?",
+  },
+  {
+    id: "counts",
+    label: "Student count",
+    capability: null,
+    query: "How many students are in my scope?",
+  },
+];
+
+const TOOL_ACTIONS = [
+  { id: "anomalies", label: "Anomaly scan", capability: "anomalies", kind: "anomalies" },
+  { id: "search", label: "Find student / class", capability: "search", kind: "search" },
+];
+
+const DRAFT_ACTIONS = [
+  { id: "fee_reminder", label: "Draft fee reminder", capability: "communication_drafts", type: "fee_reminder" },
+  { id: "attendance_warning", label: "Draft attendance notice", capability: "communication_drafts", type: "attendance_warning" },
+  { id: "exam_notice", label: "Draft exam notice", capability: "communication_drafts", type: "exam_notice" },
+];
+
 const SUGGESTIONS = [
-  "What can you help me with?",
-  "Give me a quick summary of the active school.",
-  "What needs my attention right now?",
+  "How is attendance going?",
+  "Show me overdue fees",
+  "How did the latest exam go?",
 ];
 
 function formatTime(value) {
@@ -44,10 +79,112 @@ function formatTime(value) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 }
 
-function riskLabel(risk) {
-  if (risk === "high") return "High impact";
-  if (risk === "medium") return "Medium impact";
-  return "Low impact";
+function severityLabel(severity) {
+  if (severity === "high") return "High";
+  if (severity === "medium") return "Medium";
+  return "Low";
+}
+
+function DigestCard({ digest }) {
+  if (!digest || Object.keys(digest).length === 0) return null;
+
+  const rows = [];
+  if ("overall_rate" in digest) {
+    rows.push(
+      ["Overall attendance", `${digest.overall_rate}%`],
+      ["Records in scope", String(digest.records ?? "—")],
+      ["Present", String(digest.present ?? "—")],
+      ["Days", String(digest.days ?? "—")],
+      [
+        "Below 75%",
+        Array.isArray(digest.students_below_75)
+          ? String(digest.students_below_75.length)
+          : "—",
+      ]
+    );
+  }
+  if ("total_outstanding" in digest) {
+    rows.push(
+      ["Total outstanding", String(digest.total_outstanding ?? "—")],
+      ["Open invoices", String(digest.invoice_count ?? "—")],
+      ["Overdue", String(digest.overdue_count ?? "—")],
+      ["Overdue amount", String(digest.overdue_amount ?? "—")]
+    );
+  }
+  if ("exam" in digest || "overall_pass_rate" in digest) {
+    rows.push(
+      ["Exam", digest.exam || "—"],
+      ["Overall pass rate", `${digest.overall_pass_rate}%`],
+      ["Subjects", String(digest.subjects?.length ?? "—")]
+    );
+  }
+  if ("students" in digest || "teachers" in digest) {
+    rows.push(
+      ["Students", String(digest.students ?? "—")],
+      ["Teachers", String(digest.teachers ?? "—")]
+    );
+  }
+
+  return (
+    <div className="assistant-digest">
+      <div className="assistant-digest-title">Figures</div>
+      {rows.map(([key, value]) => (
+        <div className="assistant-digest-row" key={key}>
+          <span className="assistant-digest-key">{key}</span>
+          <span className="assistant-digest-value">{value}</span>
+        </div>
+      ))}
+      {Array.isArray(digest.students_below_75) &&
+        digest.students_below_75.length > 0 && (
+          <ul className="assistant-digest-list">
+            {digest.students_below_75.map((entry) => (
+              <li key={entry.student_id}>
+                Student #{entry.student_id} — {entry.rate}% ({entry.absent}{" "}
+                absent)
+              </li>
+            ))}
+          </ul>
+        )}
+      {Array.isArray(digest.subjects) && digest.subjects.length > 0 && (
+        <ul className="assistant-digest-list">
+          {digest.subjects.map((entry) => (
+            <li key={entry.subject}>
+              {entry.subject}: {entry.pass_rate}% pass rate
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function EntityCard({ entity }) {
+  const kind = (entity.kind || "record").toUpperCase();
+  const meta =
+    entity.kind === "invoice"
+      ? `${entity.invoice_number || ""}${entity.status ? ` · ${entity.status}` : ""}${entity.balance ? ` · balance ${entity.balance}` : ""}`
+      : entity.kind === "student"
+      ? `${entity.admission_number || ""}${entity.status ? ` · ${entity.status}` : ""}`
+      : entity.kind === "teacher"
+      ? `${entity.employee_number || ""}`
+      : "";
+  return (
+    <div className="assistant-item-card">
+      <span className="assistant-item-kind">{kind}</span>
+      <strong>{entity.name || entity.invoice_number || `#${entity.id}`}</strong>
+      {meta && <span className="assistant-item-meta">{meta}</span>}
+    </div>
+  );
+}
+
+function AnomalyCard({ item }) {
+  return (
+    <div className={`assistant-item-card sev-${item.severity}`}>
+      <span className="assistant-item-kind">{severityLabel(item.severity)} impact</span>
+      <strong>{item.title}</strong>
+      <span className="assistant-item-meta">{item.detail}</span>
+    </div>
+  );
 }
 
 function MessageBubble({ message }) {
@@ -70,100 +207,80 @@ function MessageBubble({ message }) {
       )}
       <p>{message.content}</p>
 
-      {!mine && message.sources.length > 0 && (
-        <div className="assistant-sources">
-          <span className="assistant-sources-label">
-            <ShieldCheck size={12} /> Sources
+      {!mine && message.digest && <DigestCard digest={message.digest} />}
+
+      {!mine && Array.isArray(message.items) && message.items.length > 0 && (
+        <div className="assistant-items">
+          {message.kind === "anomalies"
+            ? message.items.map((item, i) => (
+                <AnomalyCard key={i} item={item} />
+              ))
+            : message.items.map((entity, i) => (
+                <EntityCard key={`${entity.id}-${i}`} entity={entity} />
+              ))}
+        </div>
+      )}
+
+      {!mine && message.draft && (
+        <div className="assistant-draft-card">
+          <span className="assistant-draft-note">
+            <ShieldCheck size={12} /> DRAFT ONLY — nothing is sent
           </span>
-          {message.sources.map((source, i) => (
-            <span className="status-badge info" key={`${source}-${i}`}>
-              {source}
-            </span>
-          ))}
+          <strong>{message.draft.subject}</strong>
+          <p>{message.draft.body}</p>
+          <span className="assistant-item-meta">
+            {message.draft.recipientCount} recipient(s) generated in your scope
+          </span>
         </div>
       )}
     </div>
   );
 }
 
-function ActionCard({ action, executing, onConfirm, onCancel }) {
-  return (
-    <div className={`assistant-action-card risk-${action.risk || "low"}`}>
-      <div className="assistant-action-head">
-        <span className="assistant-action-badge">{riskLabel(action.risk)}</span>
-        <button
-          type="button"
-          className="assistant-action-cancel"
-          onClick={onCancel}
-          title="Dismiss action"
-          aria-label="Dismiss proposed action"
-          disabled={executing}
-        >
-          ×
-        </button>
-      </div>
-      <strong>{action.label}</strong>
-      {action.description && <p>{action.description}</p>}
-      <button
-        type="button"
-        className="primary-button assistant-action-confirm"
-        onClick={onConfirm}
-        disabled={executing}
-      >
-        <ShieldCheck size={14} />
-        {executing ? "Confirming…" : "Confirm action"}
-      </button>
-      <p className="assistant-action-note">
-        Nothing runs until you confirm, and the system applies your existing
-        permissions.
-      </p>
-    </div>
-  );
-}
-
 export default function AIAssistantPage() {
   const toast = useToast();
-  const { currentSchool, activeCampus, campusList, schoolScopeVersion } =
-    useSchool();
+  const { currentSchool, activeCampus, campusList } = useSchool();
 
   const [status, setStatus] = useState(null);
   const [statusLoading, setStatusLoading] = useState(true);
   const [statusReloadKey, setStatusReloadKey] = useState(0);
 
-  const [conversations, setConversations] = useState([]);
-  const [conversationsLoading, setConversationsLoading] = useState(false);
-  const [conversationsError, setConversationsError] = useState("");
-
-  const [activeId, setActiveId] = useState(null);
-  const [activeTitle, setActiveTitle] = useState("New conversation");
   const [messages, setMessages] = useState([]);
-  const [convLoading, setConvLoading] = useState(false);
-  const [convError, setConvError] = useState("");
-
   const [input, setInput] = useState("");
   const [pendingText, setPendingText] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState("");
-  const [executingIds, setExecutingIds] = useState(() => new Set());
-  const [deletePending, setDeletePending] = useState(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const tmpIdRef = useRef(0);
+  const [pendingDraft, setPendingDraft] = useState(null);
+  const [drafting, setDrafting] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searching, setSearching] = useState(false);
+
   const sendingRef = useRef(false);
   const threadForRef = useRef(null);
   const bottomRef = useRef(null);
+  const tmpIdRef = useRef(0);
 
-  const schoolId = currentSchool?.id != null ? currentSchool.id : null;
-  const campusId = activeCampus?.id != null ? activeCampus.id : null;
-  const scopeKey = `${currentSchool?.id ?? "none"}-${activeCampus?.id ?? "all"}`;
+  const campusLabel =
+    activeCampus?.name ||
+    (campusList.length > 1 ? "All campuses" : currentSchool?.name || "—");
+
+  const capabilities = useMemo(
+    () => (status?.available ? status.capabilities : []),
+    [status]
+  );
+  const hasCapability = useCallback(
+    (capability) => !capability || capabilities.includes(capability),
+    [capabilities]
+  );
+
+  const busy = sending || drafting || searching;
 
   const loadStatus = useCallback(() => {
     setStatusLoading(true);
-    getAssistantStatus()
-      .then((next) => {
-        setStatus(next);
-        setStatusLoading(false);
-      })
+    fetchAssistantOverview()
+      .then(setStatus)
       .finally(() => setStatusLoading(false));
   }, []);
 
@@ -171,155 +288,23 @@ export default function AIAssistantPage() {
     loadStatus();
   }, [loadStatus, statusReloadKey]);
 
-  const loadConversations = useCallback(async () => {
-    if (!status?.available) return;
-    setConversationsLoading(true);
-    setConversationsError("");
-    try {
-      const list = await listConversations();
-      setConversations(list);
-    } catch (err) {
-      setConversationsError(err.message);
-    } finally {
-      setConversationsLoading(false);
-    }
-  }, [status]);
-
-  // Reset + reload with every school/campus scope change so conversation
-  // history is never carried across institutions or campuses.
+  // Client-session history resets with every school/campus scope change so
+  // earlier questions are never (mis)read against the new scope.
   useEffect(() => {
-    setActiveId(null);
-    setActiveTitle("New conversation");
     setMessages([]);
-    setConvError("");
+    setInput("");
     setSendError("");
-    setConversations([]);
-    setDeletePending(null);
-    loadConversations();
-  }, [loadConversations, schoolScopeVersion, scopeKey]);
-
-  const loadMessages = useCallback(
-    async (id) => {
-      if (!id) return;
-      setConvLoading(true);
-      setConvError("");
-      try {
-        const conversation = await getConversation(id, schoolId, campusId);
-        setActiveTitle(conversation.title);
-        setMessages(conversation.messages);
-      } catch (err) {
-        setConvError(err.message);
-      } finally {
-        setConvLoading(false);
-      }
-    },
-    [schoolId, campusId]
-  );
-
-  useEffect(() => {
-    if (activeId) {
-      loadMessages(activeId);
-    }
-  }, [activeId, loadMessages]);
+    setPendingDraft(null);
+    setSearchOpen(false);
+    setSearchQuery("");
+  }, [currentSchool?.id, activeCampus?.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [messages, sending]);
 
-  const selectConversation = useCallback((id) => {
-    setDeletePending(null);
-    setSidebarOpen(false);
-    if (id !== activeId) {
-      setActiveId(id);
-    }
-  }, [activeId]);
-
-  const startNewChat = useCallback(async () => {
-    setDeletePending(null);
-    setInput("");
-    setSendError("");
-    if (!activeId) {
-      setSidebarOpen(false);
-      setActiveTitle("New conversation");
-      setMessages([]);
-      return;
-    }
-    // Create eagerly so an empty thread has a persistable home.
-    setSending(true);
-    try {
-      const conversation = await createConversation();
-      setConversations((current) => [conversation, ...current]);
-      setActiveId(conversation.id);
-      setActiveTitle(conversation.title || "New conversation");
-      setMessages([]);
-      setSidebarOpen(false);
-    } catch (err) {
-      toast.error(err.message);
-    } finally {
-      setSending(false);
-    }
-  }, [activeId, toast]);
-
-  const handleDeleteConversation = useCallback(
-    async (id) => {
-      try {
-        await deleteConversation(id);
-        setConversations((current) =>
-          current.filter((c) => c.id !== id)
-        );
-        if (activeId === id) {
-          setActiveId(null);
-          setActiveTitle("New conversation");
-          setMessages([]);
-        }
-        setDeletePending(null);
-        toast.info("Conversation deleted.");
-      } catch (err) {
-        toast.error(err.message);
-      }
-    },
-    [activeId, toast]
-  );
-
-  const runAction = useCallback(
-    async (messageId, action) => {
-      const id = action.id;
-      setExecutingIds((prev) => new Set(prev).add(id));
-      try {
-        const result = await executeAction({
-          action,
-          schoolId,
-          campusId,
-        });
-        toast.success(result.detail);
-        setMessages((current) =>
-          current.map((m) =>
-            m.id === messageId
-              ? { ...m, actions: m.actions.filter((a) => a.id !== id) }
-              : m
-          )
-        );
-      } catch (err) {
-        toast.error(err.message);
-      } finally {
-        setExecutingIds((prev) => {
-          const next = new Set(prev);
-          next.delete(id);
-          return next;
-        });
-      }
-    },
-    [schoolId, campusId, toast]
-  );
-
-  const dismissAction = useCallback((messageId, actionId) => {
-    setMessages((current) =>
-      current.map((m) =>
-        m.id === messageId
-          ? { ...m, actions: m.actions.filter((a) => a.id !== actionId) }
-          : m
-      )
-    );
+  const appendMessage = useCallback((message) => {
+    setMessages((current) => [...current, message]);
   }, []);
 
   const send = useCallback(
@@ -333,51 +318,30 @@ export default function AIAssistantPage() {
       setPendingText("");
 
       const tmpId = `tmp-${++tmpIdRef.current}`;
-      const createdAt = new Date().toISOString();
-      setMessages((current) => [
-        ...current,
-        {
-          id: tmpId,
-          role: "user",
-          content: text,
-          createdAt,
-          sources: [],
-          actions: [],
-        },
-      ]);
+      appendMessage({
+        id: tmpId,
+        role: "user",
+        kind: "ask",
+        content: text,
+        createdAt: new Date().toISOString(),
+      });
       setInput("");
 
-      let convId = activeId ? activeId : null;
+      threadForRef.current = "ask";
       try {
-        if (!convId) {
-          const conversation = await createConversation();
-          convId = conversation.id;
-          setActiveId(convId);
-          setActiveTitle(conversation.title || "New conversation");
-          setConversations((current) => [conversation, ...current]);
-        }
-
-        // Remember which thread this send belongs to so a late response can
-        // never bleed into a different conversation the user switched to.
-        threadForRef.current = convId;
-
-        const reply = await sendMessage(convId, {
-          message: text,
-          schoolId,
-          campusId,
-        });
-
-        if (threadForRef.current === convId) {
-          setMessages((current) => [
-            ...current,
-            { ...reply, id: reply.id || `assistant-${Date.now()}` },
-          ]);
+        const answer = await askQuestion(text);
+        if (threadForRef.current === "ask") {
+          appendMessage({
+            id: `ask-${Date.now()}`,
+            role: "assistant",
+            kind: "ask",
+            content: answer.answer || "No answer returned.",
+            digest: answer.digest,
+            createdAt: new Date().toISOString(),
+          });
         }
       } catch (err) {
-        threadForRef.current = null;
-        setMessages((current) =>
-          current.filter((m) => m.id !== tmpId)
-        );
+        setMessages((current) => current.filter((m) => m.id !== tmpId));
         setInput(text);
         setPendingText(text);
         setSendError(err.message);
@@ -387,7 +351,7 @@ export default function AIAssistantPage() {
         setSending(false);
       }
     },
-    [activeId, schoolId, campusId, status]
+    [status, appendMessage]
   );
 
   const handleKeyDown = useCallback(
@@ -404,19 +368,90 @@ export default function AIAssistantPage() {
     if (pendingText) send(pendingText);
   }, [pendingText, send]);
 
-  const scopeInfo = useMemo(() => {
-    return {
-      school: currentSchool?.name || "—",
-      campus: activeCampus?.name || (campusList.length > 1 ? "All campuses" : currentSchool?.name || "—"),
-    };
-  }, [currentSchool, activeCampus, campusList]);
+  const runAnomalies = useCallback(async () => {
+    if (busy) return;
+    setSearching(false);
+    try {
+      const items = await getAnomalies();
+      appendMessage({
+        id: `anom-${Date.now()}`,
+        role: "assistant",
+        kind: "anomalies",
+        content:
+          items.length > 0
+            ? "Anomaly scan for your scope:"
+            : "No anomalies found in your scope.",
+        items,
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }, [busy, appendMessage, toast]);
+
+  const runSearch = useCallback(async () => {
+    const query = searchQuery.trim();
+    if (!query || searching) return;
+    try {
+      const entities = await searchEntities(query);
+      appendMessage({
+        id: `search-${Date.now()}`,
+        role: "assistant",
+        kind: "search",
+        content:
+          entities.length > 0
+            ? `Found ${entities.length} matching record(s) in your scope:`
+            : `No matching records in your scope.`,
+        items: entities,
+        createdAt: new Date().toISOString(),
+      });
+      setSearchOpen(false);
+      setSearchQuery("");
+    } catch (err) {
+      toast.error(err.message);
+    }
+  }, [searchQuery, searching, appendMessage, toast]);
+
+  const confirmDraft = useCallback(async () => {
+    if (!pendingDraft || drafting) return;
+    setDrafting(true);
+    const type = pendingDraft.type;
+    try {
+      const draft = await createCommunicationDraft({ type });
+      appendMessage({
+        id: `draft-${Date.now()}`,
+        role: "assistant",
+        kind: "draft",
+        content: "Generated a draft for review:",
+        draft,
+        createdAt: new Date().toISOString(),
+      });
+      setPendingDraft(null);
+    } catch (err) {
+      toast.error(err.message);
+    } finally {
+      setDrafting(false);
+    }
+  }, [pendingDraft, drafting, appendMessage, toast]);
+
+  const cancelDraft = useCallback(() => setPendingDraft(null), []);
+
+  const promptChips = ASK_PROMPTS.filter((item) =>
+    hasCapability(item.capability)
+  );
+  const toolChips = TOOL_ACTIONS.filter((item) =>
+    hasCapability(item.capability)
+  );
+  const draftChips = DRAFT_ACTIONS.filter((item) =>
+    hasCapability(item.capability)
+  );
 
   return (
     <section className="content">
       <PageHeader
         crumb="Home / AI Assistant"
         title="AI Assistant"
-        subtitle="Ask questions about your school in plain language. Answers respect your role and the active school."
+        subtitle="Ask plain-language questions about the active school. Answers are scoped to your role, school and campus — on the server."
         action={
           status?.available ? (
             <button
@@ -450,251 +485,208 @@ export default function AIAssistantPage() {
         </div>
       ) : (
         <div className="assistant-layout">
-          {/* Context banner: the assistant only ever sees the active scope. */}
           <div className="assistant-context-bar">
             <span className="assistant-context-badge">
               <Building2 size={13} />
-              {scopeInfo.school}
+              {currentSchool?.name || status.school}
             </span>
             <span className="assistant-context-badge">
               <MapPin size={13} />
-              {scopeInfo.campus}
+              {campusLabel}
+            </span>
+            <span className="assistant-context-badge">
+              <ShieldCheck size={13} />
+              {status.role}
             </span>
             <span className="assistant-context-note">
               <ShieldCheck size={13} />
-              Scoped to your role in the active school.
+              Scoped to your access in the active school.
             </span>
           </div>
 
-          <div className="assistant-body">
-            <aside
-              className={`assistant-sidebar ${
-                sidebarOpen ? "open" : ""
-              }`.trim()}
-            >
+          <div className="assistant-capbar">
+            {promptChips.map((chip) => (
               <button
                 type="button"
-                className="primary-button assistant-new-chat"
-                onClick={startNewChat}
-                disabled={sending}
+                key={chip.id}
+                className="assistant-chip"
+                onClick={() => send(chip.query)}
+                disabled={busy}
               >
-                <Plus size={15} /> New conversation
+                {chip.label}
               </button>
+            ))}
+            {toolChips.map((chip) => (
+              <button
+                type="button"
+                key={chip.id}
+                className="assistant-chip"
+                onClick={() =>
+                  chip.kind === "anomalies"
+                    ? runAnomalies()
+                    : setSearchOpen((open) => !open)
+                }
+                disabled={busy}
+              >
+                {chip.kind === "anomalies" ? (
+                  <AlertTriangle size={13} />
+                ) : (
+                  <Search size={13} />
+                )}
+                {chip.label}
+              </button>
+            ))}
+            {draftChips.map((chip) => (
+              <button
+                type="button"
+                key={chip.id}
+                className="assistant-chip"
+                onClick={() =>
+                  setPendingDraft({ type: chip.type, label: chip.label })
+                }
+                disabled={busy}
+              >
+                <FileText size={13} />
+                {chip.label}
+              </button>
+            ))}
+          </div>
 
-              {conversationsLoading ? (
-                <div className="assistant-sidebar-loading">Loading…</div>
-              ) : conversationsError ? (
-                <div className="state-card error">
-                  <span>{conversationsError}</span>
+          <div className="assistant-scroll">
+            {messages.length === 0 ? (
+              <EmptyState
+                icon={Sparkles}
+                title="Ask the assistant anything"
+                message="Ask about attendance, fees, exam results, or student counts for the active school, or use the shortcuts above."
+              />
+            ) : (
+              <div className="thread-list">
+                {messages.map((message) => (
+                  <div key={message.id} className="assistant-message">
+                    <MessageBubble message={message} />
+                  </div>
+                ))}
+
+                {sending && (
+                  <div className="assistant-bubble in assistant-thinking">
+                    <div className="assistant-bubble-meta">
+                      <Bot size={13} />
+                      <strong>Assistant</strong>
+                    </div>
+                    <span className="thinking-dots">
+                      <span />
+                      <span />
+                      <span />
+                    </span>
+                    <span className="assistant-thinking-label">Thinking…</span>
+                  </div>
+                )}
+                <div ref={bottomRef} />
+              </div>
+            )}
+
+            {sendError && (
+              <div className="state-card error" style={{ marginTop: 12 }}>
+                <strong>No reply received</strong>
+                <span>{sendError}</span>
+                {pendingText && (
                   <button
                     type="button"
                     className="secondary-button"
-                    onClick={loadConversations}
+                    onClick={retrySend}
+                    disabled={sending}
                   >
-                    Try Again
+                    <RefreshCw size={13} /> Retry
                   </button>
-                </div>
-              ) : conversations.length === 0 ? (
-                <div className="assistant-sidebar-empty">
-                  <MessageSquare size={20} strokeWidth={1.5} />
-                  <span>No conversations yet.</span>
-                </div>
-              ) : (
-                <div className="assistant-conv-list">
-                  {conversations.map((conversation) => {
-                    const isActive = conversation.id === activeId;
-                    const confirming =
-                      deletePending === conversation.id;
-                    return (
-                      <div
-                        key={conversation.id}
-                        className={`assistant-conv ${
-                          isActive ? "active" : ""
-                        }`.trim()}
-                      >
-                        <button
-                          type="button"
-                          className="assistant-conv-main"
-                          onClick={() => selectConversation(conversation.id)}
-                        >
-                          <span className="assistant-conv-title">
-                            {conversation.title || "Conversation"}
-                          </span>
-                          <span className="assistant-conv-meta">
-                            {formatDate(
-                              conversation.updated_at ||
-                                conversation.created_at
-                            )}
-                          </span>
-                        </button>
-                        <button
-                          type="button"
-                          className={`assistant-conv-delete ${
-                            confirming ? "confirm" : ""
-                          }`.trim()}
-                          onClick={() =>
-                            confirming
-                              ? handleDeleteConversation(conversation.id)
-                              : setDeletePending(conversation.id)
-                          }
-                          title={
-                            confirming
-                              ? "Click again to delete"
-                              : "Delete conversation"
-                          }
-                          aria-label={
-                            confirming
-                              ? `Confirm deleting ${conversation.title || "conversation"}`
-                              : `Delete ${conversation.title || "conversation"}`
-                          }
-                        >
-                          {confirming ? "Sure?" : <Trash2 size={14} />}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </aside>
+                )}
+              </div>
+            )}
 
-            <div className="assistant-thread">
-              <div className="assistant-thread-head">
+            {pendingDraft && (
+              <div className="assistant-confirm-bar">
+                <span>
+                  Generate a <strong>{pendingDraft.label.toLowerCase()}</strong>{" "}
+                  draft for students in your scope? Nothing is sent.
+                </span>
                 <button
                   type="button"
-                  className="secondary-button assistant-sidebar-toggle"
-                  onClick={() => setSidebarOpen((v) => !v)}
-                  aria-expanded={sidebarOpen}
+                  className="primary-button"
+                  onClick={confirmDraft}
+                  disabled={drafting}
                 >
-                  <MessageSquare size={14} /> Conversations
+                  {drafting ? "Generating…" : "Confirm"}
                 </button>
-                <strong>{activeTitle}</strong>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={cancelDraft}
+                  disabled={drafting}
+                >
+                  Cancel
+                </button>
               </div>
+            )}
+          </div>
 
-              <div className="assistant-scroll">
-                {convLoading && messages.length === 0 ? (
-                  <SkeletonBlock rows={4} text="Loading conversation..." />
-                ) : messages.length === 0 ? (
-                  <EmptyState
-                    icon={Sparkles}
-                    title="Ask the assistant anything"
-                    message="Try one of these, or write your own question about the active school."
-                  />
-                ) : (
-                  <div className="thread-list">
-                    {messages.map((message) => (
-                      <div key={message.id} className="assistant-message">
-                        <MessageBubble message={message} />
-                        {message.role === "assistant" &&
-                          message.actions.length > 0 && (
-                            <div className="assistant-actions">
-                              {message.actions.map((action) => (
-                                <ActionCard
-                                  key={action.id}
-                                  action={action}
-                                  executing={executingIds.has(action.id)}
-                                  onConfirm={() =>
-                                    runAction(message.id, action)
-                                  }
-                                  onCancel={() =>
-                                    dismissAction(message.id, action.id)
-                                  }
-                                />
-                              ))}
-                            </div>
-                          )}
-                      </div>
-                    ))}
+          {searchOpen && (
+            <div className="assistant-search-box">
+              <input
+                className="assistant-input"
+                value={searchQuery}
+                placeholder="Search students, classes, teachers or invoices in your scope…"
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") runSearch();
+                }}
+                aria-label="Search within your scope"
+              />
+              <button
+                type="button"
+                className="primary-button"
+                onClick={runSearch}
+                disabled={searching || !searchQuery.trim()}
+              >
+                <Search size={14} /> {searching ? "Searching…" : "Search"}
+              </button>
+            </div>
+          )}
 
-                    {sending && (
-                      <div className="assistant-bubble in assistant-thinking">
-                        <div className="assistant-bubble-meta">
-                          <Bot size={13} />
-                          <strong>Assistant</strong>
-                        </div>
-                        <span className="thinking-dots">
-                          <span />
-                          <span />
-                          <span />
-                        </span>
-                        <span className="assistant-thinking-label">
-                          Thinking…
-                        </span>
-                      </div>
-                    )}
-                    <div ref={bottomRef} />
-                  </div>
-                )}
-
-                {convError && (
-                  <div className="state-card error" style={{ marginTop: 12 }}>
-                    <strong>Could not load this conversation</strong>
-                    <span>{convError}</span>
-                    <button
-                      type="button"
-                      className="secondary-button"
-                      onClick={() => loadMessages(activeId)}
-                    >
-                      Try Again
-                    </button>
-                  </div>
-                )}
-
-                {sendError && (
-                  <div className="state-card error" style={{ marginTop: 12 }}>
-                    <strong>No reply received</strong>
-                    <span>{sendError}</span>
-                    {pendingText && (
-                      <button
-                        type="button"
-                        className="secondary-button"
-                        onClick={retrySend}
-                        disabled={sending}
-                      >
-                        <RefreshCw size={13} /> Retry
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              <div className="assistant-composer">
-                {messages.length === 0 && (
-                  <div className="assistant-suggestions">
-                    {SUGGESTIONS.map((suggestion) => (
-                      <button
-                        type="button"
-                        key={suggestion}
-                        className="assistant-suggestion"
-                        onClick={() => send(suggestion)}
-                        disabled={sending}
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                <textarea
-                  className="assistant-input"
-                  rows={2}
-                  value={input}
-                  placeholder="Ask about students, fees, attendance, staff, and more…"
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleKeyDown}
-                  disabled={sending}
-                  aria-label="Message the AI assistant"
-                />
-                <div className="assistant-composer-foot">
-                  <span>Enter to send · Shift+Enter for a new line</span>
+          <div className="assistant-composer">
+            {messages.length === 0 && (
+              <div className="assistant-suggestions">
+                {SUGGESTIONS.map((suggestion) => (
                   <button
                     type="button"
-                    className="primary-button"
-                    onClick={() => send(input)}
-                    disabled={sending || !input.trim()}
+                    key={suggestion}
+                    className="assistant-suggestion"
+                    onClick={() => send(suggestion)}
+                    disabled={sending}
                   >
-                    <Send size={14} /> {sending ? "Sending…" : "Send"}
+                    {suggestion}
                   </button>
-                </div>
+                ))}
               </div>
+            )}
+            <textarea
+              className="assistant-input"
+              rows={2}
+              value={input}
+              placeholder="Ask about attendance, fees, exam results, and student counts…"
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={busy}
+              aria-label="Ask the AI assistant"
+            />
+            <div className="assistant-composer-foot">
+              <span>Enter to send · Shift+Enter for a new line</span>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={() => send(input)}
+                disabled={busy || !input.trim()}
+              >
+                <Send size={14} /> {sending ? "Asking…" : "Ask"}
+              </button>
             </div>
           </div>
         </div>

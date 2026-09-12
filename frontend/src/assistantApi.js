@@ -1,40 +1,28 @@
 /*
- * AI Assistant API client.
+ * AI Assistant API client — matches backend `apps/ai` (mounted at `/api/ai/`).
  *
- * Contract (backend P5 implements `apps/ai` mounted at `/api/ai/`):
- *
- *   GET    /api/ai/status/                     -> { available, provider?, name?, message? }
- *   GET    /api/ai/conversations/              -> { results: [{ id, title, created_at, updated_at }] }
- *   POST   /api/ai/conversations/              -> { id, title, created_at }
- *   GET    /api/ai/conversations/<id>/         -> { id, title, messages: [Message] }
- *   POST   /api/ai/conversations/<id>/messages/
- *          body: { message, school_id, campus_id }
- *          -> Message (assistant reply; user turn is stored server-side)
- *   DELETE /api/ai/conversations/<id>/         -> 204
- *   POST   /api/ai/actions/execute/
- *          body: { action_id, confirmation, params } -> { ok: true, detail?, ... }
- *
- * Message shape (used by GET conversation detail and POST messages):
- *   {
- *     id, role: "user" | "assistant",
- *     content: string,
- *     created_at: ISO string,
- *     sources?: string[],
- *     actions?: [              // assistant-only, PROPOSED actions
- *        { id, label, description?, risk?: "low"|"medium"|"high",
- *          params, requires_confirmation }
- *     ]
- *   }
+ * Endpoints:
+ *   GET  /api/ai/overview/              -> { role, institution, institution_name,
+ *                                            capabilities[], students_in_scope,
+ *                                            attendance{...}, finance?{...} }
+ *   POST /api/ai/ask/  body {query}     -> { ok, query, intent, answer, digest }
+ *   GET  /api/ai/search/?q=             -> { query, entities[] }
+ *   GET  /api/ai/insights/students/     -> { insights[] }  (role-gated)
+ *   GET  /api/ai/insights/attendance/   -> attendance dict  (role-gated)
+ *   GET  /api/ai/insights/academic/     -> academic dict  (role-gated)
+ *   GET  /api/ai/insights/finance/      -> finance dict  (role-gated)
+ *   GET  /api/ai/anomalies/             -> { anomalies[] }  (role-gated)
+ *   POST /api/ai/communication/draft/   -> draft dict (role-gated, NEVER sends)
  *
  * Security rules the client always follows:
- *  - Roles are DERIVED SERVER-SIDE from the session; the client never
- *    sends roles or permissions and never claims authorization.
- *  - The client only ever sends the school/campus the user is currently
- *    scoped to (useSchool context) — never free-form identifiers. The
- *    backend must re-validate ownership of both on every request.
- *  - Proposed actions are only RENDERED and CONFIRMED by the user. The
- *    client never performs the action itself; execution always goes back
- *    through the backend which re-checks authorization + institution scope.
+ *  - All authorization, role checks, institution scope and campus scope are
+ *    DERIVED SERVER-SIDE from the session. The client sends NO roles,
+ *    permissions, school ids or campus ids — it only asks questions.
+ *  - The "overview" endpoint doubles as the availability probe: 403 means the
+ *    account is not authorized (not an outage), 404/405/410 mean the module
+ *    is not deployed. Both map to a friendly, non-throwing `available:false`.
+ *  - Communication drafts are generated server-side and are `draft_only` —
+ *    nothing is ever sent by this client.
  *  - Assistant text is rendered as plain text (no HTML injection).
  */
 
@@ -42,32 +30,25 @@ import { apiFetch, jsonHeaders } from "./api";
 
 const AI_BASE = "/api/ai";
 
-const LIST_FALLBACK = "Could not load conversations.";
-
-function normalizeMessage(raw) {
-  if (!raw || typeof raw !== "object") return null;
-
-  const actions = Array.isArray(raw.actions) ? raw.actions : [];
-  const sources = Array.isArray(raw.sources) ? raw.sources : [];
-
+function normalizeOverview(data) {
+  if (!data || typeof data !== "object" || !("capabilities" in data)) {
+    return null;
+  }
   return {
-    id: raw.id ?? null,
-    role: raw.role === "user" ? "user" : "assistant",
-    content: typeof raw.content === "string" ? raw.content : "",
-    createdAt: raw.created_at || null,
-    sources: sources.map((s) => (typeof s === "string" ? s : String(s))),
-    actions: actions.filter(
-      (a) => a && typeof a.label === "string" && a.label.trim()
-    ),
+    role: data.role || "member",
+    school: data.institution_name || "Active school",
+    capabilities: Array.isArray(data.capabilities) ? data.capabilities : [],
+    studentsInScope: data.students_in_scope ?? null,
+    attendance: data.attendance || null,
+    finance: data.finance || null,
   };
 }
 
-// `status` never throws for "not available" deployments: 404/405/410 mean the
-// endpoint was not implemented yet, and a non-2xx response is reported as an
-// unavailable state the page can render (rather than a hard error).
-export async function getAssistantStatus() {
+// Never throws for "not available/not authorized" deployments — the page can
+// render an honest state instead of a hard error.
+export async function fetchAssistantOverview() {
   try {
-    const response = await fetch(`${AI_BASE}/status/`, {
+    const response = await fetch(`${AI_BASE}/overview/`, {
       credentials: "include",
     });
 
@@ -75,8 +56,14 @@ export async function getAssistantStatus() {
       if ([404, 405, 410].includes(response.status)) {
         return {
           available: false,
+          message: "The AI assistant is not enabled for this deployment yet.",
+        };
+      }
+      if (response.status === 403) {
+        return {
+          available: false,
           message:
-            "The AI assistant is not enabled for this deployment yet.",
+            "The AI assistant is not available to your account. Ask an administrator for access.",
         };
       }
       return {
@@ -86,120 +73,64 @@ export async function getAssistantStatus() {
     }
 
     const data = await response.json().catch(() => ({}));
-    if (data && typeof data === "object" && "available" in data) {
-      return {
-        available: !!data.available,
-        provider: data.provider || "",
-        name: data.name || "AI Assistant",
-        message: data.message || "",
-      };
-    }
-
-    return { available: false, message: "The AI assistant is not enabled." };
+    const overview = normalizeOverview(data);
+    return overview
+      ? { available: true, ...overview }
+      : { available: false, message: "The AI assistant returned an invalid response." };
   } catch {
-    return {
-      available: false,
-      message: "The AI assistant could not be reached.",
-    };
+    return { available: false, message: "The AI assistant could not be reached." };
   }
 }
 
-export async function listConversations() {
-  const data = await apiFetch(`${AI_BASE}/conversations/`, {}, LIST_FALLBACK);
-  return Array.isArray(data) ? data : data.results || [];
-}
-
-export async function createConversation() {
-  return apiFetch(
-    `${AI_BASE}/conversations/`,
-    { method: "POST", headers: jsonHeaders(), body: "{}" },
-    "Could not start a new conversation."
-  );
-}
-
-export async function getConversation(id, schoolId, campusId) {
+export async function askQuestion(query) {
   const data = await apiFetch(
-    `${AI_BASE}/conversations/${id}/?school_id=${encodeURIComponent(
-      schoolId
-    )}&campus_id=${
-      campusId ? encodeURIComponent(campusId) : ""
-    }`,
-    {},
-    "Could not load the conversation."
+    `${AI_BASE}/ask/`,
+    {
+      method: "POST",
+      headers: jsonHeaders(),
+      body: JSON.stringify({ query }),
+    },
+    "The assistant could not answer."
   );
-
-  const messages = Array.isArray(data.messages)
-    ? data.messages
-    : Array.isArray(data.results)
-    ? data.results
-    : [];
 
   return {
-    id: data.id ?? id,
-    title: data.title || "Conversation",
-    messages: messages.map(normalizeMessage).filter(Boolean),
+    intent: data?.intent || "general",
+    answer: typeof data?.answer === "string" ? data.answer : "",
+    digest: data?.digest && typeof data.digest === "object" ? data.digest : {},
   };
 }
 
-export async function sendMessage(
-  conversationId,
-  { message, schoolId, campusId }
-) {
-  const raw = await apiFetch(
-    `${AI_BASE}/conversations/${conversationId}/messages/`,
-    {
-      method: "POST",
-      headers: jsonHeaders(),
-      body: JSON.stringify({
-        message,
-        school_id: schoolId,
-        campus_id: campusId || null,
-      }),
-    },
-    "The assistant could not respond."
-  );
-
-  // Accept either a single assistant message or a { user_message,
-  // assistant_message } envelope.
-  const assistantRaw = raw?.assistant_message || raw;
-  const normalized = normalizeMessage(assistantRaw);
-
-  if (!normalized) {
-    throw new Error("The assistant returned an empty response.");
-  }
-
-  return normalized;
-}
-
-export async function deleteConversation(id) {
-  await apiFetch(
-    `${AI_BASE}/conversations/${id}/`,
-    { method: "DELETE" },
-    "Could not delete the conversation."
-  );
-}
-
-// Confirms + executes a PROPOSED action. The backend re-validates the
-// session role and the school/campus scope before performing anything.
-export async function executeAction({ action, schoolId, campusId }) {
+export async function searchEntities(query) {
   const data = await apiFetch(
-    `${AI_BASE}/actions/execute/`,
+    `${AI_BASE}/search/?q=${encodeURIComponent(query)}`,
+    {},
+    "Could not search."
+  );
+  return Array.isArray(data?.entities) ? data.entities : [];
+}
+
+export async function getAnomalies() {
+  const data = await apiFetch(`${AI_BASE}/anomalies/`, {}, "Could not scan.");
+  return Array.isArray(data?.anomalies) ? data.anomalies : [];
+}
+
+// Generates (never sends) a scoped communication draft. The backend refuses
+// if recipients fall outside the caller's access scope.
+export async function createCommunicationDraft({ type, subject = "", body = "" }) {
+  const data = await apiFetch(
+    `${AI_BASE}/communication/draft/`,
     {
       method: "POST",
       headers: jsonHeaders(),
-      body: JSON.stringify({
-        action_id: action.id,
-        confirmation: true,
-        params: action.params || {},
-        school_id: schoolId,
-        campus_id: campusId || null,
-      }),
+      body: JSON.stringify({ type, subject, body }),
     },
-    "The action could not be executed."
+    "Could not generate the draft."
   );
-
   return {
-    ok: data && data.ok !== false,
-    detail: data?.detail || "Action completed.",
+    type: data?.type || type,
+    subject: data?.subject || "",
+    body: data?.body || "",
+    recipientCount: data?.recipient_count ?? 0,
+    draftOnly: data?.draft_only !== false,
   };
 }
