@@ -623,7 +623,7 @@ class PracticalResultListCreateView(generics.ListCreateAPIView):
             "exam",
             "student",
             "exam_subject__subject",
-        )
+        ).order_by("-created_at")
 
         user = self.request.user
 
@@ -709,7 +709,7 @@ class PracticalResultDetailView(generics.RetrieveUpdateDestroyAPIView):
             "exam",
             "student",
             "exam_subject__subject",
-        )
+        ).order_by("-created_at")
 
         user = self.request.user
 
