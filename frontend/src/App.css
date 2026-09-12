@@ -469,7 +469,7 @@ h1, h2, h3, h4,
   visibility: hidden;
   transform: translateY(-4px);
   transition: all 0.12s var(--ease);
-  z-index: 200;
+  z-index: 100;
 }
 
 .nav-group:hover .nav-dropdown {
@@ -4801,7 +4801,8 @@ body.modal-open {
   cursor: pointer;
 }
 
-.checkbox-label input[type="checkbox"] {
+.checkbox-label input[type="checkbox"],
+.checkbox-label input[type="radio"] {
   width: 16px;
   height: 16px;
   accent-color: var(--primary, #2563eb);
