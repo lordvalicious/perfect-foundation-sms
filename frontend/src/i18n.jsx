@@ -47,6 +47,7 @@ const URDU = {
   Helpdesk: "ہیلپ ڈیسک",
   Visitors: "ویزٹرز",
   "Digital IDs": "ڈیجیٹل آئی ڈیز",
+  "AI Assistant": "اے آئی اسسٹنٹ",
   "Support & Security": "سپورٹ اور سیکیورٹی",
   "Home / Helpdesk": "ہوم / ہیلپ ڈیسک",
   "Home / Gate / Visitors": "ہوم / گیٹ / ویزٹرز",

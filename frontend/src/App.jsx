@@ -66,6 +66,7 @@ import {
   ShieldCheck,
   IdCard,
   Receipt,
+  Sparkles,
 } from "lucide-react";
 import "./App.css";
 import "./dark-dash.css";
@@ -133,6 +134,7 @@ const WorkflowDefinitionAdminPage = lazy(() => import("./pages/WorkflowDefinitio
 const WorkflowInstanceDetailPage = lazy(() => import("./pages/WorkflowInstanceDetailPage"));
 const PendingApprovalsPage = lazy(() => import("./pages/PendingApprovalsPage"));
 const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
+const AIAssistantPage = lazy(() => import("./pages/AIAssistantPage"));
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -408,6 +410,7 @@ const navigation = [
   { label: "Digital IDs", module: "digital_ids", path: "/digital-ids", icon: IdCard, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "staff"] },
   { label: "Pending Approvals", path: "/workflow/approvals", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"] },
   { label: "Workflow Definitions", path: "/workflow/definitions", icon: ScrollText, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"] },
+  { label: "AI Assistant", path: "/ai-assistant", icon: Sparkles, roles: [] },
 ];
 
 const systemNavigation = [
@@ -455,7 +458,7 @@ const navGroups = [
   },
   {
     label: "Support & Security",
-    items: ["/helpdesk", "/visitors", "/digital-ids", "/workflow/approvals", "/workflow/definitions"]
+    items: ["/helpdesk", "/visitors", "/digital-ids", "/ai-assistant", "/workflow/approvals", "/workflow/definitions"]
       .map(findNav)
       .filter(Boolean),
   },
@@ -1331,6 +1334,8 @@ function Shell() {
             <DigitalIdsPage />
           </RequireRoles>
         } />
+
+        <Route path="/ai-assistant" element={<AIAssistantPage />} />
 
         <Route path="/workflow/definitions" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"]}>
