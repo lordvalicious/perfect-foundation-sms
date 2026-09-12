@@ -54,6 +54,22 @@ function AlertCard({ alert }) {
   );
 }
 
+function ChartEmpty({ message }) {
+  return (
+    <div className="state-card" style={{ height: 240 }}>
+      <span>{message}</span>
+    </div>
+  );
+}
+
+function RowEmpty({ message }) {
+  return (
+    <div className="state-card">
+      <span>{message}</span>
+    </div>
+  );
+}
+
 export default function ExecutiveDashboardPage() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -79,8 +95,7 @@ export default function ExecutiveDashboardPage() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const financeTrend = useMemo(
+    const financeTrend = useMemo(
     () =>
       (data?.finance?.monthly || []).map((row) => ({
         month: getMonthLabel(row.month),
@@ -160,17 +175,21 @@ export default function ExecutiveDashboardPage() {
                   <p className="stat-label">Billed vs collected, last 6 months</p>
                 </div>
                 <div className="panel-body">
-                  <ResponsiveContainer width="100%" height={240}>
-                    <AreaChart data={financeTrend}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Area type="monotone" dataKey="Billed" stroke="#475569" fill="#94a3b8" />
-                      <Area type="monotone" dataKey="Collected" stroke="#16a34a" fill="#86efac" />
-                    </AreaChart>
-                  </ResponsiveContainer>
+                  {financeTrend.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <AreaChart data={financeTrend}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Area type="monotone" dataKey="Billed" stroke="#475569" fill="#94a3b8" />
+                        <Area type="monotone" dataKey="Collected" stroke="#16a34a" fill="#86efac" />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartEmpty message="No finance trend data available yet." />
+                  )}
 
                   <div className="dashboard-grid three">
                     <KpiCard
@@ -198,15 +217,19 @@ export default function ExecutiveDashboardPage() {
                   <p className="stat-label">Monthly rate, last 6 months</p>
                 </div>
                 <div className="panel-body">
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={attendanceTrend}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="month" />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip />
-                      <Bar dataKey="rate" name="Attendance %" fill="#6366f1" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {attendanceTrend.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={attendanceTrend}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="month" />
+                        <YAxis domain={[0, 100]} />
+                        <Tooltip />
+                        <Bar dataKey="rate" name="Attendance %" fill="#6366f1" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartEmpty message="No attendance trend data available yet." />
+                  )}
 
                   <div className="dashboard-grid two">
                     <KpiCard
@@ -231,15 +254,19 @@ export default function ExecutiveDashboardPage() {
                   <p className="stat-label">Pass rate by recent exam</p>
                 </div>
                 <div className="panel-body">
-                  <ResponsiveContainer width="100%" height={240}>
-                    <BarChart data={byExam}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis dataKey="name" />
-                      <YAxis domain={[0, 100]} />
-                      <Tooltip />
-                      <Bar dataKey="passRate" name="Pass rate %" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {byExam.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={240}>
+                      <BarChart data={byExam}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis domain={[0, 100]} />
+                        <Tooltip />
+                        <Bar dataKey="passRate" name="Pass rate %" fill="#0ea5e9" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <ChartEmpty message="No exam performance data available yet." />
+                  )}
 
                   <div className="kpi-card">
                     <div className="stat-icon">
@@ -268,32 +295,36 @@ export default function ExecutiveDashboardPage() {
                   <p className="stat-label">Active enrollments, finance, attendance</p>
                 </div>
                 <div className="panel-body">
-                  <div className="table-card">
-                    <table className="data-table">
-                      <thead>
-                        <tr>
-                          <th>Campus</th>
-                          <th>Students</th>
-                          <th>Collected</th>
-                          <th>Outstanding</th>
-                          <th>Att.</th>
-                          <th>Pass</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(data?.campuses || []).map((c) => (
-                          <tr key={c.id}>
-                            <td>{c.name}</td>
-                            <td>{c.students}</td>
-                            <td>{formatCurrency(c.collected)}</td>
-                            <td>{formatCurrency(c.outstanding)}</td>
-                            <td>{c.attendance_rate_month}%</td>
-                            <td>{c.pass_rate === null ? "—" : `${c.pass_rate}%`}</td>
+                  {(data?.campuses || []).length === 0 ? (
+                    <RowEmpty message="No campus data available." />
+                  ) : (
+                    <div className="table-card">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Campus</th>
+                            <th>Students</th>
+                            <th>Collected</th>
+                            <th>Outstanding</th>
+                            <th>Att.</th>
+                            <th>Pass</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody>
+                          {(data?.campuses || []).map((c) => (
+                            <tr key={c.id}>
+                              <td>{c.name}</td>
+                              <td>{c.students}</td>
+                              <td>{formatCurrency(c.collected)}</td>
+                              <td>{formatCurrency(c.outstanding)}</td>
+                              <td>{c.attendance_rate_month}%</td>
+                              <td>{c.pass_rate === null ? "—" : `${c.pass_rate}%`}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -303,12 +334,16 @@ export default function ExecutiveDashboardPage() {
                   <p className="stat-label">Enrollments by class</p>
                 </div>
                 <div className="panel-body">
-                  {(data?.academic?.class_strength || []).map((row) => (
-                    <div key={row.class} className="class-strength-row">
-                      <span>{row.class}</span>
-                      <strong>{row.students}</strong>
-                    </div>
-                  ))}
+                  {(data?.academic?.class_strength || []).length === 0 ? (
+                    <RowEmpty message="No class strength data available." />
+                  ) : (
+                    (data?.academic?.class_strength || []).map((row) => (
+                      <div key={row.class} className="class-strength-row">
+                        <span>{row.class}</span>
+                        <strong>{row.students}</strong>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             </div>
@@ -319,11 +354,15 @@ export default function ExecutiveDashboardPage() {
                 <p className="stat-label">Things that need attention</p>
               </div>
               <div className="panel-body">
-                <div className="dashboard-grid two">
-                  {(data?.alerts || []).map((a, i) => (
-                    <AlertCard key={i} alert={a} />
-                  ))}
-                </div>
+                {(data?.alerts || []).length === 0 ? (
+                  <RowEmpty message="No alerts — everything looks good." />
+                ) : (
+                  <div className="dashboard-grid two">
+                    {(data?.alerts || []).map((a, i) => (
+                      <AlertCard key={i} alert={a} />
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </>

@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
+import { Link } from "react-router-dom";
 import {
   Users,
   Phone,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { PageHeader, StateArea, EmptyState, StatusBadge } from "./ui";
 import { formatDate, formatCurrency } from "./format";
+import { apiFetch, jsonHeaders } from "../api";
 
 async function fetchJson(url, fallback, timeoutMs = 30000) {
   const controller = new AbortController();
@@ -64,9 +66,12 @@ async function fetchAllPages(url, maxPages = 20) {
       "Unable to load portal data."
     );
 
-    results.push(...(Array.isArray(data) ? data : data.results || []));
+    const items = Array.isArray(data) ? data : data.results || [];
+    results.push(...items);
 
-    next = Boolean(data.next);
+    // Stop as soon as a page returns fewer items than a full page — the
+    // paginator only fills the last page, so there is nothing more to fetch.
+    next = Boolean(data.next) && items.length >= 20;
     page += 1;
   }
 
@@ -83,68 +88,91 @@ function initialsOf(name) {
 }
 
 export default function ParentPortalPage() {
-  const [guardian, setGuardian] = useState(null);
-  const [children, setChildren] = useState([]);
-  const [attendance, setAttendance] = useState([]);
-  const [reportCards, setReportCards] = useState([]);
-  const [invoices, setInvoices] = useState([]);
-  const [payments, setPayments] = useState([]);
-  const [timetable, setTimetable] = useState([]);
-  const [announcements, setAnnouncements] = useState([]);
-  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [sections, setSections] = useState({});
+  const [failures, setFailures] = useState([]);
   const [selectedChildId, setSelectedChildId] = useState("");
   const [leaveForm, setLeaveForm] = useState({ start_date: "", end_date: "", reason: "" });
   const [leaveSaving, setLeaveSaving] = useState(false);
   const [leaveNotice, setLeaveNotice] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  const loadPortal = useCallback(async () => {
+    setLoading(true);
+    setFailures([]);
+
+    const LABELS = {
+      guardian: "guardian profile",
+      children: "children",
+      attendance: "attendance",
+      reportCards: "report cards",
+      invoices: "invoices",
+      payments: "payments",
+      timetable: "timetable",
+      announcements: "announcements",
+      leaveRequests: "leave requests",
+    };
+
+    const endpoints = [
+      ["guardian", () => fetchJson("/api/students/guardians/me/", "Unable to load your guardian profile.")],
+      ["children", () => fetchAllPages("/api/students/")],
+      ["attendance", () => fetchAllPages("/api/attendance/")],
+      ["reportCards", () => fetchAllPages("/api/report-cards/")],
+      ["invoices", () => fetchAllPages("/api/finance/invoices/")],
+      ["payments", () => fetchAllPages("/api/finance/payments/")],
+      ["timetable", () => fetchAllPages("/api/timetable/entries/")],
+      ["announcements", () => fetchAllPages("/api/communication/announcements/")],
+      ["leaveRequests", () => fetchAllPages("/api/students/leave/")],
+    ];
+
+    const results = await Promise.all(
+      endpoints.map(async ([key, loader]) => {
+        try {
+          const data = await loader();
+          return {
+            key,
+            data: key === "guardian" ? data : (Array.isArray(data) ? data : data.results || []),
+            failed: false,
+          };
+        } catch {
+          return { key, data: key === "guardian" ? null : [], failed: true };
+        }
+      })
+    );
+
+    setSections(Object.fromEntries(results.map((r) => [r.key, r.data])));
+    setFailures(
+      results.filter((r) => r.failed).map((r) => LABELS[r.key] || r.key)
+    );
+    setLoading(false);
+  }, []);
 
   useEffect(() => {
-    Promise.all([
-      fetchJson(
-        "/api/students/guardians/me/",
-        "Unable to load your guardian profile."
-      ).catch(() => null),
-      fetchAllPages("/api/students/").catch(() => []),
-      fetchAllPages("/api/attendance/").catch(() => []),
-      fetchAllPages("/api/report-cards/").catch(() => []),
-      fetchAllPages("/api/finance/invoices/").catch(() => []),
-      fetchAllPages("/api/finance/payments/").catch(() => []),
-      fetchAllPages("/api/timetable/entries/").catch(() => []),
-      fetchAllPages("/api/communication/announcements/").catch(() => []),
-      fetchAllPages("/api/students/leave/").catch(() => []),
-    ])
-      .then(
-        ([
-          guardianData,
-          students,
-          attendanceData,
-          cards,
-          invoiceData,
-          paymentData,
-          timetableData,
-          announcementData,
-          leaveData,
-        ]) => {
-          setGuardian(guardianData);
-          setChildren(students);
-          setAttendance(attendanceData);
-          setReportCards(cards);
-          setInvoices(invoiceData);
-          setPayments(paymentData);
-          setTimetable(timetableData);
-          setAnnouncements(announcementData);
-          setLeaveRequests(leaveData);
-          setError("");
-        }
-      )
-      .catch((err) => {
-        setError(err.message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, []);
+    loadPortal();
+  }, [loadPortal]);
+
+  const guardian = sections.guardian || null;
+  const children = Array.isArray(sections.children) ? sections.children : [];
+
+  const lists = useMemo(() => {
+    const get = (key) => (Array.isArray(sections[key]) ? sections[key] : []);
+    return {
+      attendance: get("attendance"),
+      reportCards: get("reportCards"),
+      invoices: get("invoices"),
+      payments: get("payments"),
+      timetable: get("timetable"),
+      announcements: get("announcements"),
+      leaveRequests: get("leaveRequests"),
+    };
+  }, [sections]);
+
+  const attendance = lists.attendance;
+  const reportCards = lists.reportCards;
+  const invoices = lists.invoices;
+  const payments = lists.payments;
+  const timetable = lists.timetable;
+  const announcements = lists.announcements;
+  const leaveRequests = lists.leaveRequests;
 
   const selectedChild = children.find(
     (child) => String(child.id) === String(selectedChildId)
@@ -158,18 +186,18 @@ export default function ParentPortalPage() {
     setLeaveSaving(true);
     setLeaveNotice("");
     try {
-      const response = await fetch("/api/students/leave/", {
+      const data = await apiFetch("/api/students/leave/", {
         method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRFToken": document.cookie.split("csrftoken=")[1]?.split(";")[0] || "",
-        },
+        headers: jsonHeaders(),
         body: JSON.stringify({ student: selectedChild.id, ...leaveForm }),
       });
-      const data = await response.json();
-      if (!response.ok) throw new Error(Object.values(data).flat().join(" ") || "Unable to submit leave request.");
-      setLeaveRequests((current) => [data, ...current]);
+      setSections((current) => ({
+        ...current,
+        leaveRequests: [
+          data,
+          ...(Array.isArray(current.leaveRequests) ? current.leaveRequests : []),
+        ],
+      }));
       setLeaveForm({ start_date: "", end_date: "", reason: "" });
       setLeaveNotice("Leave request submitted for school review.");
     } catch (requestError) {
@@ -276,9 +304,25 @@ export default function ParentPortalPage() {
       <StateArea
         loading={loading}
         loadingText="Loading your portal..."
-        error={error}
-        onRetry={() => window.location.reload()}
+        onRetry={loadPortal}
       >
+        {failures.length > 0 && (
+          <div className="state-card error">
+            <strong>Some data could not be loaded</strong>
+            <span>
+              We couldn't load: {failures.join(", ")}. Try again or
+              contact the school office if this persists.
+            </span>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={loadPortal}
+            >
+              Try Again
+            </button>
+          </div>
+        )}
+
         {children.length === 0 && guardian && (
           <EmptyState
             icon={Users}
@@ -312,9 +356,9 @@ export default function ParentPortalPage() {
                     ))}
                   </select>
                 </label>
-                <a className="secondary-button" href="/messages">
+                <Link className="secondary-button" to="/messages">
                   <Send size={15} /> Message school
-                </a>
+                </Link>
               </div>
             </div>
 

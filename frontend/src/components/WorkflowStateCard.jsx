@@ -4,38 +4,57 @@ import { CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
  * Displays the current state of a workflow instance with visual indicator.
  */
 export function WorkflowStateCard({ instance }) {
-  const getStateColor = (state) => {
-    if (state === "approved") return "bg-green-50 border-green-200";
-    if (state === "rejected") return "bg-red-50 border-red-200";
-    if (state === "draft") return "bg-gray-50 border-gray-200";
-    if (state === "pending_approval") return "bg-yellow-50 border-yellow-200";
-    return "bg-blue-50 border-blue-200";
-  };
+  const state = instance.current_state || "";
 
-  const getStateIcon = (state) => {
-    if (state === "approved") return <CheckCircle className="w-5 h-5 text-green-600" />;
-    if (state === "rejected") return <XCircle className="w-5 h-5 text-red-600" />;
-    if (state === "pending_approval") return <Clock className="w-5 h-5 text-yellow-600" />;
-    return <AlertCircle className="w-5 h-5 text-blue-600" />;
-  };
+  const Icon =
+    state === "approved"
+      ? CheckCircle
+      : state === "rejected"
+        ? XCircle
+        : state === "pending_approval"
+          ? Clock
+          : AlertCircle;
 
-  const formatState = (state) => {
-    return state.replace(/_/g, " ").toUpperCase();
-  };
+  const tone =
+    state === "approved"
+      ? "active"
+      : state === "rejected"
+        ? "inactive"
+        : state === "pending_approval"
+          ? "warn"
+          : "info";
+
+  const formatState = (value) =>
+    (value || "unknown").replace(/_/g, " ").toUpperCase();
+
+  const iconColor =
+    state === "approved"
+      ? "var(--success, #16a34a)"
+      : state === "rejected"
+        ? "var(--danger, #dc2626)"
+        : state === "pending_approval"
+          ? "var(--warning, #d97706)"
+          : "var(--sky, #0ea5e9)";
 
   return (
-    <div className={`border rounded-lg p-4 ${getStateColor(instance.current_state)}`}>
-      <div className="flex items-center gap-3">
-        {getStateIcon(instance.current_state)}
+    <div className="panel">
+      <div className="panel-header">
         <div>
-          <p className="text-sm font-medium text-gray-600">Current State</p>
-          <p className="text-lg font-semibold text-gray-900">
-            {formatState(instance.current_state)}
-          </p>
-          {instance.is_terminal && (
-            <p className="text-xs text-gray-600 mt-1">This workflow is terminal (complete)</p>
-          )}
+          <h3 className="panel-title">Current State</h3>
+          <p className="stat-label">Workflow instance status</p>
         </div>
+        <Icon size={20} style={{ color: iconColor }} />
+      </div>
+
+      <div className="panel-body">
+        <span className={`status-badge ${tone}`}>
+          {formatState(state)}
+        </span>
+        {instance.is_terminal && (
+          <p className="muted" style={{ marginTop: 8 }}>
+            This workflow is terminal (complete)
+          </p>
+        )}
       </div>
     </div>
   );

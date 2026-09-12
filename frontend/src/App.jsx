@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -131,6 +132,7 @@ const DigitalIdsPage = lazy(() => import("./pages/DigitalIdsPage"));
 const WorkflowDefinitionAdminPage = lazy(() => import("./pages/WorkflowDefinitionAdminPage"));
 const WorkflowInstanceDetailPage = lazy(() => import("./pages/WorkflowInstanceDetailPage"));
 const PendingApprovalsPage = lazy(() => import("./pages/PendingApprovalsPage"));
+const NotFoundPage = lazy(() => import("./pages/NotFoundPage"));
 
 function getCookie(name) {
   const value = `; ${document.cookie}`;
@@ -207,9 +209,28 @@ function GlobalSearch() {
 
 function NotificationsBell() {
   const [notifications, setNotifications] = useState(null);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
-  const unread = notifications ? notifications.filter((n) => !n.is_read).length : 0;
+  const navigate = useNavigate();
+
+  // Keep the badge accurate even before the dropdown is opened: poll the
+  // unread-only list on mount and every minute.
+  const loadUnreadCount = useCallback(() => {
+    fetch(`${NOTIFICATIONS_URL}?unread_only=1`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.results || [];
+        setUnreadCount(list.length);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadUnreadCount();
+    const interval = setInterval(loadUnreadCount, 60000);
+    return () => clearInterval(interval);
+  }, [loadUnreadCount]);
 
   useEffect(() => {
     if (!open || notifications !== null) return;
@@ -221,29 +242,48 @@ function NotificationsBell() {
 
   const markAllRead = () => {
     fetch(`${NOTIFICATIONS_URL}read-all/`, { method: "POST", credentials: "include", headers: authHeaders() })
-      .then((r) => { if (r.ok) setNotifications((items) => (items || []).map((n) => ({ ...n, is_read: true }))); })
+      .then((r) => { if (r.ok) { setNotifications((items) => (items || []).map((n) => ({ ...n, is_read: true }))); setUnreadCount(0); } })
       .catch(() => {});
   };
 
-  const markRead = (n) => {
+  const handleClick = (n) => {
     if (!n.is_read) {
       fetch(`${NOTIFICATIONS_URL}${n.id}/read/`, { method: "POST", credentials: "include", headers: authHeaders() })
-        .then((r) => { if (r.ok) setNotifications((items) => (items || []).map((x) => x.id === n.id ? { ...x, is_read: true } : x)); })
+        .then((r) => {
+          if (r.ok) {
+            setNotifications((items) => (items || []).map((x) => x.id === n.id ? { ...x, is_read: true } : x));
+            setUnreadCount((count) => Math.max(0, count - 1));
+          }
+        })
         .catch(() => {});
+    }
+
+    if (n.link) {
+      setOpen(false);
+      navigate(n.link);
     }
   };
 
   return (
     <div className="notifications-wrap">
-      <button className="icon-button" title="Notifications" aria-label="Notifications" onClick={() => setOpen((v) => !v)}>
+      <button
+        className="icon-button"
+        title={unreadCount > 0 ? `Notifications (${unreadCount} unread)` : "Notifications"}
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
         <Bell size={18} />
-        {unread > 0 && <span className="notification-dot">{unread}</span>}
+        {unreadCount > 0 && <span className="notification-dot">{unreadCount}</span>}
       </button>
       {open && (
         <div className="notifications-dropdown">
           <div className="notifications-header">
             <strong>Notifications</strong>
-            {unread > 0 && (
+            <span className="muted">
+              {unreadCount > 0 ? `${unreadCount} unread` : "All caught up"}
+            </span>
+            {unreadCount > 0 && (
               <button type="button" className="text-button" onClick={markAllRead}>
                 <CheckCheck size={13} /> Mark all read
               </button>
@@ -253,10 +293,15 @@ function NotificationsBell() {
             {!loaded && <div className="search-loading">Loading...</div>}
             {loaded && notifications.length === 0 && <div className="search-loading">No notifications.</div>}
             {loaded && notifications.slice(0, 15).map((n) => (
-              <button key={n.id} type="button" className={`notification-item ${n.is_read ? "read" : ""}`} onClick={() => markRead(n)}>
+              <button
+                key={n.id}
+                type="button"
+                className={`notification-item ${n.is_read ? "read" : ""}`}
+                onClick={() => handleClick(n)}
+              >
                 <strong>{n.title}</strong>
                 {n.message && <span>{n.message}</span>}
-                <small>{n.notification_type_display || "System"}</small>
+                <small>{n.notification_type_display || "System"}{n.link ? " · Open" : ""}</small>
               </button>
             ))}
           </div>
@@ -1231,7 +1276,7 @@ function Shell() {
 
         <Route path="/staff-operations" element={
           <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr"]}>
-            <StaffOperationsPage canReview />
+            <StaffOperationsPage />
           </RequireRoles>
         } />
 
@@ -1329,7 +1374,7 @@ function Shell() {
           </RequireRoles>
         } />
 
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<NotFoundPage />} />
         </Routes>
         </Suspense>
       </ErrorBoundary>

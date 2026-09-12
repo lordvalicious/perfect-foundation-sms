@@ -10,27 +10,32 @@ const FINANCE_BREAKDOWN_URL = "/api/dashboard/finance/breakdown/";
 export default function CampusDashboardPage() {
   const [campuses, setCampuses] = useState([]);
   const [finance, setFinance] = useState(null);
+  const [financeFailed, setFinanceFailed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     setError("");
-    try {
-      const [campusData, financeData] = await Promise.all([
-        apiFetch(CAMPUSES_URL, {}, "Failed to load campuses."),
-        fetch(FINANCE_BREAKDOWN_URL, { credentials: "include" })
-          .then((r) => (r.ok ? r.json() : null))
-          .catch(() => null),
-      ]);
+    setFinanceFailed(false);
 
+    try {
+      const campusData = await apiFetch(CAMPUSES_URL, {}, "Failed to load campuses.");
       setCampuses(Array.isArray(campusData) ? campusData : campusData.results || []);
-      setFinance(financeData);
     } catch (err) {
       setError(err.message);
-    } finally {
-      setLoading(false);
     }
+
+    try {
+      const response = await fetch(FINANCE_BREAKDOWN_URL, { credentials: "include" });
+      if (!response.ok) throw new Error("Finance breakdown unavailable.");
+      setFinance(await response.json());
+    } catch {
+      setFinance(null);
+      setFinanceFailed(true);
+    }
+
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -90,6 +95,13 @@ export default function CampusDashboardPage() {
             </div>
           </div>
         </div>
+
+        {financeFailed && (
+          <div className="state-card error" style={{ marginBottom: 24 }}>
+            <strong>Finance data unavailable</strong>
+            <span>We couldn't load the finance breakdown, so collected and outstanding figures are not shown.</span>
+          </div>
+        )}
 
         {/* Campus cards */}
         <div className="panel">

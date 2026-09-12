@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 import { PageHeader, StateArea } from "./ui";
 import { WorkflowStateCard } from "../components/WorkflowStateCard";
 import { WorkflowApprovalSteps } from "../components/WorkflowApprovalSteps";
 import { WorkflowTimeline } from "../components/WorkflowTimeline";
+import { apiFetch } from "../api";
 
 const API_URL = "/api/workflow/instances";
 
@@ -15,14 +17,10 @@ export default function WorkflowInstanceDetailPage() {
 
   const fetchInstance = useCallback(async () => {
     try {
+      setError("");
       setLoading(true);
-      const response = await fetch(`${API_URL}/${id}/`, { credentials: "include" });
-      if (response.ok) {
-        const data = await response.json();
-        setInstance(data);
-      } else {
-        setError("Failed to fetch workflow instance");
-      }
+      const data = await apiFetch(`${API_URL}/${id}/`);
+      setInstance(data);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -35,63 +33,79 @@ export default function WorkflowInstanceDetailPage() {
   }, [fetchInstance]);
 
   return (
-    <div className="space-y-6">
-      {instance && (
-        <PageHeader
-          title={instance.definition_name || "Workflow"}
-          description={`Instance #${instance.id} - Object: ${instance.object_type} (ID: ${instance.object_id})`}
-        />
-      )}
+    <section className="content">
+      <PageHeader
+        crumb="Home / Workflows / Instances"
+        title={instance?.definition_name || "Workflow Instance"}
+        subtitle={
+          instance
+            ? `Instance #${instance.id} - Object: ${instance.object_type} (ID: ${instance.object_id})`
+            : "Loading workflow instance..."
+        }
+        action={
+          <Link to="/workflow/approvals" className="secondary-button">
+            <ArrowLeft size={14} /> Approvals
+          </Link>
+        }
+      />
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-red-800 text-sm">
-          {error}
-        </div>
-      )}
-
-      <StateArea loading={loading}>
+      <StateArea
+        loading={loading}
+        error={error}
+        onRetry={fetchInstance}
+        errorTitle="Unable to load workflow instance."
+        errorText={error}
+      >
         {instance && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white border border-gray-200 rounded-lg p-6 space-y-4">
-                <WorkflowStateCard instance={instance} />
+          <div className="dashboard-grid two" style={{ gridTemplateColumns: "2fr 1fr", alignItems: "start" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <WorkflowStateCard instance={instance} />
 
-                <div className="space-y-2">
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium">Submitted by:</span> {instance.created_by_name}
-                  </p>
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium">Created at:</span>{" "}
-                    {new Date(instance.created_at).toLocaleString()}
-                  </p>
-                  {instance.submitted_at && (
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Submitted at:</span>{" "}
-                      {new Date(instance.submitted_at).toLocaleString()}
-                    </p>
-                  )}
-                  {instance.completed_at && (
-                    <p className="text-sm text-gray-600">
-                      <span className="font-medium">Completed at:</span>{" "}
-                      {new Date(instance.completed_at).toLocaleString()}
-                    </p>
-                  )}
+              <div className="panel">
+                <div className="panel-header">
+                  <div>
+                    <h3 className="panel-title">Details</h3>
+                    <p className="stat-label">Submitted information</p>
+                  </div>
+                </div>
+
+                <div className="panel-body">
+                  <div className="overview-list">
+                    <div>
+                      <span>Submitted by</span>
+                      <strong>{instance.created_by_name || "—"}</strong>
+                    </div>
+                    <div>
+                      <span>Created at</span>
+                      <strong>
+                        {instance.created_at
+                          ? new Date(instance.created_at).toLocaleString()
+                          : "—"}
+                      </strong>
+                    </div>
+                    {instance.submitted_at && (
+                      <div>
+                        <span>Submitted at</span>
+                        <strong>{new Date(instance.submitted_at).toLocaleString()}</strong>
+                      </div>
+                    )}
+                    {instance.completed_at && (
+                      <div>
+                        <span>Completed at</span>
+                        <strong>{new Date(instance.completed_at).toLocaleString()}</strong>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <WorkflowTimeline transitions={instance.transitions || []} />
-              </div>
+              <WorkflowTimeline transitions={instance.transitions || []} />
             </div>
 
-            <div className="lg:col-span-1">
-              <div className="bg-white border border-gray-200 rounded-lg p-6">
-                <WorkflowApprovalSteps approvals={instance.approvals || []} />
-              </div>
-            </div>
+            <WorkflowApprovalSteps approvals={instance.approvals || []} />
           </div>
         )}
       </StateArea>
-    </div>
+    </section>
   );
 }

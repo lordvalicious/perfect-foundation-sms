@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { PageHeader, PanelHeader, StateArea } from "./ui";
 import { apiFetch, authHeaders } from "../api";
+import { useSchool } from "../schoolContext";
 
 const BASE = "/api/staff/";
 
@@ -30,11 +31,14 @@ const ATT_STATUS = [
   ["leave", "On Leave"],
 ];
 
-export default function StaffOperationsPage({ canReview }) {
+export default function StaffOperationsPage() {
+  const { scopedHasRole } = useSchool();
+  const canReview = scopedHasRole(["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr"]);
   const [tab, setTab] = useState("leave");
   const [leaves, setLeaves] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [staffList, setStaffList] = useState([]);
+  const [staffError, setStaffError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -59,12 +63,20 @@ export default function StaffOperationsPage({ canReview }) {
     notes: "",
   });
 
-  useEffect(() => {
+  const loadStaff = useCallback(() => {
+    setStaffError("");
     fetch(`${BASE}?page_size=500`, { credentials: "include" })
-      .then((r) => (r.ok ? r.json() : { results: [] }))
-      .then((json) => setStaffList(json.results || []))
-      .catch(() => setStaffList([]));
+      .then((r) => {
+        if (!r.ok) throw new Error("Could not load the staff list.");
+        return r.json();
+      })
+      .then((json) => setStaffList(Array.isArray(json) ? json : json.results || []))
+      .catch((err) => setStaffError(err.message));
   }, []);
+
+  useEffect(() => {
+    loadStaff();
+  }, [loadStaff]);
 
   const loadLeaves = useCallback(() => {
     setLoading(true);
@@ -217,6 +229,16 @@ export default function StaffOperationsPage({ canReview }) {
           Daily Attendance
         </button>
       </div>
+
+      {staffError && (
+        <div className="state-card error" style={{ marginBottom: 16 }}>
+          <strong>Staff list unavailable</strong>
+          <span>{staffError}</span>
+          <button type="button" className="secondary-button" onClick={loadStaff}>
+            Try Again
+          </button>
+        </div>
+      )}
 
       <div className="panel">
         <PanelHeader

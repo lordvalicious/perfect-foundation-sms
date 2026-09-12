@@ -1,4 +1,5 @@
 import { Edit, Trash2, FileText } from "lucide-react";
+import { EmptyState } from "../pages/ui";
 
 /**
  * Table of workflow definitions with CRUD actions.
@@ -10,82 +11,95 @@ export function WorkflowDefinitionList({
   onTest,
   loading = false,
 }) {
+  if (definitions.length === 0) {
+    return (
+      <EmptyState
+        icon={FileText}
+        title="No workflow definitions found"
+        message="Create a new workflow to start modelling business processes and approval queues."
+      />
+    );
+  }
+
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border-collapse">
+    <div className="table-wrapper">
+      <table className="data-table">
         <thead>
-          <tr className="bg-gray-50 border-b border-gray-200">
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Name</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Slug</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Object Type</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">States</th>
-            <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Steps</th>
-            <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700">Actions</th>
+          <tr>
+            <th>NAME</th>
+            <th>SLUG</th>
+            <th>OBJECT TYPE</th>
+            <th>STATES</th>
+            <th>STEPS</th>
+            <th style={{ textAlign: "right" }}>ACTIONS</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200">
+
+        <tbody>
           {definitions.map((def) => (
-            <tr key={def.id} className="hover:bg-gray-50">
-              <td className="px-4 py-3">
-                <p className="text-sm font-medium text-gray-900">{def.name}</p>
+            <tr key={def.id}>
+              <td>
+                <strong>{def.name}</strong>
               </td>
-              <td className="px-4 py-3">
-                <code className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded">
+
+              <td>
+                <code className="cell-sub" style={{ background: "transparent", padding: 0 }}>
                   {def.slug}
                 </code>
               </td>
-              <td className="px-4 py-3">
-                <p className="text-sm text-gray-600">{def.object_type}</p>
+
+              <td>
+                <span className="cell-sub">{def.object_type}</span>
               </td>
-              <td className="px-4 py-3">
-                <div className="flex gap-1 flex-wrap">
-                  {def.states?.map((state) => (
-                    <span
-                      key={state}
-                      className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded"
-                    >
+
+              <td>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {(def.states || []).map((state) => (
+                    <span key={state} className="role-chip">
                       {state}
                     </span>
                   ))}
                 </div>
               </td>
-              <td className="px-4 py-3">
-                <div className="flex gap-1 flex-wrap">
-                  {def.approval_steps?.map((step) => (
-                    <span
-                      key={step}
-                      className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded"
-                    >
+
+              <td>
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+                  {(def.approval_steps || []).map((step) => (
+                    <span key={step} className="role-chip secondary">
                       {step}
                     </span>
                   ))}
                 </div>
               </td>
-              <td className="px-4 py-3">
-                <div className="flex justify-center gap-2">
+
+              <td>
+                <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
                   <button
+                    type="button"
+                    className="table-action"
                     onClick={() => onTest(def)}
-                    title="Test"
-                    className="p-2 text-blue-600 hover:bg-blue-50 rounded"
+                    title="Test transitions"
                     disabled={loading}
                   >
-                    <FileText className="w-4 h-4" />
+                    <FileText size={15} />
                   </button>
                   <button
+                    type="button"
+                    className="table-action"
                     onClick={() => onEdit(def)}
                     title="Edit"
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded"
                     disabled={loading}
                   >
-                    <Edit className="w-4 h-4" />
+                    <Edit size={15} />
                   </button>
                   <button
+                    type="button"
+                    className="table-action danger"
                     onClick={() => onDelete(def)}
                     title="Delete"
-                    className="p-2 text-red-600 hover:bg-red-50 rounded"
                     disabled={loading}
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash2 size={15} />
                   </button>
                 </div>
               </td>
@@ -93,11 +107,6 @@ export function WorkflowDefinitionList({
           ))}
         </tbody>
       </table>
-      {definitions.length === 0 && (
-        <div className="text-center py-8">
-          <p className="text-gray-500">No workflow definitions found</p>
-        </div>
-      )}
     </div>
   );
 }
