@@ -150,6 +150,16 @@ def record_audit(
     if user is not None and not user.is_authenticated:
         user = None
 
+    institution = None
+    if request is not None:
+        institution = getattr(request, "institution", None)
+    if institution is None and user is not None:
+        institution = getattr(user, "institution", None)
+
+    user_agent = ""
+    if request is not None:
+        user_agent = request.META.get("HTTP_USER_AGENT", "")[:255]
+
     AuditLog.objects.create(
         user=user,
         action=action,
@@ -158,4 +168,6 @@ def record_audit(
         object_repr=object_repr,
         details=details or {},
         ip_address=get_client_ip(request),
+        institution=institution,
+        user_agent=user_agent,
     )

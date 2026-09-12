@@ -1803,6 +1803,17 @@ class StudentAlumni(SoftDeleteMixin):
 
         if graduation_date is None:
             graduation_date = timezone.now().date()
+        elif isinstance(graduation_date, str):
+            try:
+                graduation_date = (
+                    timezone.datetime.strptime(
+                        graduation_date, "%Y-%m-%d"
+                    ).date()
+                )
+            except ValueError:
+                raise ValidationError(
+                    "graduation date must be in YYYY-MM-DD format."
+                )
 
         # Get current enrollment info
         active_enrollment = student.enrollments.filter(status="active").first()
@@ -1831,6 +1842,25 @@ class StudentAlumni(SoftDeleteMixin):
             reason=reason,
             recorded_by=user,
         )
+
+        # Bridge into the alumni directory so graduated students
+        # automatically appear in the school's alumni network.
+        try:
+            from apps.alumni.models import AlumniProfile
+
+            AlumniProfile.objects.get_or_create(
+                student=student,
+                defaults={
+                    "institution": student.institution,
+                    "campus": active_enrollment.campus if active_enrollment else student.primary_campus,
+                    "full_name": student.full_name,
+                    "batch_year": alumni.graduation_date.year,
+                    "phone": student.phone or "",
+                },
+            )
+        except Exception:
+            # Never let an alumni-directory failure block graduation.
+            pass
 
         # Update student status
         student.status = "graduated"

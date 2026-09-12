@@ -723,6 +723,19 @@ class StudentSerializer(serializers.ModelSerializer):
                         {field: "This field is required."}
                     )
 
+        if not creating and "status" in attrs:
+            if not self.instance.can_transition_to(attrs["status"]):
+                raise serializers.ValidationError(
+                    {
+                        "status": (
+                            f"Cannot transition from "
+                            f"'{self.instance.status}' to '{attrs['status']}'. "
+                            f"Allowed transitions: "
+                            f"{self.instance.STATUS_TRANSITIONS.get(self.instance.status, [])}"
+                        )
+                    }
+                )
+
         return attrs
 
     def _extract_guardian(self, attrs):

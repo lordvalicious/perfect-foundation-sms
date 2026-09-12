@@ -9,6 +9,8 @@ from .platform_views import (
 from .tenant_views import PublicTenantConfigView
 from .views import (
     AcademicUnitListView,
+    AcademicYearActionView,
+    AcademicYearDetailView,
     AcademicYearListView,
     CampusViewSet,
     ClassListView,
@@ -17,6 +19,8 @@ from .views import (
     SectionListView,
     SubjectListView,
     SubjectOfferingListView,
+    TermActionView,
+    TermDetailView,
     TermListView,
 )
 
@@ -42,7 +46,11 @@ urlpatterns = [
     path("sections/", SectionListView.as_view(), name="section-list"),
     path("sections/<int:pk>/", SectionDetailView.as_view(), name="section-detail"),
     path("academic-years/", AcademicYearListView.as_view(), name="academic-year-list"),
+    path("academic-years/<int:pk>/", AcademicYearDetailView.as_view(), name="academic-year-detail"),
+    path("academic-years/<int:pk>/<str:action>/", AcademicYearActionView.as_view(), name="academic-year-action"),
     path("terms/", TermListView.as_view(), name="term-list"),
+    path("terms/<int:pk>/", TermDetailView.as_view(), name="term-detail"),
+    path("terms/<int:pk>/<str:action>/", TermActionView.as_view(), name="term-action"),
     path("subjects/", SubjectListView.as_view(), name="subject-list"),
     path("offerings/", SubjectOfferingListView.as_view(), name="subject-offering-list"),
     path("branding/", SchoolBrandingView.as_view(), name="school-branding"),

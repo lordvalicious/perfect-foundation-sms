@@ -6,11 +6,10 @@ from django.http import HttpResponse
 from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import apply_campus_scope
-from apps.accounts.permissions import IsAdminRole
-
+from apps.accounts.access import get_institution
 from apps.accounts.permissions import IsAdminRole
 
 from .models import AuditLog, ACTION_CHOICES
@@ -29,12 +28,11 @@ class AuditLogListView(generics.ListAPIView):
     pagination_class = AuditLogPagination
 
     def get_queryset(self):
-        queryset = apply_campus_scope(
-            AuditLog.objects.select_related("user").all(),
-            self.request,
-            campus_field=None,
-            institution_field="institution_id",
-        )
+        queryset = AuditLog.objects.select_related("user").all()
+
+        institution = get_institution(self.request)
+        if institution is not None:
+            queryset = queryset.filter(institution=institution)
 
         action = self.request.query_params.get("action")
         if action:

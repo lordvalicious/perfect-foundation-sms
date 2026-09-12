@@ -1,4 +1,8 @@
+from datetime import date
+from decimal import Decimal
+
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
@@ -647,7 +651,7 @@ class OvertimeActionView(APIView):
         if action == "approve":
             overtime.status = "approved"
             overtime.approved_by = request.user
-            overtime.approved_on = models.DateTimeField(auto_now=True)
+            overtime.approved_on = timezone.now()
             overtime.save(update_fields=["status", "approved_by", "approved_on"])
             return Response({"detail": "Overtime approved"})
         elif action == "reject":

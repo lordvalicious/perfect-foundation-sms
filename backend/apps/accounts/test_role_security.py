@@ -37,12 +37,7 @@ class RoleSecurityBase(TestCase):
     def setUp(self):
         self.school_a = School.objects.create(name="Lahore School", city="Lahore")
         self.school_b = School.objects.create(name="Sialkot School", city="Sialkot")
-        self.perm = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
+        self.perm = Permission.objects.get(codename="student.create")
 
     def _user(self, username, role, school, is_superuser=False, role_username=None):
         """Create a user with one active membership and the given role."""

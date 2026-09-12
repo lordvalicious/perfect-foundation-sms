@@ -1,4 +1,5 @@
-﻿from decimal import Decimal
+﻿from datetime import date
+from decimal import Decimal
 
 from django.db import transaction
 from django.db.models import Q, Sum
@@ -256,6 +257,7 @@ class ReceivablesReportView(APIView):
     permission_classes = [IsAccountantRole]
 
     def get(self, request):
+        today = date.today()
         invoices = (
             scoped_invoice_queryset(request)
             .select_related("student")
@@ -267,7 +269,43 @@ class ReceivablesReportView(APIView):
             )
         )
         rows = [{"invoice": invoice.invoice_number, "student": invoice.student.full_name, "balance": str(invoice.balance)} for invoice in invoices if invoice.balance > 0]
-        return Response({"rows": rows, "total": str(sum((Decimal(row["balance"]) for row in rows), Decimal("0.00")))})
+        total = sum((Decimal(row["balance"]) for row in rows), Decimal("0.00"))
+
+        # AR aging buckets keyed off the invoice due date.
+        aging = {
+            "current": Decimal("0.00"),       # not yet due or due within 30 days
+            "31_60": Decimal("0.00"),
+            "61_90": Decimal("0.00"),
+            "90_plus": Decimal("0.00"),
+        }
+        for invoice in invoices:
+            if invoice.balance <= 0:
+                continue
+            days_overdue = (today - invoice.due_date).days
+            balance = Decimal(invoice.balance)
+            if days_overdue <= 30:
+                aging["current"] += balance
+            elif days_overdue <= 60:
+                aging["31_60"] += balance
+            elif days_overdue <= 90:
+                aging["61_90"] += balance
+            else:
+                aging["90_plus"] += balance
+
+        overdue_total = aging["31_60"] + aging["61_90"] + aging["90_plus"]
+
+        return Response({
+            "rows": rows,
+            "total": str(total),
+            "aging": {
+                "current": str(aging["current"]),
+                "31_60": str(aging["31_60"]),
+                "61_90": str(aging["61_90"]),
+                "90_plus": str(aging["90_plus"]),
+            },
+            "overdue_total": str(overdue_total),
+            "as_of": today.isoformat(),
+        })
 
 
 class InvoiceListView(generics.ListAPIView):

@@ -135,7 +135,6 @@ class ClassSerializer(serializers.ModelSerializer):
         read_only=True,
     )
     section_count = serializers.IntegerField(
-        source="sections.count",
         read_only=True,
     )
     student_count = serializers.IntegerField(
@@ -229,6 +228,7 @@ class TermSerializer(serializers.ModelSerializer):
             "name",
             "start_date",
             "end_date",
+            "status",
             "created_at",
             "updated_at",
         ]

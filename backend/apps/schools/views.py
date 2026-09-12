@@ -1,5 +1,6 @@
 from django.db.models import Count, Q
 from rest_framework import generics, status, viewsets
+from rest_framework.views import APIView
 from rest_framework.mixins import (
     DestroyModelMixin,
     RetrieveModelMixin,
@@ -358,6 +359,14 @@ class ClassListView(NoPaginationMixin, generics.ListCreateAPIView):
         queryset = (
             Class.objects.filter(unit__campus__school=self.request.institution)
             .select_related("unit", "unit__campus")
+            .annotate(
+                student_count=Count(
+                    "student_enrollments",
+                    filter=Q(student_enrollments__status="active"),
+                    distinct=True,
+                ),
+                section_count=Count("sections", distinct=True),
+            )
             .order_by("level", "name")
         )
 
@@ -440,6 +449,13 @@ def section_queryset(request):
             class_obj__unit__campus__school=request.institution
         )
         .select_related("class_obj", "class_obj__unit__campus")
+        .annotate(
+            student_count=Count(
+                "student_enrollments",
+                filter=Q(student_enrollments__status="active"),
+                distinct=True,
+            ),
+        )
         .order_by("class_obj__name", "name")
     )
 
@@ -461,6 +477,54 @@ class AcademicYearListView(NoPaginationMixin, generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         serializer.save(school=self.request.institution)
+
+
+class AcademicYearDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = AcademicYearSerializer
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return AcademicYear.objects.filter(
+            school=self.request.institution
+        ).select_related("school")
+
+
+class AcademicYearActionView(APIView):
+    """Set an academic year's status (e.g. activate/complete).
+
+    Activating a year automatically completes any other active year so
+    there is exactly one active year per school.
+    """
+
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def post(self, request, pk, action):
+        year = get_object_or_404(
+            AcademicYear.objects.filter(school=request.institution),
+            pk=pk,
+        )
+        status_map = {
+            "activate": "active",
+            "complete": "completed",
+            "mark-upcoming": "upcoming",
+        }
+        if action not in status_map:
+            return Response(
+                {"detail": "Invalid action."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_status = status_map[action]
+        with transaction.atomic():
+            if new_status == "active":
+                AcademicYear.objects.filter(
+                    school=request.institution,
+                    status="active",
+                ).exclude(pk=year.pk).update(status="completed")
+            year.status = new_status
+            year.save(update_fields=["status", "updated_at"])
+
+        return Response(AcademicYearSerializer(year).data)
 
 
 class TermListView(NoPaginationMixin, generics.ListCreateAPIView):
@@ -485,6 +549,52 @@ class TermListView(NoPaginationMixin, generics.ListCreateAPIView):
             _raise_parent_not_in_school("academic_year")
 
         serializer.save()
+
+
+class TermDetailView(generics.RetrieveUpdateDestroyAPIView):
+    serializer_class = TermSerializer
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def get_queryset(self):
+        return Term.objects.filter(
+            academic_year__school=self.request.institution
+        ).select_related("academic_year")
+
+
+class TermActionView(APIView):
+    """Set a term's status (activate/complete/mark-upcoming).
+
+    Activating a term completes the other terms of its academic year.
+    """
+
+    permission_classes = [HasActiveInstitution, IsAdminOrReadOnly]
+
+    def post(self, request, pk, action):
+        term = get_object_or_404(
+            Term.objects.filter(academic_year__school=request.institution),
+            pk=pk,
+        )
+        status_map = {
+            "activate": "active",
+            "complete": "completed",
+            "mark-upcoming": "upcoming",
+        }
+        if action not in status_map:
+            return Response(
+                {"detail": "Invalid action."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        new_status = status_map[action]
+        with transaction.atomic():
+            if new_status == "active":
+                term.academic_year.terms.exclude(pk=term.pk).update(
+                    status="completed"
+                )
+            term.status = new_status
+            term.save(update_fields=["status", "updated_at"])
+
+        return Response(TermSerializer(term).data)
 
 
 class SubjectListView(NoPaginationMixin, generics.ListAPIView):

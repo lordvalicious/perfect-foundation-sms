@@ -1567,6 +1567,85 @@ class StudentGraduateView(APIView):
         )
 
 
+class StudentBatchGraduateView(APIView):
+    """Graduate a batch of students (e.g. a whole graduating class).
+
+    Accepts ``{"student_ids": [...], "graduation_date": "YYYY-MM-DD",
+    "reason": "..."}``. Runs atomically on a single transaction and
+    returns per-student success/failure details.
+    """
+    permission_classes = [IsAdminRole]
+
+    @transaction.atomic
+    def post(self, request):
+        student_ids = request.data.get("student_ids") or []
+        if not isinstance(student_ids, (list, tuple)) or not student_ids:
+            return Response(
+                {"detail": "student_ids is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        graduation_date = request.data.get("graduation_date")
+        reason = request.data.get("reason", "Graduated")
+        final_grade = request.data.get("final_grade", "")
+
+        students = (
+            Student.objects
+            .filter(
+                institution=request.institution,
+                pk__in=student_ids,
+                enrollments__academic_year__school=request.institution,
+            )
+            .distinct()
+        )
+
+        results = {"graduated": [], "failed": []}
+        for student in students:
+            try:
+                alumni = student.graduate(
+                    request.user,
+                    graduation_date=graduation_date,
+                    reason=reason,
+                    final_grade=final_grade,
+                )
+                results["graduated"].append(
+                    {
+                        "student_id": student.pk,
+                        "full_name": student.full_name,
+                        "alumni_id": alumni.pk,
+                    }
+                )
+            except ValidationError as exc:
+                results["failed"].append(
+                    {
+                        "student_id": student.pk,
+                        "full_name": student.full_name,
+                        "error": _flatten_validation_errors(exc),
+                    }
+                )
+
+        not_found = [
+            sid for sid in student_ids
+            if sid not in [s.pk for s in students]
+        ]
+        if not_found:
+            results["failed"].append(
+                {
+                    "student_id": None,
+                    "full_name": None,
+                    "error": f"Student(s) not found or out of scope: {not_found}",
+                }
+            )
+
+        if not results["graduated"]:
+            return Response(
+                results,
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response(results, status=status.HTTP_201_CREATED)
+
+
 class StudentWithdrawView(APIView):
     """Withdraw a student."""
     permission_classes = [IsAdminRole]

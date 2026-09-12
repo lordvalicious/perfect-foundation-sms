@@ -456,12 +456,7 @@ class RolePermissionTests(TestCase):
         user = make_user("admin", Role.ADMIN, self.school)
         
         # Create a permission
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         # Assign to role
         role_perm = RolePermission.objects.create(
@@ -479,12 +474,7 @@ class RolePermissionTests(TestCase):
     def test_role_permission_unique_per_institution(self):
         """Test unique constraint on role+permission+institution."""
         user = make_user("admin", Role.ADMIN, self.school)
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         RolePermission.objects.create(
             role=Role.ADMIN,
@@ -506,12 +496,7 @@ class RolePermissionTests(TestCase):
         """Test role permissions are scoped to institution."""
         other_school = School.objects.create(name="Other School")
         
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         # Create role permission for first school
         RolePermission.objects.create(
@@ -539,12 +524,7 @@ class UserPermissionTests(TestCase):
         self.target_user = make_user("teacher", Role.TEACHER, self.school)
 
     def test_grant_allow_permission(self):
-        perm = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.create")
         
         user_perm = UserPermission.objects.create(
             user=self.target_user,
@@ -558,12 +538,7 @@ class UserPermissionTests(TestCase):
         self.assertTrue(user_perm.is_active())
 
     def test_grant_deny_permission(self):
-        perm = Permission.objects.create(
-            codename="student.delete",
-            name="Delete Students",
-            action="delete",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.delete")
         
         user_perm = UserPermission.objects.create(
             user=self.target_user,
@@ -576,12 +551,7 @@ class UserPermissionTests(TestCase):
         self.assertEqual(user_perm.effect, "deny")
 
     def test_user_permission_expiration(self):
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         # Expired permission
         expired = UserPermission.objects.create(
@@ -603,12 +573,7 @@ class UserPermissionTests(TestCase):
         self.assertTrue(expired.is_active())
 
     def test_user_permission_unique_per_institution(self):
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         UserPermission.objects.create(
             user=self.target_user,
@@ -637,12 +602,7 @@ class UserPermissionEffectiveTests(TestCase):
 
     def test_role_based_permissions(self):
         """Test permissions granted via role."""
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         # Assign permission to TEACHER role
         RolePermission.objects.create(
@@ -660,12 +620,7 @@ class UserPermissionEffectiveTests(TestCase):
 
     def test_user_allow_override(self):
         """Test user-specific allow overrides role."""
-        perm = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.create")
         
         # Teacher role doesn't have create permission by default
         self.assertFalse(self.teacher_user.has_permission("student.create", self.school))
@@ -683,12 +638,7 @@ class UserPermissionEffectiveTests(TestCase):
 
     def test_user_deny_override(self):
         """Test user-specific deny overrides role."""
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         # Assign to TEACHER role
         RolePermission.objects.create(
@@ -713,12 +663,7 @@ class UserPermissionEffectiveTests(TestCase):
 
     def test_deny_overrides_allow(self):
         """Test deny takes precedence over allow."""
-        perm = Permission.objects.create(
-            codename="student.edit",
-            name="Edit Students",
-            action="edit",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.edit")
         
         # Grant allow
         UserPermission.objects.create(
@@ -740,12 +685,7 @@ class UserPermissionEffectiveTests(TestCase):
         self.assertFalse(self.teacher_user.has_permission("student.edit", self.school))
 
     def test_expired_permissions_not_counted(self):
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         # Expired allow permission
         UserPermission.objects.create(
@@ -781,18 +721,8 @@ class UserPermissionEffectiveTests(TestCase):
         self.assertTrue(superuser.has_permission("any.permission", self.school))
 
     def test_has_any_permission(self):
-        perm1 = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
-        perm2 = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
+        perm1 = Permission.objects.get(codename="student.view")
+        perm2 = Permission.objects.get(codename="student.create")
         
         RolePermission.objects.create(
             role=Role.TEACHER,
@@ -811,18 +741,8 @@ class UserPermissionEffectiveTests(TestCase):
         ))
 
     def test_has_all_permissions(self):
-        perm1 = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
-        perm2 = Permission.objects.create(
-            codename="student.create",
-            name="Create Students",
-            action="create",
-            category="student",
-        )
+        perm1 = Permission.objects.get(codename="student.view")
+        perm2 = Permission.objects.get(codename="student.create")
         
         RolePermission.objects.create(
             role=Role.TEACHER,
@@ -838,12 +758,7 @@ class UserPermissionEffectiveTests(TestCase):
         ))
 
     def test_get_permissions_returns_set(self):
-        perm = Permission.objects.create(
-            codename="student.view",
-            name="View Students",
-            action="view",
-            category="student",
-        )
+        perm = Permission.objects.get(codename="student.view")
         
         RolePermission.objects.create(
             role=Role.TEACHER,
@@ -929,7 +844,14 @@ class PermissionAPITests(TestCase):
         self.assertEqual(data["permission"], perm.pk)
 
     def test_role_permission_delete(self):
-        perm = Permission.objects.get(codename="student.view")
+        # Catalog permissions are system rows (immutable in roles); use a
+        # custom, non-system permission for the revoke flow.
+        perm = Permission.objects.create(
+            codename="custom.role.revocable.view",
+            name="Revocable Role Permission",
+            action="view",
+            category="permission",
+        )
 
         rp = RolePermission.objects.create(
             role=Role.TEACHER,

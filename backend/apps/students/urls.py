@@ -34,6 +34,7 @@ from .views import (
     SectionTransferRejectView,
     Student360View,
     StudentAlumniDetailView,
+    StudentBatchGraduateView,
     StudentGraduateView,
     StudentListCreateView,
     StudentDetailView,
@@ -52,7 +53,6 @@ from .views import (
     ProgressionHistoryView,
     StudentActivateView,
     StudentWithdrawView,
-    StudentGraduateView,
     TransferCertificateCancelView,
     TransferCertificateDetailView,
     TransferCertificateIssueView,
@@ -157,6 +157,11 @@ urlpatterns = [
         name="student-alumni-detail-pk",
     ),
     # Graduation/Withdrawal/Activation
+    path(
+        "graduation/batch/",
+        StudentBatchGraduateView.as_view(),
+        name="student-graduate-batch",
+    ),
     path(
         "<int:pk>/graduate/",
         StudentGraduateView.as_view(),

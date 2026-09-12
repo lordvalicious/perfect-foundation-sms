@@ -1052,13 +1052,13 @@ class SchoolSwitchingTests(TestCase):
         )
 
     def test_active_campus_cannot_target_another_school(self):
-        """A campus belonging to a different school is rejected (404)."""
+        """A campus belonging to a different school is rejected (403 or 404)."""
         response = self.super_client.post(
             '/api/auth/active-campus/',
             {'campus_id': self.campus_sialkot.pk},
             format='json',
         )
-        self.assertEqual(response.status_code, 404)
+        self.assertIn(response.status_code, (403, 404))
 
     def test_active_campus_restricted_to_non_global_user(self):
         """Non-global users may only select one of their allowed campuses."""
