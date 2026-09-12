@@ -24,8 +24,16 @@ class CampusStudentCountReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        # Don't apply campus scope for campus comparison report
-        # This is for super admins to compare campuses
+        # Apply campus scope for campus comparison report
+        # Global users (super_admin, admin, etc.) can see all campuses
+        # Non-global users see only their allowed campuses
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+        
+        # Optional campus filter for global users
+        campus = request.query_params.get("campus")
+        if campus:
+            queryset = queryset.filter(primary_campus_id=campus)
+        
         return queryset
 
     def get_summary(self, queryset, request):
@@ -70,7 +78,15 @@ class CampusAttendanceReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        # Don't apply campus scope for comparison
+        # Apply campus scope for attendance comparison
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "campus_id")
+
+        # Optional campus filter for global users
+        campus = request.query_params.get("campus")
+        if campus:
+            queryset = queryset.filter(campus_id=campus)
+
         return queryset
 
     def get_summary(self, queryset, request):
@@ -122,8 +138,11 @@ class CampusAcademicPerformanceReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        # Don't apply campus scope for comparison
+        # Apply campus scope for academic performance comparison
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "exam__campus_id")
 
+        # Optional exam filter
         exam = request.query_params.get("exam")
         if exam:
             queryset = queryset.filter(exam_id=exam)
@@ -184,7 +203,9 @@ class CampusFeeCollectionReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        # Don't apply campus scope for comparison
+        # Apply campus scope for fee collection comparison
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "enrollment__campus_id")
 
         date_from = request.query_params.get("date_from")
         if date_from:
@@ -244,6 +265,15 @@ class CampusStaffCountReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
+        # Apply campus scope for staff count comparison
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+
+        # Optional campus filter for global users
+        campus = request.query_params.get("campus")
+        if campus:
+            queryset = queryset.filter(primary_campus_id=campus)
+
         return queryset
 
     def get_summary(self, queryset, request):
@@ -284,6 +314,15 @@ class CampusAdmissionsReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
+        # Apply campus scope for admissions comparison
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "campus_id")
+
+        # Optional campus filter for global users
+        campus = request.query_params.get("campus")
+        if campus:
+            queryset = queryset.filter(campus_id=campus)
+
         return queryset
 
     def get_summary(self, queryset, request):
@@ -328,6 +367,9 @@ class CampusFinancialSummaryReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
+        # Apply campus scope for financial summary
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "enrollment__campus_id")
 
         date_from = request.query_params.get("date_from")
         if date_from:
@@ -405,7 +447,11 @@ class CampusComparisonReportView(AggregateReportView):
         return Campus.objects.filter(status="active")
 
     def get_queryset(self, request):
-        return super().get_queryset(request)
+        queryset = super().get_queryset(request)
+        # Apply campus scope for campus comparison
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "id")
+        return queryset
 
     def get_summary(self, queryset, request):
         return {"total_campuses": queryset.count()}
@@ -475,6 +521,9 @@ class CampusDashboardReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
+        # Apply campus scope for dashboard
+        # Global users can see all campuses, non-global users see only their campuses
+        queryset = apply_campus_scope(queryset, request, "id")
 
         campus_id = request.query_params.get("campus")
         if campus_id:

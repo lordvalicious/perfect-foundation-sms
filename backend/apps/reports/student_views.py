@@ -359,6 +359,16 @@ class StudentProfileReportView(BaseReportView):
         if not student:
             return Response({"detail": "Student not found"}, status=404)
 
+        # Verify student belongs to the user's institution/campus
+        if student.institution != getattr(request, "institution", None):
+            return Response({"detail": "Student not found"}, status=404)
+        
+        # Check campus access
+        from apps.accounts.access import campus_access
+        access = campus_access(request)
+        if not access["global"] and student.primary_campus_id not in access["allowed_ids"]:
+            return Response({"detail": "Student not found"}, status=404)
+
         # Build comprehensive profile
         enrollment = student.enrollments.filter(status="active").first()
         all_enrollments = student.enrollments.all().select_related(
