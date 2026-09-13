@@ -1,9 +1,9 @@
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, status
+from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import apply_campus_scope, get_institution
 from apps.accounts.permissions import IsStaffRole
 
 from .models import Allocation, Hostel, Room
@@ -12,6 +12,10 @@ from .serializers import (
     HostelSerializer,
     RoomSerializer,
 )
+
+
+class NoPaginationMixin:
+    pagination_class = None
 
 
 class HostelListCreateView(generics.ListCreateAPIView):
@@ -24,12 +28,44 @@ class HostelListCreateView(generics.ListCreateAPIView):
         return apply_campus_scope(queryset, self.request)
 
 
+class HostelRoomSelectorView(NoPaginationMixin, generics.ListAPIView):
+    """School-wide hostel selector consumed by the Add Room form.
+
+    Room management is a school-wide staff function: an authorized user may
+    create Rooms in any hostel of their institution. This endpoint returns
+    every hostel in the active institution regardless of campus so the Add
+    Room dropdown exposes exactly what Room creation authorizes — never a
+    hostel of another school.
+
+    The general ``/api/hostel/hostels/`` list stays campus-scoped for the
+    Hostel management table; this endpoint is intentionally separate.
+    """
+
+    serializer_class = HostelSerializer
+    permission_classes = [IsStaffRole]
+
+    def get_queryset(self):
+        institution = get_institution(self.request)
+
+        if institution is None:
+            return Hostel.objects.none()
+
+        return (
+            Hostel.objects.select_related("campus")
+            .filter(campus__school=institution)
+            .order_by("name")
+        )
+
+
 class HostelDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = HostelSerializer
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
-        return Hostel.objects.select_related("campus")
+        return apply_campus_scope(
+            Hostel.objects.select_related("campus"),
+            self.request,
+        )
 
 
 class RoomListCreateView(generics.ListCreateAPIView):
@@ -37,7 +73,13 @@ class RoomListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
+        institution = get_institution(self.request)
         queryset = Room.objects.select_related("hostel")
+
+        if institution is not None:
+            # Room management is institution-scoped; never expose rooms
+            # belonging to another school.
+            queryset = queryset.filter(hostel__campus__school=institution)
 
         hostel = self.request.query_params.get("hostel")
 
@@ -45,6 +87,21 @@ class RoomListCreateView(generics.ListCreateAPIView):
             queryset = queryset.filter(hostel_id=hostel)
 
         return queryset
+
+    def perform_create(self, serializer):
+        hostel = serializer.validated_data.get("hostel")
+        institution = get_institution(self.request)
+
+        if (
+            hostel is None
+            or institution is None
+            or hostel.campus.school_id != institution.id
+        ):
+            raise serializers.ValidationError(
+                {"hostel": "Selected hostel does not belong to your school."}
+            )
+
+        serializer.save()
 
 
 class AllocationListCreateView(generics.ListCreateAPIView):

@@ -4,6 +4,7 @@ from .views import (
     AllocationListCreateView,
     HostelDetailView,
     HostelListCreateView,
+    HostelRoomSelectorView,
     RoomListCreateView,
     VacateAllocationView,
 )
@@ -14,6 +15,11 @@ urlpatterns = [
         "hostels/<int:pk>/",
         HostelDetailView.as_view(),
         name="hostel-detail",
+    ),
+    path(
+        "room-hostels/",
+        HostelRoomSelectorView.as_view(),
+        name="hostel-room-selector",
     ),
     path("rooms/", RoomListCreateView.as_view(), name="room-list"),
     path(

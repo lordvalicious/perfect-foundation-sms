@@ -41,7 +41,7 @@ export default function HostelPage() {
   }, [loadCampuses]);
 
   const loadHostels = useCallback(() => {
-    fetch(`${BASE}hostels/`, { credentials: "include" })
+    fetch(`${BASE}room-hostels/`, { credentials: "include" })
       .then((r) => (r.ok ? r.json() : { results: [] }))
       .then((data) => setHostels(data.results || data))
       .catch(() => {});
