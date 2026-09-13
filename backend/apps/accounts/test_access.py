@@ -73,6 +73,9 @@ def make_request(user, path="/api/events/"):
     factory = APIRequestFactory()
     django_request = factory.get(path)
     force_authenticate(django_request, user)
+    # Simulate ActiveInstitutionMiddleware: the resolved active school is the
+    # user's primary institution (no session/context switching in unit tests).
+    django_request.institution = user.primary_institution
     return DRFRequest(django_request)
 
 
@@ -220,6 +223,41 @@ class UserAllowedCampusTests(TestCase):
         user = make_user("nobody", Role.STAFF, self.school)
         self.assertEqual(user_allowed_campus_ids(user), set())
 
+    def test_global_user_in_campusless_school_fails_closed(self):
+        """A global user whose active school has no campuses must NOT get the
+        campuses of other schools (fail closed, never cross-school)."""
+        campusless_school = School.objects.create(name="Campusless School")
+        other_school = School.objects.create(name="Other School")
+        other_campus = Campus.objects.create(
+            school=other_school,
+            name="Other Campus",
+        )
+        user = make_user("sadm-empty", Role.ADMIN, campusless_school)
+
+        self.assertEqual(user_allowed_campus_ids(user), set())
+        self.assertNotIn(other_campus.pk, user_allowed_campus_ids(user))
+
+    def test_global_user_scope_locked_to_own_school(self):
+        """user_allowed_campus_ids never returns another school's campuses."""
+        other_school = School.objects.create(name="Other School")
+        other_campus = Campus.objects.create(
+            school=other_school,
+            name="Other Campus",
+        )
+
+        school_b = School.objects.create(name="Second School")
+        campus_b1 = Campus.objects.create(
+            school=school_b,
+            name="B Campus 1",
+        )
+        user = make_user("sadm-scope", Role.ADMIN, school_b)
+
+        self.assertEqual(
+            user_allowed_campus_ids(user),
+            {campus_b1.pk},
+        )
+        self.assertNotIn(other_campus.pk, user_allowed_campus_ids(user))
+
 
 class CampusAccessTests(TestCase):
     def setUp(self):
@@ -278,6 +316,18 @@ class CampusAccessTests(TestCase):
         with self.assertRaises(PermissionDenied):
             campus_access(request)
 
+    def test_global_user_denied_foreign_school_campus(self):
+        """A global user must not address a campus of another school."""
+        other_school = School.objects.create(name="Other School")
+        other_campus = Campus.objects.create(
+            school=other_school,
+            name="Other Campus",
+        )
+        admin = make_user("sadmin-x", Role.SUPER_ADMIN, self.school)
+        request = make_request(admin, f"/?campus={other_campus.pk}")
+        with self.assertRaises(PermissionDenied):
+            campus_access(request)
+
 
 class AssertCampusAllowedTests(TestCase):
     def setUp(self):
@@ -311,14 +361,46 @@ class AssertCampusAllowedTests(TestCase):
         with self.assertRaises(PermissionDenied):
             assert_campus_allowed(self.admin, "not-an-id")
 
-    def test_global_user_accepts_any_existing_campus(self):
+    def test_global_user_accepts_any_campus_of_active_school(self):
         admin = make_user("sadmin", Role.SUPER_ADMIN, self.school)
-        assert_campus_allowed(admin, self.campus_b.pk)
+        assert_campus_allowed(admin, self.campus_b.pk, request=make_request(admin))
 
     def test_global_user_rejects_unknown_campus(self):
         admin = make_user("sadmin2", Role.SUPER_ADMIN, self.school)
         with self.assertRaises(PermissionDenied):
-            assert_campus_allowed(admin, 9999)
+            assert_campus_allowed(
+                admin,
+                9999,
+                request=make_request(admin),
+            )
+
+    def test_global_user_rejects_foreign_school_campus(self):
+        other_school = School.objects.create(name="Other School")
+        other_campus = Campus.objects.create(
+            school=other_school,
+            name="Other Campus",
+        )
+        admin = make_user("sadmin-y", Role.SUPER_ADMIN, self.school)
+        with self.assertRaises(PermissionDenied):
+            assert_campus_allowed(
+                admin,
+                other_campus.pk,
+                request=make_request(admin),
+            )
+
+    def test_global_user_without_institution_context_uses_own_scope(self):
+        """No explicit institution context -> validated against the user's own
+        school's campuses; a campus of another school is still rejected."""
+        admin = make_user("sadm-z", Role.SUPER_ADMIN, self.school)
+        assert_campus_allowed(admin, self.campus_b.pk)
+
+        other_school = School.objects.create(name="Other School")
+        other_campus = Campus.objects.create(
+            school=other_school,
+            name="Other Campus",
+        )
+        with self.assertRaises(PermissionDenied):
+            assert_campus_allowed(admin, other_campus.pk)
 
 
 class CampusIsolatedEventListTests(TestCase):

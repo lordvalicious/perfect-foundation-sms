@@ -12,7 +12,7 @@ from rest_framework import status
 
 from apps.schools.models import School, Campus
 from apps.accounts.models import User, InstitutionMembership, RoleAssignment, Role
-from apps.students.models import Student, Enrollment
+from apps.students.models import Student, Enrollment, Guardian
 from apps.teachers.models import Teacher
 from apps.finance.models import Invoice, Payment
 
@@ -139,6 +139,26 @@ class TenantIsolationTestBase(TestCase):
             role=Role.ACCOUNTANT,
         )
         
+        # Create guardians (required by Student.guardian)
+        cls.guardian_a1 = Guardian.objects.create(
+            institution=cls.school_a,
+            name="Guardian A1",
+            relationship="Father",
+            phone="555-0101",
+        )
+        cls.guardian_a2 = Guardian.objects.create(
+            institution=cls.school_a,
+            name="Guardian A2",
+            relationship="Mother",
+            phone="555-0102",
+        )
+        cls.guardian_b1 = Guardian.objects.create(
+            institution=cls.school_b,
+            name="Guardian B1",
+            relationship="Father",
+            phone="555-0103",
+        )
+
         # Create students in school A
         cls.student_a1 = Student.objects.create(
             admission_number="STU001",
@@ -148,6 +168,7 @@ class TenantIsolationTestBase(TestCase):
             gender="male",
             institution=cls.school_a,
             primary_campus=cls.campus_a1,
+            guardian=cls.guardian_a1,
             status="active",
         )
         
@@ -159,6 +180,7 @@ class TenantIsolationTestBase(TestCase):
             gender="female",
             institution=cls.school_a,
             primary_campus=cls.campus_a2,
+            guardian=cls.guardian_a2,
             status="active",
         )
         
@@ -171,12 +193,29 @@ class TenantIsolationTestBase(TestCase):
             gender="male",
             institution=cls.school_b,
             primary_campus=cls.campus_b1,
+            guardian=cls.guardian_b1,
             status="active",
         )
         
         # Create enrollments
-        from apps.schools.models import AcademicYear, Class, Section
-        
+        from apps.schools.models import AcademicUnit, AcademicYear, Class, Section
+
+        def _unit_class_section(campus, tag):
+            unit = AcademicUnit.objects.create(
+                campus=campus,
+                name=f"Primary {tag}",
+            )
+            class_obj = Class.objects.create(
+                unit=unit,
+                name=f"Grade 1 {tag}",
+                level=1,
+            )
+            section = Section.objects.create(
+                class_obj=class_obj,
+                name="A",
+            )
+            return unit, class_obj, section
+
         cls.year_a = AcademicYear.objects.create(
             school=cls.school_a,
             name="2024-2025",
@@ -191,15 +230,36 @@ class TenantIsolationTestBase(TestCase):
             end_date="2025-06-30",
             status="active",
         )
-        
-        cls.class_a1 = Class.objects.create(
-            unit=cls.campus_a1.unit_set.first() or cls.campus_a1.academic_units.first().units.first() if hasattr(cls.campus_a1, 'unit_set') else None,
-            name="Class 1",
-            level=1,
+
+        _, cls.class_a1, cls.section_a1 = _unit_class_section(cls.campus_a1, "A1")
+        _, cls.class_a2, cls.section_a2 = _unit_class_section(cls.campus_a2, "A2")
+        _, cls.class_b1, cls.section_b1 = _unit_class_section(cls.campus_b1, "B1")
+
+        cls.enrollment_a1 = Enrollment.objects.create(
+            student=cls.student_a1,
+            academic_year=cls.year_a,
+            campus=cls.campus_a1,
+            class_obj=cls.class_a1,
+            section=cls.section_a1,
             status="active",
         )
-        # Need to create proper academic structure - skip if not available
-        
+        cls.enrollment_a2 = Enrollment.objects.create(
+            student=cls.student_a2,
+            academic_year=cls.year_a,
+            campus=cls.campus_a2,
+            class_obj=cls.class_a2,
+            section=cls.section_a2,
+            status="active",
+        )
+        cls.enrollment_b1 = Enrollment.objects.create(
+            student=cls.student_b1,
+            academic_year=cls.year_b,
+            campus=cls.campus_b1,
+            class_obj=cls.class_b1,
+            section=cls.section_b1,
+            status="active",
+        )
+
     def setUp(self):
         self.client = APIClient()
         
@@ -278,7 +338,7 @@ class FinanceCrossSchoolAccessTest(TenantIsolationTestBase):
     def test_accountant_a_cannot_create_invoice_for_school_b(self):
         """Accountant A should not create invoice for School B student."""
         self._login(self.accountant_a)
-        response = self.client.post("/api/finance/invoices/", {
+        response = self.client.post("/api/finance/invoices/create/", {
             "student": self.student_b1.id,
             "academic_year": self.year_b.id,
             "campus": self.campus_b1.id,

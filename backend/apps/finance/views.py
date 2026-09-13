@@ -133,7 +133,7 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
         campus = serializer.validated_data.get("campus")
         if campus:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(self.request.user, campus.pk)
+            assert_campus_allowed(self.request.user, campus.pk, request=self.request)
         serializer.save(institution=self.request.institution, created_by=self.request.user)
 
 
@@ -148,7 +148,7 @@ class ExpensePostView(APIView):
         )
         if expense.campus_id:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, expense.campus_id)
+            assert_campus_allowed(request.user, expense.campus_id, request=request)
         if expense.status == "cancelled":
             return Response({"detail": "Cancelled expenses cannot be posted."}, status=400)
         if expense.journal_entry_id:
@@ -560,7 +560,7 @@ class InvoiceCreateView(generics.CreateAPIView):
         if enrollment.academic_year.school_id != self.request.institution.id:
             raise PermissionDenied("Enrollment is outside the active institution.")
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(self.request.user, enrollment.campus_id)
+        assert_campus_allowed(self.request.user, enrollment.campus_id, request=self.request)
         invoice = serializer.save()
 
         record_audit(
@@ -625,7 +625,7 @@ class PaymentCreateView(generics.CreateAPIView):
         if invoice.academic_year.school_id != self.request.institution.id:
             raise PermissionDenied("Invoice is outside the active institution.")
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(self.request.user, invoice.enrollment.campus_id)
+        assert_campus_allowed(self.request.user, invoice.enrollment.campus_id, request=self.request)
         payment = serializer.save()
 
         record_audit(
@@ -686,7 +686,7 @@ class PaymentReceiptHTMLView(APIView):
 
         user = self.request.user
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(user, payment.invoice.enrollment.campus_id)
+        assert_campus_allowed(user, payment.invoice.enrollment.campus_id, request=self.request)
 
         if not is_manager(user):
             if is_parent(user):
@@ -837,7 +837,7 @@ class PaymentReceiptPDFView(APIView):
 
         user = request.user
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(user, payment.invoice.enrollment.campus_id)
+        assert_campus_allowed(user, payment.invoice.enrollment.campus_id, request=request)
 
         if not is_manager(user):
             if is_parent(user):
@@ -917,7 +917,7 @@ class BulkInvoiceCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        assert_campus_allowed(request.user, campus_id)
+        assert_campus_allowed(request.user, campus_id, request=request)
 
         try:
             fee_structure = FeeStructure.objects.get(
@@ -1078,7 +1078,7 @@ class BulkPaymentCreateView(APIView):
                 errors.append({"index": idx, "reason": "Invoice belongs to a different institution."})
                 continue
 
-            assert_campus_allowed(request.user, invoice.enrollment.campus_id)
+            assert_campus_allowed(request.user, invoice.enrollment.campus_id, request=request)
 
             if invoice.status in ("cancelled", "draft"):
                 errors.append({"index": idx, "reason": f"Invoice {invoice.invoice_number} is {invoice.status}."})
@@ -1458,7 +1458,7 @@ class InstallmentScheduleView(APIView):
         )
 
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(request.user, invoice.enrollment.campus_id)
+        assert_campus_allowed(request.user, invoice.enrollment.campus_id, request=request)
 
         if invoice.installment_count <= 1:
             return Response({
@@ -1549,7 +1549,7 @@ class FeeAssignmentPreviewView(APIView):
             )
 
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(request.user, campus_id)
+        assert_campus_allowed(request.user, campus_id, request=request)
 
         academic_year = get_object_or_404(AcademicYear, pk=academic_year_id)
         campus = get_object_or_404(Campus, pk=campus_id)
@@ -1652,7 +1652,7 @@ class ConcessionListCreateView(generics.ListCreateAPIView):
         if invoice.academic_year.school_id != self.request.institution.id:
             raise PermissionDenied("Invoice is outside the active institution.")
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(self.request.user, invoice.enrollment.campus_id)
+        assert_campus_allowed(self.request.user, invoice.enrollment.campus_id, request=self.request)
         serializer.save(institution=self.request.institution)
 
 
@@ -1678,7 +1678,7 @@ class ConcessionApproveView(APIView):
             institution=request.institution,
         )
         from apps.accounts.access import assert_campus_allowed
-        assert_campus_allowed(request.user, concession.invoice.enrollment.campus_id)
+        assert_campus_allowed(request.user, concession.invoice.enrollment.campus_id, request=request)
 
         if concession.status != "pending":
             return Response({"detail": "Only pending concessions can be approved."}, status=400)
@@ -1719,7 +1719,7 @@ class FineListCreateView(generics.ListCreateAPIView):
         from apps.accounts.access import assert_campus_allowed
         enrollment = student.enrollments.filter(status="active").first()
         if enrollment is not None:
-            assert_campus_allowed(self.request.user, enrollment.campus_id)
+            assert_campus_allowed(self.request.user, enrollment.campus_id, request=self.request)
         serializer.save(institution=self.request.institution, issued_by=self.request.user)
 
 
@@ -1751,7 +1751,7 @@ class FineApproveView(APIView):
         ).first()
         if enrollment:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, enrollment.campus_id)
+            assert_campus_allowed(request.user, enrollment.campus_id, request=request)
 
         if fine.status != "pending":
             return Response({"detail": "Only pending fines can be approved."}, status=400)
@@ -1789,7 +1789,7 @@ class FineWaiveView(APIView):
         ).first()
         if enrollment:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, enrollment.campus_id)
+            assert_campus_allowed(request.user, enrollment.campus_id, request=request)
 
         serializer = FineWaiveSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -1834,7 +1834,7 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
             from apps.accounts.access import assert_campus_allowed
             enrollment = student.enrollments.filter(status="active").first()
             if enrollment is not None:
-                assert_campus_allowed(self.request.user, enrollment.campus_id)
+                assert_campus_allowed(self.request.user, enrollment.campus_id, request=self.request)
         serializer.save(institution=self.request.institution, created_by=self.request.user)
 
 
@@ -2008,7 +2008,7 @@ class JournalEntryPostView(APIView):
 
         if entry.campus_id:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, entry.campus_id)
+            assert_campus_allowed(request.user, entry.campus_id, request=request)
 
         try:
             entry.post(request.user)
@@ -2044,7 +2044,7 @@ class JournalEntryVoidView(APIView):
 
         if entry.campus_id:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, entry.campus_id)
+            assert_campus_allowed(request.user, entry.campus_id, request=request)
 
         reason = serializer.validated_data["reason"]
 
@@ -2133,7 +2133,7 @@ class BankReconciliationApproveView(APIView):
 
         if reconciliation.bank_account.campus_id:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, reconciliation.bank_account.campus_id)
+            assert_campus_allowed(request.user, reconciliation.bank_account.campus_id, request=request)
 
         if reconciliation.status != "completed":
             return Response({"detail": "Only completed reconciliations can be approved."}, status=400)
@@ -2210,7 +2210,7 @@ class BudgetApproveView(APIView):
 
         if budget.campus_id:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, budget.campus_id)
+            assert_campus_allowed(request.user, budget.campus_id, request=request)
 
         if budget.status != "draft":
             return Response({"detail": "Only draft budgets can be approved."}, status=400)
@@ -2242,7 +2242,7 @@ class BudgetCloseView(APIView):
 
         if budget.campus_id:
             from apps.accounts.access import assert_campus_allowed
-            assert_campus_allowed(request.user, budget.campus_id)
+            assert_campus_allowed(request.user, budget.campus_id, request=request)
 
         if budget.status != "active":
             return Response({"detail": "Only active budgets can be closed."}, status=400)

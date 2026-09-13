@@ -119,10 +119,19 @@ class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
         queryset = Teacher.objects.all()
 
         user = self.request.user
+        institution = getattr(self.request, "institution", None)
 
-        institution_filter = Q(institution=self.request.institution) | Q(
-            membership__institution=self.request.institution
-        )
+        if institution is None and user.is_authenticated:
+            from apps.accounts.managers import get_current_institution
+
+            institution = get_current_institution()
+
+        if institution is not None:
+            institution_filter = Q(institution=institution) | Q(
+                membership__institution=institution
+            )
+        else:
+            institution_filter = Q()
 
         if not is_manager(user):
             profile = get_teacher_profile(user)
@@ -132,6 +141,8 @@ class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
                     institution_filter,
                     pk=profile.pk,
                 )
+            else:
+                queryset = queryset.none()
         else:
             queryset = queryset.filter(institution_filter)
 

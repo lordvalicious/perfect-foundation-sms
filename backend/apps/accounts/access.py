@@ -99,10 +99,15 @@ def is_global(user):
     return user.is_superuser or user.has_any_role(GLOBAL_ROLES)
 
 
-def user_allowed_campus_ids(user):
+def user_allowed_campus_ids(user, institution=None):
     """Set of campus ids the user may access.
 
-    Global users get every active campus of their primary institution.
+    Global users get every active campus of the active institution (the
+    resolved request school, falling back to the user's primary institution).
+    There is deliberately NO cross-school fallback: an institution with no
+    campuses yields an empty scope (fail closed), so a campus id from another
+    school can never be injected.
+
     Everyone else gets the campuses recorded on their own profile plus the
     campuses linked to their teacher assignments / student enrollments so
     existing records without a ``primary_campus`` keep working.
@@ -113,18 +118,18 @@ def user_allowed_campus_ids(user):
     if is_global(user):
         from apps.schools.models import Campus
 
-        campuses = Campus.objects.filter(status="active")
-        institution = getattr(user, "primary_institution", None)
+        if institution is None:
+            institution = getattr(user, "primary_institution", None)
 
-        if institution is not None:
-            campuses = campuses.filter(school=institution)
+        if institution is None:
+            return set()
 
-        # Fallback: if the user's primary institution has no campuses,
-        # allow all active campuses so global users are not blocked.
-        if not campuses:
-            campuses = Campus.objects.filter(status="active")
-
-        return set(campuses.values_list("id", flat=True))
+        return set(
+            Campus.objects.filter(
+                status="active",
+                school=institution,
+            ).values_list("id", flat=True)
+        )
 
     ids = set()
 
@@ -193,7 +198,8 @@ def campus_access(request):
     a campus outside their scope or when the param is not a valid campus.
     """
     user = request.user
-    allowed = user_allowed_campus_ids(user)
+    institution = get_institution(request)
+    allowed = user_allowed_campus_ids(user, institution)
 
     requested = None
     raw = request.query_params.get("campus")
@@ -208,10 +214,19 @@ def campus_access(request):
         if requested is not None:
             from apps.schools.models import Campus
 
-            if not Campus.objects.filter(
-                pk=requested,
-                status="active",
-            ).exists():
+            if institution is not None:
+                valid = Campus.objects.filter(
+                    pk=requested,
+                    status="active",
+                    school=institution,
+                ).exists()
+            else:
+                # No explicit institution context (e.g. DRF test client):
+                # validate against the user's own resolved campus scope, which
+                # is always derived from the user's active school(s) only.
+                valid = requested in allowed
+
+            if not valid:
                 raise PermissionDenied("Invalid campus.")
 
         return {
@@ -232,11 +247,15 @@ def campus_access(request):
     }
 
 
-def assert_campus_allowed(user, campus_id):
+def assert_campus_allowed(user, campus_id, request=None):
     """Raise ``PermissionDenied`` unless the user may access the campus.
 
     Used for write paths (e.g. ``campus`` supplied in the request body)
     where ``campus_access`` (query-param based) does not apply.
+
+    When a ``request`` is provided its resolved active institution is used to
+    validate the campus (accounts for Super Admin context-switching); otherwise
+    the user's primary institution is the fallback.
     """
     if not campus_id:
         raise PermissionDenied("Invalid campus.")
@@ -253,23 +272,31 @@ def assert_campus_allowed(user, campus_id):
     if is_global(user):
         from apps.schools.models import Campus
 
-        # Get the user's active institution and verify the campus belongs to it.
-        institution = get_institution(user)
+        # Prefer the resolved active institution (request, then thread-local
+        # context set by ActiveInstitutionMiddleware). The denormalized
+        # ``User.institution`` FK is deliberately NOT used first: it can be
+        # stale for a Super Admin that has context-switched schools.
+        if request is not None:
+            institution = getattr(request, "institution", None)
+        else:
+            from apps.accounts.managers import get_current_institution
+
+            institution = get_current_institution()
+
         if institution is not None:
-            if not Campus.objects.filter(
+            valid = Campus.objects.filter(
                 pk=campus_id,
                 status="active",
                 school=institution,
-            ).exists():
-                raise PermissionDenied("You do not have access to this campus.")
-            return
+            ).exists()
+        else:
+            # No explicit institution context: validate against the user's own
+            # resolved campus scope (user's active school(s) only). A campus
+            # outside that scope is rejected, so foreign-school ids never pass.
+            valid = campus_id in user_allowed_campus_ids(user)
 
-        # Fallback: if no institution context, still validate campus exists+active.
-        if not Campus.objects.filter(
-            pk=campus_id,
-            status="active",
-        ).exists():
-            raise PermissionDenied("Invalid campus.")
+        if not valid:
+            raise PermissionDenied("You do not have access to this campus.")
         return
 
     allowed = user_allowed_campus_ids(user)

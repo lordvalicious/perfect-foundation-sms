@@ -598,8 +598,12 @@ class StudentListCreateView(generics.ListCreateAPIView):
         if institution is None:
             return queryset.none()
 
+        # Institution-tagged students are always visible; legacy records
+        # without a school tag are resolved through their enrollments.
+        # Never expose a student of another active school.
         queryset = queryset.filter(
-            enrollments__academic_year__school=institution
+            Q(institution=institution)
+            | Q(enrollments__academic_year__school=institution)
         )
 
         user = self.request.user
