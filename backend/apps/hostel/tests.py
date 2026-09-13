@@ -5,24 +5,18 @@ hostels the user is authorized to create Rooms in, because it was fed by the
 campus-scoped Hostel-management list. Room management is a school-wide
 (institution-scoped) staff function in this codebase, so the selector must be
 institution-scoped while the general hostel list stays campus-scoped.
-
-Required coverage:
-  1. Authorized hostel appears in the selector        (HostelRoomSelectorTests)
-  2. Add Room can use that hostel                     (HostelRoomSelectorTests)
-  3. Cross-school isolation                           (HostelRoomSelectorTests)
-  4. Cross-campus scope follows the Room-management
-     authorization (school-wide within the institution) (HostelRoomSelectorTests)
-  5. Direct-ID protection: cross-school Room POST and
-     hostel GET/PATCH/DELETE are rejected             (HostelRoomSecurityTests)
 """
+
+from datetime import date
 
 from django.test import TestCase
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Role, StaffProfile
 from apps.accounts.test_access import make_user
-from apps.hostel.models import Hostel, Room
+from apps.hostel.models import Allocation, Hostel, Room
 from apps.schools.models import Campus, School
+from apps.students.models import Guardian, Student
 
 PASSWORD = "TestPass123!"
 
@@ -346,3 +340,274 @@ class HostelAddRoomEndToEndTests(HostelAddRoomSetup):
         persisted = Room.objects.get(pk=room_id)
         self.assertEqual(persisted.hostel_id, hostel_id)
         self.assertEqual(persisted.room_number, "E2E-1")
+
+
+class AllocationActiveSchoolPolicyTests(HostelAddRoomSetup):
+    """ACTIVE-SCHOOL FAILURE POLICY regression suite.
+
+    Missing, invalid, unauthorized or unresolved active-school context must
+    always fail closed. The hostel endpoints must NEVER fall back to
+    ``Student.objects.all()`` / all-room / all-allocation (all-school) data.
+
+    ``force_authenticate`` without a session login leaves ``request.institution``
+    unset (documented in test_campus_isolation) while ``IsStaffRole`` still
+    passes because the user holds staff roles on an active membership — this is
+    exactly the "authorized user, missing active school" state the policy
+    targets.
+    """
+
+    def _as_no_school(self, user):
+        """Authenticated staff user with NO active school context."""
+        self.client.force_authenticate(user=None)
+        self.client.force_authenticate(user=user)
+        return self.client
+
+    def _make_student(self, school, campus, admission_number):
+        guardian = Guardian.objects.create(
+            name=f"Guardian {admission_number}",
+            relationship="Father",
+            phone=f"555-{admission_number}",
+        )
+        return Student.objects.create(
+            institution=school,
+            admission_number=admission_number,
+            first_name="Alloc",
+            last_name=admission_number,
+            gender="male",
+            status="active",
+            primary_campus=campus,
+            guardian=guardian,
+        )
+
+    def _make_allocation(self, hostel, room_number, student):
+        room = Room.objects.create(
+            hostel=hostel, room_number=room_number, capacity=4
+        )
+        return Allocation.objects.create(
+            room=room,
+            student=student,
+            start_date=date(2026, 9, 1),
+        )
+
+    def test_allocations_are_institution_scoped(self):
+        """A School-A user only ever sees School-A allocations."""
+        student_a = self._make_student(
+            self.school_a, self.campus_a1, "ALLOC-A-001"
+        )
+        student_b = self._make_student(
+            self.school_b, self.campus_b1, "ALLOC-B-001"
+        )
+        alloc_a = self._make_allocation(
+            self.hostel_a1, "A-ALLOC-1", student_a
+        )
+        alloc_b = self._make_allocation(
+            self.hostel_b1, "B-ALLOC-1", student_b
+        )
+
+        self._as(self.admin_a)
+        body = self._ids("/api/hostel/allocations/")
+        self.assertIn(alloc_a.pk, body)
+        self.assertNotIn(alloc_b.pk, body)
+
+    def test_missing_active_school_allocation_list_fails_closed(self):
+        """No active school → allocations request is EMPTY, never all-school."""
+        student_a = self._make_student(
+            self.school_a, self.campus_a1, "ALLOC-A-002"
+        )
+        alloc = self._make_allocation(
+            self.hostel_a1, "A-ALLOC-2", student_a
+        )
+        self.assertTrue(Allocation.objects.filter(pk=alloc.pk).exists())
+
+        self._as_no_school(self.admin_a)
+        response = self.client.get("/api/hostel/allocations/")
+        self.assertEqual(response.status_code, 200)
+        self.assertNotIn(alloc.pk, self._ids("/api/hostel/allocations/"))
+
+    def test_missing_active_school_rooms_fails_closed(self):
+        """No active school → the Add Room feed is empty, not all rooms."""
+        Room.objects.create(
+            hostel=self.hostel_a1, room_number="FAIL-OPEN-1", capacity=4
+        )
+        self.assertTrue(Room.objects.exists())
+
+        self._as_no_school(self.admin_a)
+        response = self.client.get("/api/hostel/rooms/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self._ids("/api/hostel/rooms/"), [])
+
+    def test_missing_active_school_room_post_rejected(self):
+        Room.objects.create(
+            hostel=self.hostel_a1, room_number="FAIL-OPEN-2", capacity=4
+        )
+        self._as_no_school(self.admin_a)
+        response = self.client.post(
+            "/api/hostel/rooms/",
+            {
+                "hostel": self.hostel_a1.pk,
+                "room_number": "NOPE-1",
+                "capacity": 4,
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_missing_active_school_allocation_post_rejected(self):
+        student_a = self._make_student(
+            self.school_a, self.campus_a1, "ALLOC-A-003"
+        )
+        room = Room.objects.create(
+            hostel=self.hostel_a1, room_number="A-ALLOC-3", capacity=4
+        )
+        self._as_no_school(self.admin_a)
+        response = self.client.post(
+            "/api/hostel/allocations/",
+            {
+                "room": room.pk,
+                "student": student_a.pk,
+                "start_date": "2026-09-01",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            Allocation.objects.filter(room=room).exists()
+        )
+
+    def test_missing_active_school_vacate_fails_closed(self):
+        student_a = self._make_student(
+            self.school_a, self.campus_a1, "ALLOC-A-004"
+        )
+        alloc = self._make_allocation(
+            self.hostel_a1, "A-ALLOC-4", student_a
+        )
+        self._as_no_school(self.admin_a)
+        response = self.client.post(
+            f"/api/hostel/allocations/{alloc.pk}/vacate/"
+        )
+        self.assertEqual(response.status_code, 404)
+        alloc.refresh_from_db()
+        self.assertEqual(alloc.status, "active")
+
+    def test_cross_school_allocation_create_rejected(self):
+        """School A user must never allocate a School B student or room."""
+        student_b = self._make_student(
+            self.school_b, self.campus_b1, "ALLOC-B-002"
+        )
+        student_a = self._make_student(
+            self.school_a, self.campus_a1, "ALLOC-A-005"
+        )
+        room_a = Room.objects.create(
+            hostel=self.hostel_a1, room_number="A-ALLOC-5", capacity=4
+        )
+        room_b = Room.objects.create(
+            hostel=self.hostel_b1, room_number="B-ALLOC-2", capacity=4
+        )
+        self._as(self.admin_a)
+
+        # Foreign room + foreign student.
+        response = self.client.post(
+            "/api/hostel/allocations/",
+            {
+                "room": room_b.pk,
+                "student": student_b.pk,
+                "start_date": "2026-09-01",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "room", response.json(),
+            "error should name the room field",
+        )
+
+        # Active-school student but foreign room.
+        response = self.client.post(
+            "/api/hostel/allocations/",
+            {
+                "room": room_b.pk,
+                "student": student_a.pk,
+                "start_date": "2026-09-01",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+
+        # Active-school room but foreign student.
+        response = self.client.post(
+            "/api/hostel/allocations/",
+            {
+                "room": room_a.pk,
+                "student": student_b.pk,
+                "start_date": "2026-09-01",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400)
+        self.assertIn(
+            "student", response.json(),
+            "error should name the student field",
+        )
+
+        # No allocation row was created for School B.
+        self.assertFalse(
+            Allocation.objects.filter(room=room_b).exists()
+        )
+
+    def test_cross_school_allocation_vacate_rejected(self):
+        student_b = self._make_student(
+            self.school_b, self.campus_b1, "ALLOC-B-003"
+        )
+        alloc_b = self._make_allocation(
+            self.hostel_b1, "B-ALLOC-3", student_b
+        )
+        self._as(self.admin_a)
+        response = self.client.post(
+            f"/api/hostel/allocations/{alloc_b.pk}/vacate/"
+        )
+        self.assertEqual(response.status_code, 404)
+        alloc_b.refresh_from_db()
+        self.assertEqual(alloc_b.status, "active")
+
+    def test_stale_or_invalid_active_school_fails_closed(self):
+        """A stale/invalid session school never returns all-school data.
+
+        The session points at a school the user does not belong to (School B)
+        and at a nonexistent school. Either way the request resolves to the
+        user's own authorized school (or no school) — School B allocations are
+        never surfaced and there is no all-school fallback.
+        """
+        student_a = self._make_student(
+            self.school_a, self.campus_a1, "ALLOC-A-006"
+        )
+        student_b = self._make_student(
+            self.school_b, self.campus_b1, "ALLOC-B-004"
+        )
+        alloc_a = self._make_allocation(
+            self.hostel_a1, "A-ALLOC-6", student_a
+        )
+        alloc_b = self._make_allocation(
+            self.hostel_b1, "B-ALLOC-4", student_b
+        )
+
+        self._as(self.admin_a)
+
+        for stale_id in (self.school_b.pk, 999999):
+            with self.subTest(stale_id=stale_id):
+                session = self.client.session
+                session["active_institution_id"] = stale_id
+                session.save()
+
+                body = self._ids("/api/hostel/allocations/")
+                self.assertIn(alloc_a.pk, body)
+                self.assertNotIn(alloc_b.pk, body)
+
+    def test_students_selector_fails_closed_without_active_school(self):
+        """The allocation student selector never returns all-school students."""
+        self._make_student(self.school_a, self.campus_a1, "ALLOC-A-007")
+        self._make_student(self.school_b, self.campus_b1, "ALLOC-B-005")
+
+        self._as_no_school(self.admin_a)
+        data = self.client.get("/api/students/?page_size=1000").json()
+        body = data.get("results", data)
+        self.assertEqual([], body)

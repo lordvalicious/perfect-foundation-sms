@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 
 from apps.accounts.access import apply_campus_scope, get_institution
 from apps.accounts.permissions import IsStaffRole
+from apps.students.models import Student
 
 from .models import Allocation, Hostel, Room
 from .serializers import (
@@ -74,12 +75,17 @@ class RoomListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         institution = get_institution(self.request)
-        queryset = Room.objects.select_related("hostel")
 
-        if institution is not None:
-            # Room management is institution-scoped; never expose rooms
-            # belonging to another school.
-            queryset = queryset.filter(hostel__campus__school=institution)
+        if institution is None:
+            # Active-school failure policy: without a valid active school we
+            # fail closed. Never list rooms across schools (which would leak
+            # every institution's data to a user with no tenant context).
+            return Room.objects.none()
+
+        queryset = Room.objects.select_related("hostel")
+        # Room management is institution-scoped; never expose rooms belonging
+        # to another school.
+        queryset = queryset.filter(hostel__campus__school=institution)
 
         hostel = self.request.query_params.get("hostel")
 
@@ -92,9 +98,13 @@ class RoomListCreateView(generics.ListCreateAPIView):
         hostel = serializer.validated_data.get("hostel")
         institution = get_institution(self.request)
 
+        if institution is None:
+            raise serializers.ValidationError(
+                {"institution": "Select a school before adding a room."}
+            )
+
         if (
             hostel is None
-            or institution is None
             or hostel.campus.school_id != institution.id
         ):
             raise serializers.ValidationError(
@@ -109,11 +119,18 @@ class AllocationListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
+        institution = get_institution(self.request)
+
+        if institution is None:
+            # Active-school failure policy: fail closed — never return
+            # allocations from all schools when the active school is missing.
+            return Allocation.objects.none()
+
         queryset = Allocation.objects.select_related(
             "student",
             "room",
             "room__hostel",
-        )
+        ).filter(room__hostel__campus__school=institution)
 
         room = self.request.query_params.get("room")
 
@@ -127,6 +144,41 @@ class AllocationListCreateView(generics.ListCreateAPIView):
 
         return queryset
 
+    def perform_create(self, serializer):
+        institution = get_institution(self.request)
+
+        if institution is None:
+            raise serializers.ValidationError(
+                {
+                    "institution": (
+                        "Select a school before allocating a student "
+                        "to a room."
+                    )
+                }
+            )
+
+        room = serializer.validated_data.get("room")
+
+        if (
+            room is None
+            or room.hostel.campus.school_id != institution.id
+        ):
+            raise serializers.ValidationError(
+                {"room": "Selected room does not belong to your school."}
+            )
+
+        student = serializer.validated_data.get("student")
+
+        if (
+            student is None
+            or student.institution_id != institution.id
+        ):
+            raise serializers.ValidationError(
+                {"student": "Selected student does not belong to your school."}
+            )
+
+        serializer.save()
+
 
 class VacateAllocationView(APIView):
     """POST /hostel/allocations/<pk>/vacate/"""
@@ -136,7 +188,21 @@ class VacateAllocationView(APIView):
     def post(self, request, pk):
         from django.utils import timezone
 
-        allocation = get_object_or_404(Allocation, pk=pk)
+        institution = get_institution(request)
+
+        # The vacate target is scoped to the active institution. With no
+        # valid active school the queryset is empty, so the lookup 404s and
+        # never touches another school's allocation.
+        queryset = Allocation.objects.all()
+
+        if institution is not None:
+            queryset = queryset.filter(
+                room__hostel__campus__school=institution
+            )
+        else:
+            queryset = queryset.none()
+
+        allocation = get_object_or_404(queryset, pk=pk)
         allocation.status = "vacated"
         allocation.end_date = timezone.localdate()
         allocation.save()

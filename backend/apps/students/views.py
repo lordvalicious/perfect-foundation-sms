@@ -586,8 +586,17 @@ class StudentListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = STUDENT_QUERYSET.order_by("first_name", "last_name")
+        institution = getattr(self.request, "institution", None)
+
+        # Active-school failure policy: the student selector (used by the
+        # Hostel Allocation form) must fail closed. With no valid active
+        # school the queryset is empty — a bare ``school=None`` filter would
+        # still match students that have no enrollment rows (NULL join).
+        if institution is None:
+            return queryset.none()
+
         queryset = queryset.filter(
-            enrollments__academic_year__school=self.request.institution
+            enrollments__academic_year__school=institution
         )
 
         user = self.request.user
@@ -657,8 +666,16 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = StudentSerializer
 
     def get_queryset(self):
-        queryset = STUDENT_QUERYSET.filter(
-            enrollments__academic_year__school=self.request.institution
+        queryset = STUDENT_QUERYSET
+        institution = getattr(self.request, "institution", None)
+
+        # Active-school failure policy: fail closed when no valid active
+        # school — never expose a cross-school student via a NULL join.
+        if institution is None:
+            return queryset.none()
+
+        queryset = queryset.filter(
+            enrollments__academic_year__school=institution
         )
 
         user = self.request.user

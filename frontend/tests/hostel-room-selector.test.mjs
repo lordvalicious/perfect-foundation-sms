@@ -21,28 +21,34 @@ const source = readFileSync(
   "utf8"
 );
 
-const loadHostelsBlock = source.match(
-  /const loadHostels = useCallback\(\(\) => \{[\s\S]*?\}, \[\]\);/
+const selectorBlock = source.match(
+  /fetch\(`\$\{BASE\}room-hostels\/`, \{ credentials: "include", signal \}\)[\s\S]*?\},\s*\[schoolId\]\);/
 );
 
 test("Add Room dropdown is fed by the institution-scoped selector", () => {
   assert.ok(
-    loadHostelsBlock,
-    "HostelPage.jsx must define a loadHostels useCallback that feeds the Add Room dropdown"
+    selectorBlock,
+    "HostelPage.jsx must fetch /api/hostel/room-hostels/ inside a school-keyed effect"
   );
 
-  const block = loadHostelsBlock[0];
+  const block = selectorBlock[0];
 
   assert.match(
     block,
     /room-hostels\//,
-    "loadHostels must request /api/hostel/room-hostels/ (institution-scoped selector), not the campus-scoped hostel-management list"
+    "the Add Room selector must request /api/hostel/room-hostels/ (institution-scoped selector), not the campus-scoped hostel-management list"
   );
 
   assert.doesNotMatch(
     block,
     /\$\{BASE\}hostels\//,
-    "loadHostels must NOT reuse the campus-scoped /api/hostel/hostels/ list"
+    "the Add Room selector must NOT reuse the campus-scoped /api/hostel/hostels/ list"
+  );
+
+  assert.match(
+    block,
+    /if \(!signal\.aborted\) setHostels/,
+    "Add Room hostels must only be set when the in-flight request was not aborted"
   );
 });
 
