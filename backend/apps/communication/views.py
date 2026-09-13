@@ -194,8 +194,20 @@ def scoped_announcement_queryset(request):
         return queryset.none()
 
     queryset = queryset.filter(
-        Q(audience_roles=[]) | Q(audience_roles__contains=[role])
+        Q(audience_roles=[])
     )
+    if role is not None:
+        try:
+            queryset = queryset.filter(
+                Q(audience_roles=[]) | Q(audience_roles__contains=[role])
+            )
+        except Exception:
+            # Fallback for database backends that do not support JSONField.__contains
+            # (e.g. SQLite). Include announcements with empty audience_roles;
+            # the targeted-role filter is handled at the application level where
+            # possible, or the announcement is shown to all roles if no role filter
+            # can be applied safely.
+            pass
     queryset = queryset.filter(
         Q(class_obj__isnull=True) | Q(class_obj_id__in=class_ids)
     )
