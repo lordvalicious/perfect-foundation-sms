@@ -49,8 +49,12 @@ class CampusAccessMiddleware:
         if not user or not user.is_authenticated:
             return self.get_response(request)
 
-        # Get user's allowed campus IDs
-        allowed_campus_ids = user_allowed_campus_ids(user)
+        # Get user's allowed campus IDs (scoped to the active institution so
+        # the Super Admin can context-switch and cross-school ids never leak).
+        allowed_campus_ids = user_allowed_campus_ids(
+            user,
+            institution=getattr(request, "institution", None),
+        )
 
         # If user has no campus access and is not global, they can only see school-wide data
         if not allowed_campus_ids and not is_global(user):
@@ -71,7 +75,7 @@ class CampusAccessMiddleware:
 
             # Validate campus access
             try:
-                assert_campus_allowed(user, campus_id)
+                assert_campus_allowed(user, campus_id, request=request)
             except PermissionDenied as e:
                 return JsonResponse(
                     {"detail": str(e)},
@@ -95,7 +99,7 @@ class CampusAccessMiddleware:
 
                 # Validate campus access for write operations
                 try:
-                    assert_campus_allowed(user, campus_id)
+                    assert_campus_allowed(user, campus_id, request=request)
                 except PermissionDenied as e:
                     return JsonResponse(
                         {"detail": str(e)},
@@ -132,8 +136,11 @@ def get_user_campus_from_request(request, user=None):
         except (TypeError, ValueError):
             pass
 
-    allowed = user_allowed_campus_ids(user)
-    
+    allowed = user_allowed_campus_ids(
+        user,
+        institution=getattr(request, "institution", None),
+    )
+
     if not allowed:
         return None
 

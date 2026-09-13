@@ -633,7 +633,7 @@ class ActiveCampusView(APIView):
 
         # Reuse the shared access helper (raises django PermissionDenied).
         try:
-            assert_campus_allowed(request.user, campus_id)
+            assert_campus_allowed(request.user, campus_id, request=request)
         except DjangoPermissionDenied as exc:
             return Response(
                 {"detail": str(exc)},
