@@ -416,7 +416,7 @@ export default function ProfilePage() {
                   <DetailRow
                     icon={Building2}
                     label="Campus"
-                    value={profile.campus_name}
+                    value={profile.primary_campus_name || profile.campus_name}
                   />
 
                   <DetailRow

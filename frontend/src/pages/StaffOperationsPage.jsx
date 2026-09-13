@@ -52,6 +52,7 @@ export default function StaffOperationsPage() {
     start_date: today,
     end_date: today,
     reason: "",
+    staff: "",
   });
 
   const [attDate, setAttDate] = useState(today);
@@ -111,10 +112,13 @@ export default function StaffOperationsPage() {
     setNotice("");
     setError("");
 
+    const payload = { ...leaveForm };
+    if (!canReview || !payload.staff) delete payload.staff;
+
     apiFetch(`${BASE}leave/`, {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(leaveForm),
+      body: JSON.stringify(payload),
     })
       .then(() => {
         setShowLeaveForm(false);
@@ -251,6 +255,22 @@ export default function StaffOperationsPage() {
             <>
               {showLeaveForm && (
                 <form onSubmit={submitLeave} className="filter-row">
+                  {canReview && (
+                    <select
+                      value={leaveForm.staff}
+                      onChange={(e) =>
+                        setLeaveForm({ ...leaveForm, staff: e.target.value })
+                      }
+                    >
+                      <option value="">For myself</option>
+                      {staffList.map((member) => (
+                        <option key={member.id} value={member.id}>
+                          {member.full_name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+
                   <select
                     value={leaveForm.leave_type}
                     onChange={(e) =>
