@@ -162,7 +162,12 @@ export async function apiFetch(url, options = {}, fallback = "Request failed.") 
       }
     }
 
-    throw new Error(message);
+    const error = new Error(message);
+    error.status = response.status;
+    error.detail =
+      data && typeof data === "object" && data.detail ? data.detail : null;
+
+    throw error;
   }
 
   return data;

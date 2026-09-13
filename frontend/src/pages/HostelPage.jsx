@@ -23,6 +23,7 @@ export default function HostelPage() {
   const [showForm, setShowForm] = useState(false);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [scopeBlocked, setScopeBlocked] = useState(false);
 
   // One AbortController per active school. Every school-scoped request shares
   // its signal, so switching (or losing) the active school aborts all
@@ -129,6 +130,7 @@ export default function HostelPage() {
     if (!schoolId) {
       setRows([]);
       setLoading(false);
+      setScopeBlocked(false);
       return;
     }
 
@@ -146,10 +148,25 @@ export default function HostelPage() {
 
     apiFetch(url, { signal })
       .then((data) => {
-        if (!signal.aborted) setRows(data.results || data);
+        if (!signal.aborted) {
+          setRows(data.results || data);
+          setScopeBlocked(false);
+        }
       })
       .catch((err) => {
-        if (!signal.aborted) setError(err.message);
+        if (!signal.aborted) {
+          if (err.status === 403) {
+            // Active-school failure policy: a 403 on a school-scoped load
+            // means the active school is stale, unauthorized, or inactive.
+            // Fail closed to the "select a school" state instead of showing
+            // a raw error — never a populated or stale student list.
+            setRows([]);
+            setScopeBlocked(true);
+            setError("");
+          } else {
+            setError(err.message);
+          }
+        }
       })
       .finally(() => {
         if (!signal.aborted) setLoading(false);
@@ -202,10 +219,12 @@ export default function HostelPage() {
       .catch((err) => setError(err.message));
   };
 
-  // Active-school failure policy: while no valid active school is selected,
-  // the page fails closed — no populated student/room selectors, no scoped
-  // tables, and an explicit message pointing at the school switcher.
+  // Active-school failure policy: while no valid active school is selected —
+  // or the resolved context is stale/inactive (backed by a 403 on a scoped
+  // load) — the page fails closed: no populated student/room selectors, no
+  // scoped tables, and an explicit message pointing at the school switcher.
   const noActiveSchool = !schoolId && !isSwitching;
+  const schoolContextUnavailable = noActiveSchool || scopeBlocked;
   const noSchoolMessage =
     tab === "allocations"
       ? "No active school selected. Please select a school to view hostel allocation students."
@@ -252,7 +271,7 @@ export default function HostelPage() {
           subtitle={`${rows.length} records`}
         />
 
-        {noActiveSchool ? (
+        {schoolContextUnavailable ? (
           <div className="state-card error">{noSchoolMessage}</div>
         ) : (
         <StateArea loading={loading} error={error} onRetry={load}>

@@ -14,6 +14,77 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Fail-closed classifications of the request's active-school context. Views
+# that draw school-scoped data should reject (403) for ``stale``/``inactive``
+# contexts and treat ``missing`` as an empty/400 tenant-context error.
+ACTIVE_SCHOOL_OK = "ok"
+ACTIVE_SCHOOL_MISSING = "missing"
+ACTIVE_SCHOOL_STALE = "stale"
+ACTIVE_SCHOOL_INACTIVE = "inactive"
+
+
+def active_school_state(request):
+    """Classify how the active school resolved for this request.
+
+    Rules (active-school failure policy, §5A):
+
+    * ``missing``  - no active school could be resolved at all.
+    * ``stale``    - the session explicitly pointed at a school the user is
+                     not authorized for (invalid, deleted, foreign, or a
+                     non-active membership); the middleware silently fell
+                     back to the user's first active membership.
+    * ``inactive`` - the resolved school exists but is not currently in an
+                     active/operational state.
+    * ``ok``       - resolved to an active school the user is authorized to
+                     access.
+    """
+    institution = getattr(request, "institution", None)
+
+    if institution is None:
+        return ACTIVE_SCHOOL_MISSING
+
+    if getattr(request, "institution_context_stale", False):
+        return ACTIVE_SCHOOL_STALE
+
+    is_paused = getattr(institution, "is_paused", False)
+
+    if getattr(institution, "status", "active") != "active" or is_paused:
+        return ACTIVE_SCHOOL_INACTIVE
+
+    return ACTIVE_SCHOOL_OK
+
+
+def require_active_school(request):
+    """Return the reliably confirmed active school, or ``None`` when absent.
+
+    Fail-closed enforcement a backend already has the DRF exception handler
+    installed for: a stale/unauthorized session context or an inactive/
+    archived school raises a 403 ``PermissionDenied``; a genuinely absent
+    context returns ``None`` (read paths then yield empty results, write
+    paths return the documented 400 tenant error).
+    """
+    from rest_framework.exceptions import PermissionDenied
+
+    state = active_school_state(request)
+
+    if state == ACTIVE_SCHOOL_STALE:
+        raise PermissionDenied(
+            detail=(
+                "Your active school context is no longer valid. "
+                "Please select a school to continue."
+            )
+        )
+
+    if state == ACTIVE_SCHOOL_INACTIVE:
+        raise PermissionDenied(
+            detail=(
+                "This school is no longer active. "
+                "Please select another school."
+            )
+        )
+
+    return getattr(request, "institution", None)
+
 
 class ActiveInstitutionMiddleware:
     """Keep tenant selection server-side instead of trusting a URL or client id."""
@@ -33,6 +104,7 @@ class ActiveInstitutionMiddleware:
 
         request.institution = None
         request.institution_membership = None
+        request.institution_context_stale = False
 
         # --- 1) Domain-based resolution (works for anonymous users too) ---
         host_school = self._resolve_by_host(request)
@@ -81,6 +153,14 @@ class ActiveInstitutionMiddleware:
                 if membership is None and request.institution is None:
                     membership = memberships.first()
                     if membership is not None:
+                        # The session explicitly selected a school the user is
+                        # not authorized for (invalid, deleted, foreign, or a
+                        # non-active context). Flag it so school-scoped views
+                        # can fail closed instead of silently serving the
+                        # substituted first membership (§5A "Unauthorized
+                        # school must never become a fallback").
+                        if selected_id is not None:
+                            request.institution_context_stale = True
                         request.session[self.session_key] = membership.institution_id
                     else:
                         request.session.pop(self.session_key, None)

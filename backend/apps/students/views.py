@@ -15,6 +15,7 @@ from rest_framework.views import APIView
 from decimal import Decimal
 
 from apps.accounts.access import apply_campus_scope, assert_campus_allowed, campus_access, get_institution
+from apps.accounts.middleware import require_active_school
 from apps.accounts.permissions import (
     IsAdminOrReadOnly,
     IsAdminRole,
@@ -586,12 +587,14 @@ class StudentListCreateView(generics.ListCreateAPIView):
 
     def get_queryset(self):
         queryset = STUDENT_QUERYSET.order_by("first_name", "last_name")
-        institution = getattr(self.request, "institution", None)
+        institution = require_active_school(self.request)
 
         # Active-school failure policy: the student selector (used by the
         # Hostel Allocation form) must fail closed. With no valid active
         # school the queryset is empty — a bare ``school=None`` filter would
-        # still match students that have no enrollment rows (NULL join).
+        # still match students that have no enrollment rows (NULL join). A
+        # stale/unauthorized or inactive school context raises a 403 instead
+        # of silently falling back.
         if institution is None:
             return queryset.none()
 
@@ -667,10 +670,12 @@ class StudentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         queryset = STUDENT_QUERYSET
-        institution = getattr(self.request, "institution", None)
+        institution = require_active_school(self.request)
 
         # Active-school failure policy: fail closed when no valid active
-        # school — never expose a cross-school student via a NULL join.
+        # school — never expose a cross-school student via a NULL join; a
+        # stale/unauthorized or inactive school context raises a 403 instead
+        # of silently falling back.
         if institution is None:
             return queryset.none()
 

@@ -3,7 +3,8 @@ from rest_framework import generics, serializers, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import apply_campus_scope, get_institution
+from apps.accounts.access import apply_campus_scope
+from apps.accounts.middleware import require_active_school
 from apps.accounts.permissions import IsStaffRole
 from apps.students.models import Student
 
@@ -15,6 +16,19 @@ from .serializers import (
 )
 
 
+def resolve_school_context(request):
+    """Return the active school, or ``None`` when no tenant context exists.
+
+    Active-school failure policy (§5A): a stale/unauthorized session context
+    or an inactive/archived school raises a 403 here — the policy forbids
+    silently serving the substituted first membership or skipping tenant
+    filtering. Only a genuinely absent context returns ``None`` (read paths
+    then yield empty results, write paths return the documented 400 tenant
+    error).
+    """
+    return require_active_school(request)
+
+
 class NoPaginationMixin:
     pagination_class = None
 
@@ -24,6 +38,8 @@ class HostelListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
+        resolve_school_context(self.request)
+
         queryset = Hostel.objects.select_related("campus")
 
         return apply_campus_scope(queryset, self.request)
@@ -46,7 +62,7 @@ class HostelRoomSelectorView(NoPaginationMixin, generics.ListAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
-        institution = get_institution(self.request)
+        institution = resolve_school_context(self.request)
 
         if institution is None:
             return Hostel.objects.none()
@@ -63,6 +79,8 @@ class HostelDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
+        resolve_school_context(self.request)
+
         return apply_campus_scope(
             Hostel.objects.select_related("campus"),
             self.request,
@@ -74,7 +92,7 @@ class RoomListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
-        institution = get_institution(self.request)
+        institution = resolve_school_context(self.request)
 
         if institution is None:
             # Active-school failure policy: without a valid active school we
@@ -96,7 +114,7 @@ class RoomListCreateView(generics.ListCreateAPIView):
 
     def perform_create(self, serializer):
         hostel = serializer.validated_data.get("hostel")
-        institution = get_institution(self.request)
+        institution = resolve_school_context(self.request)
 
         if institution is None:
             raise serializers.ValidationError(
@@ -119,7 +137,7 @@ class AllocationListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsStaffRole]
 
     def get_queryset(self):
-        institution = get_institution(self.request)
+        institution = resolve_school_context(self.request)
 
         if institution is None:
             # Active-school failure policy: fail closed — never return
@@ -145,7 +163,7 @@ class AllocationListCreateView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        institution = get_institution(self.request)
+        institution = resolve_school_context(self.request)
 
         if institution is None:
             raise serializers.ValidationError(
@@ -188,7 +206,7 @@ class VacateAllocationView(APIView):
     def post(self, request, pk):
         from django.utils import timezone
 
-        institution = get_institution(request)
+        institution = resolve_school_context(request)
 
         # The vacate target is scoped to the active institution. With no
         # valid active school the queryset is empty, so the lookup 404s and

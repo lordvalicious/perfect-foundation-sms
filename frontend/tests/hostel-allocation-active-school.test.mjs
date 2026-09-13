@@ -77,13 +77,13 @@ test("rooms options are keyed to the active school and abortable", () => {
 test("load() fails closed without an active school", () => {
   assert.match(
     source,
-    /if \(!schoolId\) \{\s*setRows\(\[\]\);\s*setLoading\(false\);\s*return;\s*\}/,
-    "load() must clear rows and stop loading when the active school is missing"
+    /if \(!schoolId\) \{\s*setRows\(\[\]\);\s*setLoading\(false\);\s*setScopeBlocked\(false\);\s*return;\s*\}/,
+    "load() must clear rows, stop loading, and clear any block state when the active school is missing"
   );
 
   assert.match(
     source,
-    /if \(!signal\.aborted\) setRows\(data\.results \|\| data\)/,
+    /if \(!signal\.aborted\) \{\s*setRows\(data\.results \|\| data\);/,
     "rows must only be applied when the request was not aborted"
   );
 });
@@ -120,7 +120,32 @@ test("fail-closed message is rendered when no active school is selected", () => 
   );
   assert.match(
     source,
-    /noActiveSchool \? \([\s\S]*?state-card error/,
+    /schoolContextUnavailable = noActiveSchool \|\| scopeBlocked;/,
+    "a 403-blocked scope must also drive the fail-closed UI"
+  );
+  assert.match(
+    source,
+    /schoolContextUnavailable \? \([\s\S]*?state-card error/,
     "the fail-closed message must render inside the error card UI"
+  );
+});
+
+test("a 403 on a scoped load fails closed to the select-school state", () => {
+  assert.match(
+    source,
+    /const \[scopeBlocked, setScopeBlocked\] = useState\(false\);/,
+    "a scopeBlocked flag must exist"
+  );
+
+  assert.match(
+    source,
+    /if \(err\.status === 403\) \{[\s\S]*?setRows\(\[\]\);[\s\S]*?setScopeBlocked\(true\);[\s\S]*?setError\(""\);/,
+    "a 403 must clear rows, block the scope, and clear the raw error"
+  );
+
+  assert.match(
+    source,
+    /setScopeBlocked\(false\);[\s\S]*?\}/,
+    "a successful reload must clear the blocked state"
   );
 });

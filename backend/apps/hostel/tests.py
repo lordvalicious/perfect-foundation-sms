@@ -389,6 +389,12 @@ class AllocationActiveSchoolPolicyTests(HostelAddRoomSetup):
             start_date=date(2026, 9, 1),
         )
 
+    def _set_active_school(self, school_id):
+        session = self.client.session
+        session["active_institution_id"] = school_id
+        session.save()
+        return self.client
+
     def test_allocations_are_institution_scoped(self):
         """A School-A user only ever sees School-A allocations."""
         student_a = self._make_student(
@@ -570,12 +576,13 @@ class AllocationActiveSchoolPolicyTests(HostelAddRoomSetup):
         self.assertEqual(alloc_b.status, "active")
 
     def test_stale_or_invalid_active_school_fails_closed(self):
-        """A stale/invalid session school never returns all-school data.
+        """Stale/invalid session school → 403, zero data, no silent fallback.
 
-        The session points at a school the user does not belong to (School B)
-        and at a nonexistent school. Either way the request resolves to the
-        user's own authorized school (or no school) — School B allocations are
-        never surfaced and there is no all-school fallback.
+        The session explicitly points at a school the user is NOT authorized
+        for (School B — they only belong to School A) or at a nonexistent
+        school. Per §5A "Unauthorized school must never become a fallback"
+        the request must be REJECTED (403), never silently re-served against
+        the user's first membership.
         """
         student_a = self._make_student(
             self.school_a, self.campus_a1, "ALLOC-A-006"
@@ -583,10 +590,10 @@ class AllocationActiveSchoolPolicyTests(HostelAddRoomSetup):
         student_b = self._make_student(
             self.school_b, self.campus_b1, "ALLOC-B-004"
         )
-        alloc_a = self._make_allocation(
+        self._make_allocation(
             self.hostel_a1, "A-ALLOC-6", student_a
         )
-        alloc_b = self._make_allocation(
+        self._make_allocation(
             self.hostel_b1, "B-ALLOC-4", student_b
         )
 
@@ -594,13 +601,82 @@ class AllocationActiveSchoolPolicyTests(HostelAddRoomSetup):
 
         for stale_id in (self.school_b.pk, 999999):
             with self.subTest(stale_id=stale_id):
-                session = self.client.session
-                session["active_institution_id"] = stale_id
-                session.save()
+                # The middleware self-heals the session after a rejected
+                # request, so re-assert the stale context before EACH call.
+                self._set_active_school(stale_id)
+                response = self.client.get("/api/hostel/allocations/")
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(
+                    response.json().get("results", []), [],
+                    "a stale context must not fall back to any school's data",
+                )
 
-                body = self._ids("/api/hostel/allocations/")
-                self.assertIn(alloc_a.pk, body)
-                self.assertNotIn(alloc_b.pk, body)
+                self._set_active_school(stale_id)
+                response = self.client.get("/api/students/?page_size=1000")
+                self.assertEqual(response.status_code, 403)
+                self.assertEqual(
+                    response.json().get("results", []), [],
+                    "the allocation student selector must reject a stale context",
+                )
+
+                self._set_active_school(stale_id)
+                response = self.client.get("/api/hostel/rooms/")
+                self.assertEqual(response.status_code, 403)
+
+    def test_stale_active_school_allocation_create_rejected(self):
+        """Stale/unauthorized context rejects writes too — never a silent fallback."""
+        student_a = self._make_student(
+            self.school_a, self.campus_a1, "ALLOC-A-008"
+        )
+        room_a = Room.objects.create(
+            hostel=self.hostel_a1, room_number="A-ALLOC-8", capacity=4
+        )
+
+        self._as(self.admin_a)
+        self._set_active_school(self.school_b.pk)
+
+        response = self.client.post(
+            "/api/hostel/allocations/",
+            {
+                "room": room_a.pk,
+                "student": student_a.pk,
+                "start_date": "2026-09-01",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(
+            Allocation.objects.filter(room=room_a).exists()
+        )
+
+    def test_inactive_school_selector_fails_closed(self):
+        """An inactive school can never feed the allocation student selector.
+
+        `get_active_memberships()` filters the membership row only, so the
+        inactive school still resolves to ``request.institution``; the
+        selector must reject it with 403 rather than serve its students
+        (ModuleAccessMiddleware covers /api/hostel/* but /api/students/* is
+        core SIS, so the guard must live in the view).
+        """
+        school_c = School.objects.create(
+            name="Inactive Hostel School", code="hstl-c", status="inactive"
+        )
+        campus_c = Campus.objects.create(
+            school=school_c, name="Campus C", status="active"
+        )
+        member_c = make_user("hstl-inactive-mgr", Role.ADMIN, school_c)
+
+        self._make_student(school_c, campus_c, "ALLOC-C-001")
+        self._make_student(self.school_a, self.campus_a1, "ALLOC-A-009")
+
+        self._as(member_c)
+        self._set_active_school(school_c.pk)
+
+        response = self.client.get("/api/students/?page_size=1000")
+        self.assertEqual(response.status_code, 403)
+
+        response = self.client.get("/api/hostel/allocations/")
+        self.assertEqual(response.status_code, 403)
 
     def test_students_selector_fails_closed_without_active_school(self):
         """The allocation student selector never returns all-school students."""
