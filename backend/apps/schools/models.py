@@ -436,6 +436,14 @@ class SchoolSettings(models.Model):
     primary_color = models.CharField(max_length=7, default="#1a73e8")
     secondary_color = models.CharField(max_length=7, default="#34a853")
     accent_color = models.CharField(max_length=7, default="#fbbc04")
+    # Single normalized application theme color (strict #RRGGBB). Kept
+    # distinct from the print/CSS color trio above: it drives the app UI,
+    # while primary/secondary/accent continue branding documents and media.
+    theme_color = models.CharField(
+        max_length=7,
+        default="#1a73e8",
+        help_text="Application theme color (strict hex, #RRGGBB).",
+    )
     motto = models.CharField(max_length=300, blank=True)
     contact_email = models.EmailField(blank=True)
     contact_phone = models.CharField(max_length=20, blank=True)

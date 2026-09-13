@@ -1,6 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Palette, Save, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Palette, Save, Upload } from "lucide-react";
 import { PageHeader, StateArea } from "./ui";
+import {
+  THEME_PRESETS,
+  applyBrandTheme,
+  brandTextOnColor,
+  isHexColor,
+} from "../brandTheme";
 
 const BRANDING_URL = "/api/schools/branding/";
 
@@ -8,6 +14,7 @@ const DEFAULT_COLORS = {
   primary_color: "#1a73e8",
   secondary_color: "#34a853",
   accent_color: "#fbbc04",
+  theme_color: "#1a73e8",
 };
 
 export default function BrandingPage() {
@@ -25,6 +32,7 @@ export default function BrandingPage() {
     primary_color: DEFAULT_COLORS.primary_color,
     secondary_color: DEFAULT_COLORS.secondary_color,
     accent_color: DEFAULT_COLORS.accent_color,
+    theme_color: DEFAULT_COLORS.theme_color,
     contact_email: "",
     contact_phone: "",
     contact_website: "",
@@ -43,47 +51,54 @@ export default function BrandingPage() {
   const [logoFile, setLogoFile] = useState(null);
   const [faviconFile, setFaviconFile] = useState(null);
 
-  const fetchBranding = useCallback(async () => {
-    setLoading(true);
-    try {
-      const response = await fetch(BRANDING_URL, { credentials: "include" });
-      if (response.ok) {
-        const data = await response.json();
-        setForm({
-          school_name: data.school_name || "",
-          short_name: data.short_name || "",
-          motto: data.motto || "",
-          primary_color: data.primary_color || DEFAULT_COLORS.primary_color,
-          secondary_color: data.secondary_color || DEFAULT_COLORS.secondary_color,
-          accent_color: data.accent_color || DEFAULT_COLORS.accent_color,
-          contact_email: data.contact_email || "",
-          contact_phone: data.contact_phone || "",
-          contact_website: data.contact_website || "",
-          address_line: data.address_line || "",
-          footer_text: data.footer_text || "",
-          currency: data.currency || "PKR",
-          timezone: data.timezone || "UTC",
-          date_format: data.date_format || "dd-mm-yyyy",
-          language: data.language || "en",
-          working_days:
-            data.working_days?.length > 0
-              ? data.working_days
-              : ["mon", "tue", "wed", "thu", "fri"],
-          email_from_name: data.email_from_name || "",
-          email_from_address: data.email_from_address || "",
-        });
-        if (data.logo_url) setLogoPreview(data.logo_url);
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
-    fetchBranding();
-  }, [fetchBranding]);
+    let cancelled = false;
+
+    (async () => {
+      setLoading(true);
+      try {
+        const response = await fetch(BRANDING_URL, { credentials: "include" });
+        if (cancelled) return;
+        if (response.ok) {
+          const data = await response.json();
+          if (cancelled) return;
+          setForm({
+            school_name: data.school_name || "",
+            short_name: data.short_name || "",
+            motto: data.motto || "",
+            primary_color: data.primary_color || DEFAULT_COLORS.primary_color,
+            secondary_color: data.secondary_color || DEFAULT_COLORS.secondary_color,
+            accent_color: data.accent_color || DEFAULT_COLORS.accent_color,
+            theme_color: data.theme_color || DEFAULT_COLORS.theme_color,
+            contact_email: data.contact_email || "",
+            contact_phone: data.contact_phone || "",
+            contact_website: data.contact_website || "",
+            address_line: data.address_line || "",
+            footer_text: data.footer_text || "",
+            currency: data.currency || "PKR",
+            timezone: data.timezone || "UTC",
+            date_format: data.date_format || "dd-mm-yyyy",
+            language: data.language || "en",
+            working_days:
+              data.working_days?.length > 0
+                ? data.working_days
+                : ["mon", "tue", "wed", "thu", "fri"],
+            email_from_name: data.email_from_name || "",
+            email_from_address: data.email_from_address || "",
+          });
+          if (data.logo_url) setLogoPreview(data.logo_url);
+        }
+      } catch {
+        // ignore
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleChange = (event) => {
     const { name, value } = event.target;
@@ -110,6 +125,12 @@ export default function BrandingPage() {
     setSaving(true);
     setError("");
     setSuccess("");
+
+    if (!isHexColor(form.theme_color)) {
+      setError("Theme color must be a valid hex color, e.g. #7c3aed.");
+      setSaving(false);
+      return;
+    }
 
     const formData = new FormData();
     Object.entries(form).forEach(([key, value]) => {
@@ -142,6 +163,13 @@ export default function BrandingPage() {
       setSuccess("Branding settings saved successfully.");
       setLogoFile(null);
       setFaviconFile(null);
+
+      // Apply the CONFIRMED value from the backend echo, never an unconfirmed
+      // client-side selection.
+      const confirmed = await response.json().catch(() => null);
+      if (confirmed && isHexColor(confirmed.theme_color)) {
+        applyBrandTheme(confirmed.theme_color);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -208,6 +236,64 @@ export default function BrandingPage() {
                       </div>
                     </label>
                   </div>
+                </div>
+              </div>
+
+              <div className="panel">
+                <div className="teacher-list-header">
+                  <h3><Palette size={16} /> Theme Colors</h3>
+                </div>
+                <div className="form-section">
+                  <p style={{ fontSize: 12, color: "#888", margin: 0 }}>
+                    One accent color drives the entire app shell — buttons, active
+                    tabs and nav, focus rings. It applies in both Light and Dark
+                    mode (each keeps its own neutrals).
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginTop: 12 }}>
+                    {THEME_PRESETS.map((p) => {
+                      const selected =
+                        isHexColor(form.theme_color) &&
+                        p.value.toLowerCase() === form.theme_color.toLowerCase();
+                      return (
+                        <button
+                          key={p.value}
+                          type="button"
+                          title={p.name}
+                          aria-label={`Set theme color to ${p.name}`}
+                          aria-pressed={selected}
+                          onClick={() => setForm((s) => ({ ...s, theme_color: p.value }))}
+                          style={{
+                            height: 40,
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            background: p.value,
+                            border: selected ? "2px solid var(--text)" : "2px solid transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {selected && <Check size={16} color={brandTextOnColor(p.value)} />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 12 }}>
+                    Custom
+                    <input
+                      type="color"
+                      value={isHexColor(form.theme_color) ? form.theme_color : DEFAULT_COLORS.theme_color}
+                      onChange={(e) => setForm((p) => ({ ...p, theme_color: e.target.value }))}
+                      style={{ width: 40, height: 32, padding: 0, border: "none", cursor: "pointer" }}
+                    />
+                    <input
+                      name="theme_color"
+                      value={form.theme_color}
+                      onChange={handleChange}
+                      placeholder="#RRGGBB"
+                      style={{ flex: 1, maxWidth: 180 }}
+                    />
+                  </label>
                 </div>
               </div>
 
@@ -377,6 +463,39 @@ export default function BrandingPage() {
                       <div>
                         <strong style={{ fontSize: 14 }}>{form.school_name || "School Name"}</strong>
                         {form.motto && <div style={{ fontSize: 11, opacity: 0.8 }}>{form.motto}</div>}
+                      </div>
+                    </div>
+                    {/* App theme accent sample — uses the same centralized
+                        brand tokens as the shell (applyBrandTheme), scoped to
+                        this node so the real app is untouched until save. */}
+                    <div
+                      style={{
+                        padding: 16,
+                        background: "var(--surface, #ffffff)",
+                        borderBottom: "1px solid var(--border, #e0e0e0)",
+                        "--brand-color": isHexColor(form.theme_color)
+                          ? form.theme_color
+                          : DEFAULT_COLORS.theme_color,
+                        "--text-on-brand": brandTextOnColor(
+                          isHexColor(form.theme_color)
+                            ? form.theme_color
+                            : DEFAULT_COLORS.theme_color
+                        ),
+                      }}
+                    >
+                      <div style={{ fontSize: 12, color: "var(--text-muted, #666)", marginBottom: 10 }}>
+                        App theme accent
+                      </div>
+                      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                        <span className="primary-button" style={{ padding: "8px 14px", fontSize: 12, display: "inline-flex" }}>
+                          Primary action
+                        </span>
+                        <span className="tab-button active" style={{ borderBottom: "2px solid", borderRadius: 0 }}>
+                          Active tab
+                        </span>
+                        <span className="topbar-link active" style={{ padding: "4px 10px", borderRadius: 6 }}>
+                          Active nav
+                        </span>
                       </div>
                     </div>
                     {/* Preview content */}

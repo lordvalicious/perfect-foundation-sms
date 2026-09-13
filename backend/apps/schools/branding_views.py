@@ -1,41 +1,58 @@
 """API views for school branding settings."""
 
+import re
+
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsAdminRole
+from apps.accounts.middleware import require_active_school
+from apps.accounts.permissions import IsAdminRole, IsStaffRole
 
-from .models import School, SchoolSettings
+from .models import SchoolSettings
+
+# Strict #RRGGBB only: rejects named colors, short/3-digit hex, alpha hex,
+# and any unsafe value (spaces, ;, url(...), var(), quotes, etc.).
+HEX_COLOR_RE = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def is_valid_hex_color(value):
+    return isinstance(value, str) and bool(HEX_COLOR_RE.match(value))
 
 
 class SchoolBrandingView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        # Reading branding (including the app theme color) is needed by the
+        # whole school so the shell theme reaches every role. Only admins may
+        # modify it.
+        if self.request.method in ("GET",):
+            return [IsAuthenticated(), IsStaffRole()]
+        return [IsAuthenticated(), IsAdminRole()]
 
     def _get_settings(self, request):
-        school = getattr(request, "institution", None)
-        if not school:
-            return None, school
+        # Active-school failure policy: a stale/unauthorized context or an
+        # inactive school raises a 403 here. Only a genuinely absent context
+        # returns None (mapped to 404 below — fail closed, never another
+        # school's data and never an unscoped all-school query).
+        school = require_active_school(request)
+        if school is None:
+            return None, None
         settings, _ = SchoolSettings.objects.get_or_create(school=school)
         return settings, school
 
-    def get(self, request):
-        settings, school = self._get_settings(request)
-        if not settings:
-            return Response({"detail": "No school configured."}, status=status.HTTP_404_NOT_FOUND)
-
-        request_build = request.build_absolute_uri if hasattr(request, "build_absolute_uri") else None
-
+    def _payload(self, request, settings, school):
         logo_url = None
         if settings.logo:
-            logo_url = request.build_absolute_uri(settings.logo.url) if request_build else settings.logo.url
+            logo_url = request.build_absolute_uri(settings.logo.url)
 
         favicon_url = None
         if settings.favicon:
-            favicon_url = request.build_absolute_uri(settings.favicon.url) if request_build else settings.favicon.url
+            favicon_url = request.build_absolute_uri(settings.favicon.url)
 
-        return Response({
+        return {
             "school_code": school.code,
             "school_name": school.name,
             "short_name": settings.short_name,
@@ -45,6 +62,7 @@ class SchoolBrandingView(APIView):
             "primary_color": settings.primary_color,
             "secondary_color": settings.secondary_color,
             "accent_color": settings.accent_color,
+            "theme_color": settings.theme_color,
             "contact_email": settings.contact_email,
             "contact_phone": settings.contact_phone,
             "contact_website": settings.contact_website,
@@ -62,7 +80,14 @@ class SchoolBrandingView(APIView):
             ],
             "email_from_name": settings.email_from_name,
             "email_from_address": settings.email_from_address,
-        })
+        }
+
+    def get(self, request):
+        settings, school = self._get_settings(request)
+        if not settings:
+            return Response({"detail": "No school configured."}, status=status.HTTP_404_NOT_FOUND)
+
+        return Response(self._payload(request, settings, school))
 
     def put(self, request):
         settings, school = self._get_settings(request)
@@ -70,6 +95,19 @@ class SchoolBrandingView(APIView):
             return Response({"detail": "No school configured."}, status=status.HTTP_404_NOT_FOUND)
 
         try:
+            # Validate the theme color first and fail before any mutation, so
+            # a malformed/unsafe value can never overwrite a valid saved theme.
+            if "theme_color" in request.data:
+                value = request.data.get("theme_color")
+
+                if not is_valid_hex_color(value):
+                    return Response(
+                        {"detail": "theme_color must be a valid hex color, e.g. #RRGGBB."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+
+                settings.theme_color = value
+
             settings.motto = request.data.get("motto", settings.motto)
             settings.primary_color = request.data.get("primary_color", settings.primary_color)
             settings.secondary_color = request.data.get("secondary_color", settings.secondary_color)
@@ -163,7 +201,9 @@ class SchoolBrandingView(APIView):
                 school.name = request.data["school_name"]
                 school.save()
 
-            return Response({"detail": "Branding settings updated."})
+            # Echo the confirmed persisted payload so the client applies the
+            # value the backend actually stored (failed saves never look ok).
+            return Response(self._payload(request, settings, school))
         except Exception as e:
             import logging
             logger = logging.getLogger(__name__)

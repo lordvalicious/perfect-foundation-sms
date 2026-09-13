@@ -13,6 +13,7 @@ from .models import (
 	Campus,
 	Class,
 	School,
+	SchoolSettings,
 	Section,
 	Subject,
 	SubjectOffering,
@@ -108,6 +109,259 @@ class TenantBrandingApiTests(TestCase):
 			"/api/schools/tenant-config/?school_code=missing"
 		)
 		self.assertEqual(missing.status_code, 404)
+
+
+class ThemeColorBrandingApiTests(TestCase):
+	"""Theme color API: validation, persistence, isolation, fail-closed."""
+
+	def _login(self, user):
+		self.client.force_login(user)
+
+	def setUp(self):
+		self.school_a = School.objects.create(name="School A", code="school-a")
+		self.school_b = School.objects.create(name="School B", code="school-b")
+		self.school_c = School.objects.create(
+			name="School Inactive", code="school-c", status="inactive",
+		)
+
+		self.admin_a = get_user_model().objects.create_user(
+			username="admin-a2", email="admin-a2@test.edu", password="TestPass123!",
+		)
+		membership_a = InstitutionMembership.objects.create(
+			user=self.admin_a, institution=self.school_a,
+		)
+		RoleAssignment.objects.create(membership=membership_a, role=Role.ADMIN)
+
+		self.admin_b = get_user_model().objects.create_user(
+			username="admin-b2", email="admin-b2@test.edu", password="TestPass123!",
+		)
+		membership_b = InstitutionMembership.objects.create(
+			user=self.admin_b, institution=self.school_b,
+		)
+		RoleAssignment.objects.create(membership=membership_b, role=Role.ADMIN)
+
+		self.admin_c = get_user_model().objects.create_user(
+			username="admin-c2", email="admin-c2@test.edu", password="TestPass123!",
+		)
+		membership_c = InstitutionMembership.objects.create(
+			user=self.admin_c, institution=self.school_c,
+		)
+		RoleAssignment.objects.create(membership=membership_c, role=Role.ADMIN)
+
+		self.teacher_a = get_user_model().objects.create_user(
+			username="teacher-a", email="teacher-a@test.edu", password="TestPass123!",
+		)
+		membership_t = InstitutionMembership.objects.create(
+			user=self.teacher_a, institution=self.school_a,
+		)
+		RoleAssignment.objects.create(membership=membership_t, role=Role.TEACHER)
+
+		self.client = APIClient()
+
+	def test_theme_color_has_safe_default(self):
+		self._login(self.admin_a)
+		response = self.client.get("/api/schools/branding/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["theme_color"], "#1a73e8")
+
+	def test_theme_color_saves_valid_preset_and_custom_hex(self):
+		self._login(self.admin_a)
+
+		for color in ("#7c3aed", "#7C3AED"):
+			with self.subTest(color=color):
+				response = self.client.put(
+					"/api/schools/branding/",
+					{"theme_color": color},
+					format="multipart",
+				)
+
+				self.assertEqual(response.status_code, 200)
+				self.assertEqual(response.data["theme_color"], color)
+
+				got = self.client.get("/api/schools/branding/")
+				self.assertEqual(got.data["theme_color"], color)
+
+		row = SchoolSettings.objects.get(school=self.school_a)
+		self.assertEqual(row.theme_color, "#7C3AED")
+
+	def test_invalid_theme_color_rejected_and_existing_preserved(self):
+		self._login(self.admin_a)
+
+		valid = self.client.put(
+			"/api/schools/branding/", {"theme_color": "#7c3aed"}, format="multipart",
+		)
+		self.assertEqual(valid.status_code, 200)
+
+		for bad in ("red", "#fff", "123456", "##7c3aed", "#7c3aed00", "#7c3ae", "##", "", "# 7c3aed"):
+			with self.subTest(bad=bad):
+				response = self.client.put(
+					"/api/schools/branding/",
+					{"theme_color": bad},
+					format="multipart",
+				)
+
+				self.assertEqual(response.status_code, 400)
+				self.assertEqual(
+					response.data["detail"],
+					"theme_color must be a valid hex color, e.g. #RRGGBB.",
+				)
+
+		row = SchoolSettings.objects.get(school=self.school_a)
+		self.assertEqual(row.theme_color, "#7c3aed", "invalid input must not overwrite a saved theme")
+
+	def test_theme_color_is_scoped_to_own_school(self):
+		self._login(self.admin_a)
+		self.client.put(
+			"/api/schools/branding/", {"theme_color": "#7c3aed"}, format="multipart",
+		)
+
+		self._login(self.admin_b)
+		response = self.client.get("/api/schools/branding/")
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["school_code"], "school-b")
+		self.assertEqual(response.data["theme_color"], "#1a73e8")
+
+	def test_foreign_active_school_context_rejected_fail_closed(self):
+		self._login(self.admin_a)
+
+		def _assert_foreign_context():
+			# The middleware self-heals the session after a rejected request,
+			# so the stale/foreign context must be re-asserted before EACH call
+			# (same pattern as the hostel allocation tests).
+			session = self.client.session
+			session["active_institution_id"] = self.school_b.pk
+			session.save()
+
+		_assert_foreign_context()
+		got = self.client.get("/api/schools/branding/")
+		self.assertEqual(got.status_code, 403)
+
+		_assert_foreign_context()
+		put = self.client.put(
+			"/api/schools/branding/",
+			{"theme_color": "#e11d48"},
+			format="multipart",
+		)
+		self.assertEqual(put.status_code, 403)
+		self.assertFalse(
+			SchoolSettings.objects.filter(school=self.school_b, theme_color="#e11d48").exists(),
+			"a stale context must not be able to write another school's branding",
+		)
+
+	def test_multi_membership_user_sees_theme_per_active_school(self):
+		# Same Super Admin of both schools: the served theme must follow the
+		# active school every time — School A purple / School B green with no
+		# crosstalk. (Normal users are bound to exactly one school; only the
+		# platform Super Admin may hold multiple memberships.)
+		dual = get_user_model().objects.create_superuser(
+			username="dual-a-b", email="dual-ab@test.edu", password="TestPass123!",
+		)
+		for school in (self.school_a, self.school_b):
+			membership = InstitutionMembership.objects.create(
+				user=dual, institution=school,
+			)
+			RoleAssignment.objects.create(membership=membership, role=Role.ADMIN)
+
+		self._login(dual)
+
+		# Active school = A (explicitly, the way the shell sets it).
+		session = self.client.session
+		session["active_institution_id"] = self.school_a.pk
+		session.save()
+
+		self.client.put(
+			"/api/schools/branding/", {"theme_color": "#7c3aed"}, format="multipart",
+		)
+		self.assertEqual(
+			SchoolSettings.objects.get(school=self.school_a).theme_color, "#7c3aed",
+		)
+
+		# Switch active school to B (as the shell does on school change).
+		session = self.client.session
+		session["active_institution_id"] = self.school_b.pk
+		session.save()
+
+		got_b = self.client.get("/api/schools/branding/")
+		self.assertEqual(got_b.status_code, 200)
+		self.assertEqual(got_b.data["school_code"], "school-b")
+		self.assertEqual(got_b.data["theme_color"], "#1a73e8")
+
+		# And back to A without reloading anything else.
+		session = self.client.session
+		session["active_institution_id"] = self.school_a.pk
+		session.save()
+
+		got_a = self.client.get("/api/schools/branding/")
+		self.assertEqual(got_a.status_code, 200)
+		self.assertEqual(got_a.data["school_code"], "school-a")
+		self.assertEqual(got_a.data["theme_color"], "#7c3aed")
+
+		# School B must still be untouched.
+		self.assertEqual(
+			SchoolSettings.objects.get(school=self.school_b).theme_color, "#1a73e8",
+		)
+
+	def test_invalid_active_school_context_rejected(self):
+		self._login(self.admin_a)
+
+		session = self.client.session
+		session["active_institution_id"] = 999999
+		session.save()
+
+		response = self.client.get("/api/schools/branding/")
+		self.assertEqual(response.status_code, 403)
+
+	def test_missing_active_school_fails_closed(self):
+		platform = get_user_model().objects.create_superuser(
+			username="platform-a",
+			email="platform-a@test.edu",
+			password="TestPass123!",
+		)
+		self._login(platform)
+
+		got = self.client.get("/api/schools/branding/")
+		self.assertEqual(got.status_code, 404)
+
+		put = self.client.put(
+			"/api/schools/branding/", {"theme_color": "#16a34a"}, format="multipart",
+		)
+		self.assertEqual(put.status_code, 404)
+
+	def test_inactive_school_theme_fails_closed(self):
+		self._login(self.admin_c)
+		response = self.client.get("/api/schools/branding/")
+		self.assertEqual(response.status_code, 403)
+
+	def test_non_admin_can_read_but_not_modify(self):
+		self._login(self.teacher_a)
+
+		got = self.client.get("/api/schools/branding/")
+		self.assertEqual(got.status_code, 200)
+		self.assertEqual(got.data["theme_color"], "#1a73e8")
+
+		put = self.client.put(
+			"/api/schools/branding/", {"theme_color": "#dc2626"}, format="multipart",
+		)
+		self.assertEqual(put.status_code, 403)
+		self.assertEqual(
+			SchoolSettings.objects.get(school=self.school_a).theme_color,
+			"#1a73e8",
+		)
+
+	def test_put_echoes_confirmed_persisted_payload(self):
+		self._login(self.admin_a)
+		response = self.client.put(
+			"/api/schools/branding/",
+			{"theme_color": "#059669", "school_name": "School A Renamed"},
+			format="multipart",
+		)
+
+		self.assertEqual(response.status_code, 200)
+		self.assertEqual(response.data["theme_color"], "#059669")
+		self.assertEqual(response.data["school_name"], "School A Renamed")
+		self.assertEqual(response.data["school_code"], "school-a")
 
 
 class SectionDetailApiTests(TestCase):

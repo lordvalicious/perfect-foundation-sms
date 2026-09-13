@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useAuth } from "./auth";
 import { apiFetch, jsonHeaders } from "./api";
+import { applyBrandTheme, clearBrandTheme, isHexColor } from "./brandTheme";
 
 const SchoolContext = createContext(null);
 
@@ -34,6 +35,7 @@ export function SchoolProvider({ children }) {
     short_name: "",
     motto: "",
     primary_color: "",
+    theme_color: "",
     logo_url: "",
   });
 
@@ -182,11 +184,25 @@ export function SchoolProvider({ children }) {
   }, [fetchActiveInstitution]);
 
   // White-label: apply the school's saved branding to the shell (document
-  // title, brand accent color, mobile theme-color). Cosmetic only — failures
-  // fall back to the institution name and are never surfaced as errors.
+  // title, brand theme color, mobile theme-color). Cosmetic only — failures
+  // fall back to the institution name and default theme and are never
+  // surfaced as errors.
+  //
+  // Active-school failure policy: the theme is cleared on EVERY school change
+  // BEFORE the new school's branding is fetched, so a stale/expired/previous
+  // school's colors are never shown while resolving the next one. Only a
+  // confirmed, valid `theme_color` from the CURRENT school is applied; any
+  // failure leaves the default design-system accent in place.
   useEffect(() => {
+    clearBrandTheme();
     const name = currentSchool?.name || "School Management System";
-    if (!currentSchool?.id) return undefined;
+
+    if (!currentSchool?.id) {
+      setBranding((p) => ({ ...p, school_name: name, theme_color: "" }));
+      document.title = name;
+      return undefined;
+    }
+
     let cancelled = false;
 
     apiFetch("/api/schools/branding/", {}, "Could not load branding.")
@@ -197,32 +213,22 @@ export function SchoolProvider({ children }) {
           short_name: data.short_name || "",
           motto: data.motto || "",
           primary_color: data.primary_color || "",
+          theme_color: data.theme_color || "",
           logo_url: data.logo_url || "",
         };
         setBranding(next);
         document.title = next.school_name;
-        const color =
-          typeof next.primary_color === "string" && next.primary_color
-            ? next.primary_color
-            : "";
-        if (color) {
-          document.documentElement.style.setProperty("--brand-color", color);
-          let meta = document.querySelector('meta[name="theme-color"]');
-          if (!meta) {
-            meta = document.createElement("meta");
-            meta.setAttribute("name", "theme-color");
-            document.head.appendChild(meta);
-          }
-          meta.setAttribute("content", color);
+
+        if (isHexColor(next.theme_color)) {
+          applyBrandTheme(next.theme_color);
         } else {
-          document.documentElement.style.removeProperty("--brand-color");
-          const meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute("content", "");
+          clearBrandTheme();
         }
       })
       .catch(() => {
         if (cancelled) return;
-        setBranding((p) => ({ ...p, school_name: name }));
+        clearBrandTheme();
+        setBranding((p) => ({ ...p, school_name: name, theme_color: "" }));
         document.title = name;
       });
 

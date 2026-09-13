@@ -34,6 +34,15 @@
   --primary-soft: rgba(79, 70, 229, 0.07);
   --primary-glow: rgba(79, 70, 229, 0.12);
 
+  /* Brand theme tokens. `--brand-color` is injected inline by applyBrandTheme
+     (schoolContext / Branding page). Without it every token falls back to the
+     per-mode indigo family below, so the default appearance is unchanged. */
+  --brand-color: var(--primary);
+  --brand-strong: color-mix(in srgb, var(--brand-color) 88%, #000);
+  --brand-soft: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  --brand-glow: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  --text-on-brand: var(--text-on-primary);
+
   --sidebar-bg: #ffffff;
   --sidebar-hover: #f0efeb;
   --topbar-bg: rgba(255, 255, 255, 0.92);
@@ -93,6 +102,12 @@
   --primary-strong: #a5b4fc;
   --primary-soft: rgba(129, 140, 248, 0.1);
   --primary-glow: rgba(129, 140, 248, 0.18);
+
+  --brand-color: var(--primary);
+  --brand-strong: color-mix(in srgb, var(--brand-color) 72%, #fff);
+  --brand-soft: color-mix(in srgb, var(--brand-color) 8%, transparent);
+  --brand-glow: color-mix(in srgb, var(--brand-color) 14%, transparent);
+  --text-on-brand: var(--text-on-primary);
 
   --sidebar-bg: #1c1a17;
   --sidebar-hover: #2d2a24;
@@ -172,7 +187,7 @@ h1, h2, h3, h4,
 }
 
 ::selection {
-  background: var(--primary-glow);
+  background: var(--brand-glow, var(--primary-glow));
   color: var(--text);
 }
 
@@ -182,7 +197,7 @@ h1, h2, h3, h4,
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 :focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 2px solid var(--brand-color, var(--primary));
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -256,7 +271,7 @@ h1, h2, h3, h4,
   align-items: center;
   justify-content: center;
   background: var(--brand-color, var(--primary));
-  color: var(--text-on-primary);
+  color: var(--text-on-brand, var(--text-on-primary));
   font-family: var(--font-display);
   font-size: 11px;
   font-weight: 800;
@@ -369,12 +384,12 @@ h1, h2, h3, h4,
 }
 
 .school-switcher-item:hover {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--brand-soft, var(--primary-soft));
+  color: var(--brand-color, var(--primary));
 }
 
 .school-switcher-item.active {
-  color: var(--primary);
+  color: var(--brand-color, var(--primary));
   font-weight: 600;
 }
 
@@ -412,8 +427,8 @@ h1, h2, h3, h4,
 }
 
 .topbar-link.active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--brand-soft, var(--primary-soft));
+  color: var(--brand-color, var(--primary));
   font-weight: 600;
 }
 
@@ -498,12 +513,12 @@ h1, h2, h3, h4,
 }
 
 .nav-dropdown-item:hover {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--brand-soft, var(--primary-soft));
+  color: var(--brand-color, var(--primary));
 }
 
 .nav-dropdown-item.active {
-  color: var(--primary);
+  color: var(--brand-color, var(--primary));
   font-weight: 600;
 }
 
@@ -643,8 +658,8 @@ body.nav-open .mobile-nav {
 }
 
 .mobile-nav-link.active {
-  background: var(--primary-soft);
-  color: var(--primary);
+  background: var(--brand-soft, var(--primary-soft));
+  color: var(--brand-color, var(--primary));
   font-weight: 600;
 }
 
@@ -1077,14 +1092,14 @@ body.nav-open .mobile-nav {
 }
 
 .primary-button {
-  background: var(--primary);
-  color: var(--text-on-primary);
+  background: var(--brand-color, var(--primary));
+  color: var(--text-on-brand, var(--text-on-primary));
 }
 
 .primary-button:hover {
-  background: var(--primary-strong);
+  background: var(--brand-strong, var(--primary-strong));
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.25);
+  box-shadow: 0 2px 8px var(--brand-glow, rgba(79, 70, 229, 0.25));
 }
 
 .primary-button:active {
@@ -2478,8 +2493,8 @@ select {
 .tabs button:hover { color: var(--text); }
 
 .tabs button.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+  color: var(--brand-color, var(--primary));
+  border-bottom-color: var(--brand-color, var(--primary));
 }
 
 /* Tab buttons used both inside .tabs bars and standalone (Hostel, Library,
@@ -2504,8 +2519,8 @@ select {
 }
 
 .tab-button.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
+  color: var(--brand-color, var(--primary));
+  border-bottom-color: var(--brand-color, var(--primary));
 }
 
 /* ==========================================================================

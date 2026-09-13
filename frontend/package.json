@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test tests/hostel-room-selector.test.mjs tests/hostel-allocation-active-school.test.mjs",
+    "test": "node --test tests/hostel-room-selector.test.mjs tests/hostel-allocation-active-school.test.mjs tests/branding-theme.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
