@@ -137,7 +137,7 @@ function BulkInvoiceModal({ onClose, onDone }) {
               <div className="state-card">
                 <strong>{result.skipped} enrollment(s) skipped.</strong>
                 <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                  {result.skipped_details.map((s, i) => (
+                  {(result.skipped_details || []).map((s, i) => (
                     <li key={i}>{s.student}: {s.reason}</li>
                   ))}
                 </ul>
@@ -357,7 +357,7 @@ function BulkPaymentModal({ onClose, onDone }) {
               <div className="state-card error">
                 <strong>{result.errors} error(s) occurred.</strong>
                 <ul style={{ marginTop: 8, paddingLeft: 20 }}>
-                  {result.error_details.map((e, i) => (
+                  {(result.error_details || []).map((e, i) => (
                     <li key={i}>#{e.index}: {e.reason}</li>
                   ))}
                 </ul>

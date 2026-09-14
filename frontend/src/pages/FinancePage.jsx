@@ -203,7 +203,7 @@ function BreakdownCharts({ data, error, onRetry }) {
           </div>
         </div>
 
-        {data.monthly.length === 0 ? (
+        {(data.monthly || []).length === 0 ? (
           <div className="state-card">No payments recorded yet.</div>
         ) : (
           <div className="bar-chart">
@@ -238,7 +238,7 @@ function BreakdownCharts({ data, error, onRetry }) {
           </div>
         </div>
 
-        {data.by_campus.length === 0 ? (
+        {(data.by_campus || []).length === 0 ? (
           <div className="state-card">No campus data available.</div>
         ) : (
           <div className="campus-breakdown">

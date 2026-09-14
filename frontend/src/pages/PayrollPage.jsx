@@ -878,7 +878,7 @@ export default function PayrollPage() {
           <div className="modal-footer">
             <button type="button" className="secondary-button" onClick={closeStructureModal} disabled={saving}>Cancel</button>
             <button type="button" className="primary-button" onClick={handleStructureSubmit} disabled={saving}>
-              {saving ? <Loader2 size={14} className="spin" /> : modal.mode === "create" ? "Create" : "Save"}
+              {saving ? <Loader2 size={14} className="spin" /> : modal?.mode === "create" ? "Create" : "Save"}
             </button>
           </div>
         </form>
@@ -984,7 +984,7 @@ export default function PayrollPage() {
           <div className="modal-footer">
             <button type="button" className="secondary-button" onClick={closeRecordModal} disabled={saving}>Cancel</button>
             <button type="button" className="primary-button" onClick={(e) => { e.preventDefault(); handleRecordSubmit(e); }} disabled={saving}>
-              {saving ? <Loader2 size={14} className="spin" /> : modal.mode === "create" ? "Create" : "Save"}
+              {saving ? <Loader2 size={14} className="spin" /> : modal?.mode === "create" ? "Create" : "Save"}
             </button>
           </div>
         </form>
