@@ -131,7 +131,9 @@ class TeacherDetailView(generics.RetrieveUpdateDestroyAPIView):
                 membership__institution=institution
             )
         else:
-            institution_filter = Q()
+            # No active institution context: fail closed. An empty Q() would
+            # expose every tenant's teachers to managers.
+            return queryset.none()
 
         if not is_manager(user):
             profile = get_teacher_profile(user)
