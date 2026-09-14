@@ -1,4 +1,5 @@
-from django.db.models import Q
+from django.db.models import Q, TextField
+from django.db.models.functions import Cast
 from django.utils import timezone
 from rest_framework import generics, status
 from rest_framework.permissions import IsAuthenticated
@@ -193,21 +194,27 @@ def scoped_announcement_queryset(request):
     else:
         return queryset.none()
 
-    queryset = queryset.filter(
-        Q(audience_roles=[])
-    )
+    # audience_roles is a JSON array of role slugs. An empty list means
+    # "everyone" (unrestricted). Match both the empty array and the presence
+    # of the current role WITHOUT the JSONField __contains lookup: that lookup
+    # raises NotSupportedError on SQLite when the QuerySet is EVALUATED
+    # (during DRF pagination/count, after this function returns) because
+    # QuerySets are lazy. Instead cast the JSON to text and search for the
+    # quoted role slug, which is portable across SQLite (TEXT) and
+    # PostgreSQL (JSONB::text) and keeps the audience filter in SQL.
     if role is not None:
-        try:
-            queryset = queryset.filter(
-                Q(audience_roles=[]) | Q(audience_roles__contains=[role])
+        queryset = queryset.annotate(
+            _audience_roles_txt=Cast(
+                "audience_roles", output_field=TextField()
             )
-        except Exception:
-            # Fallback for database backends that do not support JSONField.__contains
-            # (e.g. SQLite). Include announcements with empty audience_roles;
-            # the targeted-role filter is handled at the application level where
-            # possible, or the announcement is shown to all roles if no role filter
-            # can be applied safely.
-            pass
+        ).filter(
+            Q(audience_roles=[])
+            | Q(_audience_roles_txt__icontains=f'"{role}"')
+        )
+    else:
+        queryset = queryset.filter(
+            Q(audience_roles=[])
+        )
     queryset = queryset.filter(
         Q(class_obj__isnull=True) | Q(class_obj_id__in=class_ids)
     )

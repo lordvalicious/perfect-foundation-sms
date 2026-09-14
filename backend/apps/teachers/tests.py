@@ -224,3 +224,23 @@ class TeacherAPIRegressionTests(TestCase):
 
         _, results = self._list(self.admin_a, self.school_a)
         self.assertNotIn(teacher_id, [t["id"] for t in results])
+
+    def test_detail_fails_closed_without_active_institution(self):
+        response = self._create(self.admin_a, self.school_a)
+        self.assertEqual(response.status_code, 201)
+        teacher_id = json.loads(response.content)["id"]
+
+        non_manager = make_user("t_nonmgr", "teacher", self.school_a)
+
+        for user in (self.admin_a, non_manager):
+            request = self._make_request(
+                "get",
+                f"/api/teachers/{teacher_id}/",
+                user,
+                None,
+            )
+            detail_response = TeacherDetailView.as_view()(
+                request, pk=teacher_id
+            )
+            detail_response.render()
+            self.assertEqual(detail_response.status_code, 404)
