@@ -318,8 +318,29 @@ fresh tree; totals 75/75 matrix green).
   no Postgres configured). SQLite-green only; not verified on Postgres.
 - **J — remaining issues**: F-2 (below, Dev1-owned backend) is the only open item.
 
-**QA REF (F-2) — NEW BACKEND DEFECT (P2, Dev1-owned, pre-existing, NOT introduced by a4e761c):
-Audit Log CSV export is broken end-to-end.**
+**QA REF (F-2) — RESOLVED-BY-DEVELOPER-1 (backend `916f934`, merged + re-verified by Dev2):
+Audit Log CSV export (`GET /api/audit/?format=csv`) now works end-to-end.**
+
+- Status: **CLOSED** with integration proof on this exact tree (HEAD contains `916f934`).
+- What was wrong (Dev2 finding, `8d369c2`): no CSV renderer registered → DRF content
+  negotiation raised `Http404` **before** the view's CSV branch → `?format=csv` always 404,
+  frontend `AuditLogsPage` export always failed.
+- Dev1 `916f934 fix(backend): restore audit log CSV export` added an `AuditLogCSVRenderer`
+  (`media_type="text/csv"`, `format="csv"`) and wired `renderer_classes` on
+  `AuditLogListView`; the `if fmt == "csv"` path in `list()` is now reachable.
+- Re-verification ON MERGED MASTER (this tree): `apps.audit` suite **38/38 OK**, including
+  Dev1's new `test_audit_csv_export.py` (13 cases: CSV 200 + `text/csv` content type +
+  correct headers/known-row + action & user filter respect + **tenant A↔B isolation** +
+  unauthorized 403 + pagination + JSON list unaffected). Full-suite re-run on merged
+  HEAD: **970 tests, 0 true failures** (21 partner-owned `apps.reports` errors + 1 skip,
+  out of Dev2 scope) — consistent with the pre-merge baseline.
+- Frontend: `AuditLogsPage` Export CSV contract (`apiDownload(URL?format=csv)`) is unchanged
+  and now receives 200 + `text/csv`; the error-handling path we already ship remains the
+  correct graceful fallback. **No frontend change required.**
+
+(Historical note kept below for the record.)
+
+**QA REF (F-2 ORIGINAL FINDING — pre-fix) — NEW BACKEND DEFECT (P2, Dev1-owned, pre-existing):**
 - Reproduction (fresh test DB, exact frontend request): `GET /api/audit/?format=csv` → **404**
   `Not Found: /api/audit/` (via `AuditLogsPage.handleExportCSV` → `apiDownload`).
 - Also reproduced with the live backend: `?format=csv` → 404; `?page=1&page_size=50&action=...`
