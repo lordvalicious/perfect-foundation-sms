@@ -274,7 +274,7 @@ and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master
     SQLite fallback path (or check `connection.vendor`), or
   - add `audience_roles` filtering via `Q(audience_roles=[...])` exact-match per target role list
     built from role slugs, avoiding `__contains`.
-- Impact: on SQLite dev/production the parent-portal "Announcements" section and the staff
+- Impact: on SQLite (dev/test) the parent-portal "Announcements" section and the staff
   announcements page show the API error state (frontend already handles it - error banner + retry,
   no hang, no crash). Frontend requires no change.
 
