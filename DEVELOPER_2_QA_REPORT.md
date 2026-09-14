@@ -221,12 +221,20 @@ and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master
 
 ## Baselines recorded
 - Frontend tests: 22/22 pass; ESLint: 0 errors (10 pre-existing PayrollPage warnings); Vite build: passes.
-- Backend suites run on the merged tree (fresh test DB, `development` settings, SQLite engine):
-  - `accounts.test_regressions`: 10/10 OK
-  - `teachers.tests` + `accounts.test_access` + `communication.tests` + `communication.test_phase7_isolation`: 108/108 OK
-  - `students.tests` + `portal.tests` + `hr.tests` + `hostel.tests`: 71/71 OK
-  - `finance.tests` + `attendance.tests`: 72/72 OK
-  - Total this session: 261 tests, 0 failures. Known partner-owned Reports errors untouched.
+- Backend suites run on the merged tree (fresh test DB, SQLite engine):
+  - Targeted batches (261 tests, 0 failures): `accounts.test_regressions` 10/10;
+    `teachers.tests` + `accounts.test_access` + `communication.tests` +
+    `communication.test_phase7_isolation` 108/108; `students.tests` + `portal.tests` +
+    `hr.tests` + `hostel.tests` 71/71; `finance.tests` + `attendance.tests` 72/72.
+  - Account/event flows: 62/62 OK.
+  - **Full suite (`DJANGO_SETTINGS_MODULE=config.settings.test`): 942 run, 0 failures,
+    1 skipped, 21 partner-owned Reports errors - identical to the Developer 1 baseline.**
+- TEST-MODE NOTE (important for anyone re-running): use `config.settings.test` for tests.
+  `config.settings.development` applies real throttle rates (`login: 60/hour`); running the
+  full/account/event suites under `development` blows the throttles inside one process and
+  produces mass 429->403/404 cascades unrelated to code (verified: `apps.accounts.tests`
+  + `apps.events.tests` = 40 failures under `development`, 62/62 OK under `test` settings
+  in 11s). No merge or frontend regression involved.
 
 ## FINAL integration matrix (fresh test DB, exact frontend requests; 70/75 PASS)
 - TEACHER AUTHORIZATION (16/16): own profile 200 + `primary_campus_name`; admin/manager 200;
