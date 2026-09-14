@@ -142,7 +142,8 @@ this session.
   `visibleSections` (by class) are correct memos. HELD.
 - **AuditLogsPage CSV export**: `GET /api/audit/?format=csv` (via `apiDownload`) — CSV
   includes Timestamp, User, Action, Model, Object, Object ID, IP Address, Details; respects
-  all page filters; row cap 5000. No missing-fields defect. HELD.
+  all page filters; row cap 5000. **CORRECTED — see finding F-2; export does NOT succeed
+  (DRF negotiation 404 before the view's CSV branch can run).**
 - **Teacher own-vs-other isolation (read scope)**: teacher reading another teacher's detail
   → 404 (verified). Manager reads in-school teacher → 200. HELD (UI side); see B-1 for the
   non-manager backend gap.
@@ -285,8 +286,61 @@ and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master
   `currentSchool.id` remount + scoped fetch guards already in place; regression guards 22/22 green).
 - No frontend source changes were required on the merged tree.
 
+---
+
+## Addendum (2026-09-14) — final integration QA on the a4e761c merge (closing sections A–J)
+
+Executed on the merged tree `developer-2-frontend` (HEAD `49c262c`, contains master `a4e761c`).
+Frontend `npm test` 22/22, `eslint` 0 errors / 10 warnings, Vite build OK. Backend full suite under
+`config.settings.test` on fresh SQLite: **Ran 957 tests — 0 failures** (21 pre-existing errors are
+the partner-owned `apps.reports` tests; 1 skipped) — equals/exceeds the 942-tests Dev1 baseline and
+confirms **F-1 is CLOSED** by `a4e761c` (announcements audience filtering now runs 200/200 on the
+fresh tree; totals 75/75 matrix green).
+
+- **A — branch / git**: `developer-2-frontend` contains `master` via merge `49c262c`
+  (`a4e761c` is an ancestor); fully re-verified after fetch+merge.
+- **B — a4e761c present + tested**: 4 files (`communication/views.py`, `teachers/views.py`,
+  `teachers/tests.py`, `test_announcement_audience.py`); 15 new backend tests; rolled into matrix +
+  full-suite re-run. 75/75 matrix green (announcements + teacher security + tenant isolation).
+- **C — announcement matrix (Teacher/Parent/Student × HTTP/Unrestricted/Targeted/Unrelated/Pagination)**
+  PASS 200/200 (was 500 before the merge). Envelope pagination present; unrelated school announcements
+  not returned; isolation A/B disjoint.
+- **D — multi-school tenant isolation**: announcement audiences, students, attendance, health, audit
+  logs — cross-school reads 404/empty; disjoint. PASS.
+- **E — teacher security**: `TeacherDetailView` manager branch now `queryset.none()` (fail closed) when
+  no active institution; 16/16 matrix green (own 200, other 404, no-active-school 404, cross-campus
+  admin 404, etc.).
+- **F — previous issues**: F-1 CLOSED (SQLite 500 → 200). See new **F-2** below (audit CSV export).
+- **G — frontend quality**: `npm test` 22/22, `eslint` 0 err / 10 warn, build OK.
+- **H — backend totals**: 957 tests / 0 failures (21 partner-owned `apps.reports` errors + 1 skip are
+  outside Dev2 scope, pre-existing).
+- **I — live-Postgres**: **NOT AVAILABLE** in this environment (`DB_ENGINE=sqlite` in `backend/.env`;
+  no Postgres configured). SQLite-green only; not verified on Postgres.
+- **J — remaining issues**: F-2 (below, Dev1-owned backend) is the only open item.
+
+**QA REF (F-2) — NEW BACKEND DEFECT (P2, Dev1-owned, pre-existing, NOT introduced by a4e761c):
+Audit Log CSV export is broken end-to-end.**
+- Reproduction (fresh test DB, exact frontend request): `GET /api/audit/?format=csv` → **404**
+  `Not Found: /api/audit/` (via `AuditLogsPage.handleExportCSV` → `apiDownload`).
+- Also reproduced with the live backend: `?format=csv` → 404; `?page=1&page_size=50&action=...`
+  (no `format`, JSON) → 200 JSON. Any `?format=csv` GET fails; the plain list works.
+- Root cause: DRF's `DefaultContentNegotiation.filter_renderers()` raises `Http404` (negotiation.py
+  lines ~87-88) whenever `?format=<x>` has **no registered renderer** for `<x>`
+  (`URL_FORMAT_OVERRIDE` = `"format"` is the default, and NO CSV renderer is registered in
+  `base.py` `REST_FRAMEWORK.DEFAULT_RENDERER_CLASSES`). So the request is rejected at content
+  negotiation — **before** `AuditLogListView.list()` ever runs — and the view's own
+  `if fmt == "csv":` CSV branch (views.py:74-82) is therefore **dead code** and unreachable.
+- Frontend impact: `AuditLogsPage` Export CSV always fails with "Could not export audit logs."
+  Frontend already handles the error gracefully (no hang/crash); no frontend change corrects this —
+  the defect is DRF renderer configuration owned by Developer 1.
+- Suggested fix for Developer 1 (backend): register a CSV renderer (e.g. `djangorestframework-csv`
+  or a small custom renderer mapping to the existing CSV-builder code path), or add a dedicated
+  non-DRF CSV endpoint, or set `URL_FORMAT_OVERRIDE = ""` and route CSV via a dedicated URL — then
+  the `list()` CSV branch becomes reachable. Out of Dev2 scope (backend-owned, pre-existing;
+  do not fix per role contract).
+
 ## Ready to merge? 
-- YES from Developer 2 for frontend: branch contains master via `2fa4f87`, working tree matches
-  origin/developer-2-frontend, all frontend + targeted backend suites green. The ONE open item is
-  backend F-1 (announcements SQLite 500) which is Developer 1-owned and does not block the frontend
-  diff itself.
+- YES from Developer 2 for frontend: branch contains master via `49c262c`, working tree matches
+  origin/developer-2-frontend, all frontend + targeted backend suites green. The ONE open backend
+  item is F-2 (audit CSV export, Dev1-owned renderer config) and it does not block the frontend diff
+  itself. F-1 (announcements SQLite 500) is CLOSED by the merged `a4e761c`.
