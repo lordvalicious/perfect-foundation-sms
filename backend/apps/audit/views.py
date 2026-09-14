@@ -6,6 +6,7 @@ from django.http import HttpResponse
 from rest_framework import generics
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.renderers import BaseRenderer, BrowsableAPIRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -22,10 +23,33 @@ class AuditLogPagination(PageNumberPagination):
     max_page_size = 200
 
 
+class AuditLogCSVRenderer(BaseRenderer):
+    """Minimal CSV renderer so ``?format=csv`` content negotiation succeeds.
+
+    The audit CSV export writes its rows into a plain ``HttpResponse`` inside
+    ``AuditLogListView.list``; DRF only negotiates the media type here and
+    then passes the view's ``HttpResponse`` through untouched.
+    """
+
+    media_type = "text/csv"
+    format = "csv"
+
+    def render(self, data, media_type=None, renderer_context=None):
+        # Not used by the CSV export itself (that path returns an
+        # ``HttpResponse`` directly); this only satisfies DRF's renderer
+        # interface when negotiation is exercised for other outcomes.
+        return ""
+
+
 class AuditLogListView(generics.ListAPIView):
     serializer_class = AuditLogSerializer
     permission_classes = [IsAdminRole]
     pagination_class = AuditLogPagination
+    renderer_classes = [
+        JSONRenderer,
+        BrowsableAPIRenderer,
+        AuditLogCSVRenderer,
+    ]
 
     def get_queryset(self):
         queryset = AuditLog.objects.select_related("user").all()
