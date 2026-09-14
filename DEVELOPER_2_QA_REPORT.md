@@ -209,3 +209,76 @@ this session.
 - Targeted API assertions on a fresh test DB simulating the FIXED UI payloads: 5/5
   (teacher detail 200 + `primary_campus_name` present; HR leave with `staff` → 201;
   staff own leave without `staff` → 201; HR without selection → 404 as designed).
+---
+
+# FINAL INTEGRATION QA (post-Developer-1-merge)
+
+Baseline: `developer-2-frontend` synced with `master` via merge `2fa4f87`
+(`Merge remote-tracking branch origin/master into developer-2-frontend`). Developer 1
+fix `98db9d3` (`fix(backend): close teacher detail tenant leak and harden announcements filtering`)
+and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master` ref was stale
+(local pointer at `eb7e2e9`; fixes came in through `origin/master`); branch HEAD verified clean.
+
+## Baselines recorded
+- Frontend tests: 22/22 pass; ESLint: 0 errors (10 pre-existing PayrollPage warnings); Vite build: passes.
+- Backend suites run on the merged tree (fresh test DB, `development` settings, SQLite engine):
+  - `accounts.test_regressions`: 10/10 OK
+  - `teachers.tests` + `accounts.test_access` + `communication.tests` + `communication.test_phase7_isolation`: 108/108 OK
+  - `students.tests` + `portal.tests` + `hr.tests` + `hostel.tests`: 71/71 OK
+  - `finance.tests` + `attendance.tests`: 72/72 OK
+  - Total this session: 261 tests, 0 failures. Known partner-owned Reports errors untouched.
+
+## FINAL integration matrix (fresh test DB, exact frontend requests; 70/75 PASS)
+- TEACHER AUTHORIZATION (16/16): own profile 200 + `primary_campus_name`; admin/manager 200;
+  unauthorized staff / receptionist / student / parent all 404 (leak CLOSED, was 200 before 98db9d3);
+  cross-school teacher 404 for teacher + admin; cross-campus teacher: non-manager 404, admin 200;
+  invalid id 404; no-active-school non-manager-without-profile 404 (fail-closed via `get_current_institution`);
+  teacher without active school still sees own 200.
+- STAFF/HR (9/9): staff list/me, teacher me, HR-filed leave with `staff` as string id -> 201,
+  staff own leave without `staff` -> 201, leave list 200, approve 2xx, employee create (HRPage contract) 201.
+- STUDENTS (11/11): parent sees only own child (list + detail), cross-school student 404 for parent AND
+  admin, admin CRUD (add -> enroll -> visible -> edit 200 -> delete 204), search 200, campus/class/section filters 200.
+- ATTENDANCE (4/4): register list, summary, staff attendance, teacher register all 200 on live-data params.
+- HEALTH (5/5): same-school record create/view/edit 201/200/200, cross-school student blocked,
+  list school-scoped (admission number prefix check).
+- HOSTEL (5/5): school-scoped hostel list, `room-hostels` selector contains the school's hostel
+  (Add Room fix), room create 201, cross-school hostel room blocked, allocation 201.
+  NOTE: room editing/deletion is NOT supported anywhere (no backend `/rooms/<pk>/` route and the
+  HostelPage only POSTs) - documented, not a defect.
+- PARENT PORTAL (10/11): guardian/me, children, attendance, timetable, report-cards, invoices, payments,
+  notifications, teacher info 200 for a scoped parent; FAILS = announcements feed (see A/B below).
+- CONTRACTS (6/6): auth/me, active-institution, active-campus, schools/modules/current, dashboard/overview 200.
+
+## Surviving defect - handoff to Developer 1
+### F-1 (P1, BACKEND, UNFIXED BY 98db9d3): announcements still 500 on SQLite for non-manager roles
+- Reproduction (fresh test DB, SQLite): `GET /api/communication/announcements/?page=1` with a `parent`
+  (also teacher/student) session ->
+  `django.db.utils.NotSupportedError: contains lookup is not supported on this database backend` -> HTTP 500.
+- Root cause: `backend/apps/communication/views.py` `scoped_announcement_queryset()` non-manager branch
+  (lines ~196-213) wraps `queryset.filter(Q(audience_roles=[]) | Q(audience_roles__contains=[role]))`
+  in try/except **but `filter()` is lazy** - the failing SQL is only generated at evaluation time
+  (ListAPIView pagination `.count()`), outside the try block, so the exception is never caught.
+- Manager roles are unaffected (verified 200) because `apply_campus_scope` is used without the role filter.
+- Why tests missed it: `communication/test_phase7_isolation.py` only exercises manager/campus-admin
+  roles for the list endpoint, never the parent/teacher/student branch.
+- Suggested fix for Developer 1 (frontend cannot/should not work around a 500):
+  - materialize the non-manager queryset and filter by `role in a.audience_roles` in Python for the
+    SQLite fallback path (or check `connection.vendor`), or
+  - add `audience_roles` filtering via `Q(audience_roles=[...])` exact-match per target role list
+    built from role slugs, avoiding `__contains`.
+- Impact: on SQLite dev/production the parent-portal "Announcements" section and the staff
+  announcements page show the API error state (frontend already handles it - error banner + retry,
+  no hang, no crash). Frontend requires no change.
+
+## Frontend verdict after merged backend fixes
+- No new frontend defects found. Teacher 404/403 handled by `ProfileModal`/`ProfilePage`
+  (`profileErrorMessage`, error state, no infinite loading); announcements page renders
+  loading/error/empty states (`StateArea`); school switching unaffected (routes keyed by
+  `currentSchool.id` remount + scoped fetch guards already in place; regression guards 22/22 green).
+- No frontend source changes were required on the merged tree.
+
+## Ready to merge? 
+- YES from Developer 2 for frontend: branch contains master via `2fa4f87`, working tree matches
+  origin/developer-2-frontend, all frontend + targeted backend suites green. The ONE open item is
+  backend F-1 (announcements SQLite 500) which is Developer 1-owned and does not block the frontend
+  diff itself.
