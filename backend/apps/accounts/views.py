@@ -39,6 +39,7 @@ from .access import (
     apply_campus_scope,
     assert_campus_allowed,
     can_manage_role,
+    get_institution,
     is_global,
     restrict_to_allowed_campuses,
     user_allowed_campus_ids,
@@ -1081,7 +1082,23 @@ class AdminUnlockAccountView(APIView):
         from django.contrib.auth import get_user_model
         User = get_user_model()
 
-        user = User.objects.filter(pk=user_id).first()
+        user_qs = User.objects.filter(pk=user_id)
+
+        # Non-global roles (e.g. principal) may only unlock users inside the
+        # caller's active institution; global roles may unlock platform-wide.
+        if not is_global(request.user):
+            institution = get_institution(request)
+            if institution is None:
+                return Response(
+                    {"detail": "No active institution selected."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            user_qs = user_qs.filter(
+                memberships__institution=institution,
+                memberships__status="active",
+            )
+
+        user = user_qs.distinct().first()
         if not user:
             return Response(
                 {"detail": "User not found."},

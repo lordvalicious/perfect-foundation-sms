@@ -34,6 +34,19 @@ def _course_teacher_or_503(request, course):
     return teacher
 
 
+def _get_scoped_quiz(request, quiz_id):
+    """Return a Quiz if it belongs to a course in the caller's institution; 404 otherwise."""
+    return get_object_or_404(
+        apply_campus_scope(
+            Quiz.objects.select_related("course"),
+            request,
+            "course__campus_id",
+            institution_field="course__institution_id",
+        ),
+        pk=quiz_id,
+    )
+
+
 class QuizListCreateView(generics.ListCreateAPIView):
     serializer_class = QuizListSerializer
 
@@ -53,6 +66,15 @@ class QuizListCreateView(generics.ListCreateAPIView):
                     status="active"
                 ).values("class_obj"),
             ).distinct()
+
+        # Non-student view: scope by institution + campus so teachers/staff
+        # only see quizzes belonging to their active institution's courses.
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "course__campus_id",
+            institution_field="course__institution_id",
+        )
 
         course_id = self.request.query_params.get("course")
 
@@ -88,12 +110,23 @@ class QuizDetailView(generics.RetrieveUpdateDestroyAPIView):
         return QuizListSerializer
 
     def get_queryset(self):
-        queryset = Quiz.objects.select_related("course")
+        # Institution- + campus-scoped base queryset (prevents cross-tenant quiz read).
+        queryset = apply_campus_scope(
+            Quiz.objects.select_related("course"),
+            self.request,
+            "course__campus_id",
+            institution_field="course__institution_id",
+        )
 
         student = _user_student(self.request)
 
         if student is not None and not self.request.user.is_superuser:
-            return queryset.filter(is_published=True)
+            return queryset.filter(
+                is_published=True,
+                course__class_obj__in=student.enrollments.filter(
+                    status="active"
+                ).values("class_obj"),
+            ).distinct()
 
         return queryset
 
@@ -114,7 +147,7 @@ class QuizQuestionListView(APIView):
     """
 
     def get(self, request, quiz_id):
-        quiz = get_object_or_404(Quiz, pk=quiz_id)
+        quiz = _get_scoped_quiz(request, quiz_id)
         student = _user_student(request)
 
         if (
@@ -144,7 +177,7 @@ class QuizQuestionCreateView(APIView):
     """POST one question (teacher of the course only)."""
 
     def post(self, request, quiz_id):
-        quiz = get_object_or_404(Quiz, pk=quiz_id)
+        quiz = _get_scoped_quiz(request, quiz_id)
         _course_teacher_or_503(request, quiz.course)
 
         data = dict(request.data)
@@ -175,9 +208,7 @@ class SubmitQuizAttemptView(APIView):
     """POST {answers: {"<question_id>": "a", ...}} -> auto-scored attempt."""
 
     def post(self, request, quiz_id):
-        quiz = get_object_or_404(
-            Quiz.objects.select_related("course"), pk=quiz_id
-        )
+        quiz = _get_scoped_quiz(request, quiz_id)
         student = _user_student(request)
 
         if student is None:
@@ -284,15 +315,11 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not quiz_id:
             return Question.objects.none()
 
-        quiz = get_object_or_404(
-            Quiz.objects.select_related("course"),
-            pk=quiz_id
-        )
-
-        # Check institution access for non-superusers
+        quiz = _get_scoped_quiz(self.request, quiz_id)
         user = self.request.user
+
         if not user.is_superuser:
-            teacher = _user_teacher(request)
+            teacher = _user_teacher(self.request)
             if teacher is not None and quiz.course.teacher_id != teacher.id:
                 raise PermissionDenied("You do not have access to this quiz.")
 
@@ -302,22 +329,14 @@ class QuestionDetailView(generics.RetrieveUpdateDestroyAPIView):
         quiz_id = self.kwargs.get("quiz_id")
         if not quiz_id:
             raise PermissionDenied("Quiz ID is required.")
-
-        quiz = get_object_or_404(Quiz, pk=quiz_id)
-
-        # Verify instructor access
-        teacher = _user_teacher(self.request)
-        if teacher is not None and quiz.course.teacher_id != teacher.id:
-            if not self.request.user.is_superuser:
-                raise PermissionDenied("Only the course's teacher can edit questions.")
-
+        quiz = _get_scoped_quiz(self.request, quiz_id)
+        _course_teacher_or_503(self.request, quiz.course)
         serializer.save(quiz=quiz)
 
     def perform_destroy(self, instance):
-        user = self.request.user
-        quiz = instance.quiz
-        teacher = _user_teacher(user)
-        if teacher is not None and quiz.course.teacher_id != teacher.id:
-            if not user.is_superuser:
-                raise PermissionDenied("Only the course's teacher can delete questions.")
+        quiz = get_object_or_404(
+            Quiz.objects.select_related("course"),
+            pk=self.kwargs.get("quiz_id"),
+        )
+        _course_teacher_or_503(self.request, quiz.course)
         instance.delete()
