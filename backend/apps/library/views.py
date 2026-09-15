@@ -83,8 +83,25 @@ class BookIssueListView(generics.ListCreateAPIView):
         return queryset
 
     def perform_create(self, serializer):
-        if not self.get_queryset().filter(book_copy=serializer.validated_data["book_copy"]).exists():
+        book_copy = serializer.validated_data["book_copy"]
+        if not apply_campus_scope(
+            BookCopy.objects.filter(pk=book_copy.pk),
+            self.request,
+            "book__campus_id", institution_field="book__institution_id",
+        ).exists():
             raise PermissionDenied("The book is outside your campus scope.")
+
+        student = serializer.validated_data.get("student")
+        teacher = serializer.validated_data.get("teacher")
+
+        if student is not None and not student.enrollments.filter(
+            academic_year__school=self.request.institution
+        ).exists():
+            raise PermissionDenied("The student is outside the active institution.")
+
+        if teacher is not None and teacher.institution_id != self.request.institution.id:
+            raise PermissionDenied("The teacher is outside the active institution.")
+
         serializer.save()
 
 
@@ -166,6 +183,30 @@ class BookReservationListCreateView(generics.ListCreateAPIView):
             queryset = queryset.filter(book_id=book_id)
 
         return queryset.order_by("-requested_at")
+
+    def perform_create(self, serializer):
+        from apps.library.models import Book
+
+        book = serializer.validated_data.get("book")
+        if book is not None and not apply_campus_scope(
+            Book.objects.filter(pk=book.pk),
+            self.request,
+            "campus_id", institution_field="institution_id",
+        ).exists():
+            raise PermissionDenied("The book is outside your campus scope.")
+
+        student = serializer.validated_data.get("student")
+        teacher = serializer.validated_data.get("teacher")
+
+        if student is not None and not student.enrollments.filter(
+            academic_year__school=self.request.institution
+        ).exists():
+            raise PermissionDenied("The student is outside the active institution.")
+
+        if teacher is not None and teacher.institution_id != self.request.institution.id:
+            raise PermissionDenied("The teacher is outside the active institution.")
+
+        serializer.save()
 
 
 class BookReservationDetailView(generics.RetrieveDestroyAPIView):

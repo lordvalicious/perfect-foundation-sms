@@ -267,6 +267,9 @@ class StudentGuardianListCreateView(generics.ListCreateAPIView):
             self.request.user,
             student.enrollments.filter(status="active").values_list("campus_id", flat=True).first(),
         )
+        guardian = serializer.validated_data.get("guardian")
+        if guardian is not None and guardian.institution_id != self.request.institution.id:
+            raise PermissionDenied("Guardian is outside the active institution.")
         serializer.save()
 
 
@@ -897,6 +900,26 @@ class EnrollmentListCreateView(generics.ListCreateAPIView):
 
         return queryset
 
+    def perform_create(self, serializer):
+        student = serializer.validated_data.get("student")
+        institution = getattr(self.request, "institution", None)
+
+        if student is not None and student.institution_id != (institution.id if institution else None):
+            raise PermissionDenied(
+                "Student does not belong to the active institution."
+            )
+        serializer.save()
+
+    def perform_update(self, serializer):
+        student = serializer.validated_data.get("student")
+        institution = getattr(self.request, "institution", None)
+
+        if student is not None and student.institution_id != (institution.id if institution else None):
+            raise PermissionDenied(
+                "Student does not belong to the active institution."
+            )
+        serializer.save()
+
 
 class EnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrReadOnly]
@@ -913,6 +936,16 @@ class EnrollmentDetailView(generics.RetrieveUpdateDestroyAPIView):
                 "section",
             )
         ).filter(academic_year__school=self.request.institution), self.request)
+
+    def perform_update(self, serializer):
+        student = serializer.validated_data.get("student")
+        institution = getattr(self.request, "institution", None)
+
+        if student is not None and student.institution_id != (institution.id if institution else None):
+            raise PermissionDenied(
+                "Student does not belong to the active institution."
+            )
+        serializer.save()
 
 
 # =============================================================================

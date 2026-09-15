@@ -9,6 +9,7 @@ from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope, get_institution
 from apps.audit.models import record_audit
 from apps.students.models import Student
 
@@ -48,13 +49,11 @@ class StripeCheckoutView(APIView):
                 status=400,
             )
 
-        try:
-            invoice = Invoice.objects.get(id=invoice_id)
-        except Invoice.DoesNotExist:
-            return JsonResponse(
-                {"detail": "Invoice not found."},
-                status=404,
-            )
+        from django.shortcuts import get_object_or_404
+        invoice = get_object_or_404(
+            apply_campus_scope(Invoice.objects.all(), request),
+            pk=invoice_id,
+        )
 
         if invoice.balance <= 0:
             return JsonResponse(
@@ -130,8 +129,10 @@ def _handle_checkout_completed(session):
         return
 
     payment = Payment(
-        receipt_number=next_receipt_number(),
+        receipt_number=next_receipt_number(invoice.institution),
         invoice=invoice,
+        institution=invoice.institution,
+        campus=invoice.campus,
         amount=amount,
         payment_date=timezone.now().date(),
         payment_method="stripe",

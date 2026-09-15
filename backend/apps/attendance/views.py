@@ -705,6 +705,16 @@ class AttendanceCorrectionListView(NoPaginationMixin, generics.ListAPIView):
             .order_by("-corrected_at")
         )
 
+        # Corrections are scoped by the underlying attendance record's campus
+        # (and the campus' school) so cross-school/campus corrections never
+        # leak.
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "attendance__campus_id",
+            institution_field="attendance__campus__school_id",
+        )
+
         attendance = self.request.query_params.get("attendance")
         if attendance:
             queryset = queryset.filter(attendance_id=attendance)

@@ -735,5 +735,617 @@ class CampusScopingTest(TenantIsolationTestBase):
         self.assertEqual(response.status_code, 403)
 
 
+class TenantScopedViewsRegressionTest(TenantIsolationTestBase):
+    """Phase 3A regression: institution/campus scoping on alumni, inventory,
+    attendance corrections, teacher assignments, LMS lessons/quizzes, homework
+    submissions, and the admin account unlock endpoint.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        from apps.alumni.models import AlumniProfile
+        from apps.inventory.models import AssetCategory, Supplier
+        from apps.lms.models import Course, Lesson, Quiz
+        from apps.homework.models import Homework
+        from apps.attendance.models import AttendanceCorrection
+        from apps.schools.models import Subject
+
+        # Alumni
+        cls.alumni_a1 = AlumniProfile.objects.create(
+            institution=cls.school_a, campus=cls.campus_a1,
+            full_name="Alumni A1", batch_year=2020,
+        )
+        cls.alumni_b1 = AlumniProfile.objects.create(
+            institution=cls.school_b, campus=cls.campus_b1,
+            full_name="Alumni B1", batch_year=2020,
+        )
+
+        # Inventory (institution-scoped only; no campus FK)
+        cls.category_a1 = AssetCategory.objects.create(institution=cls.school_a, name="Furniture A")
+        cls.category_b1 = AssetCategory.objects.create(institution=cls.school_b, name="Furniture B")
+        cls.supplier_a1 = Supplier.objects.create(institution=cls.school_a, name="Supplier A")
+        cls.supplier_b1 = Supplier.objects.create(institution=cls.school_b, name="Supplier B")
+
+        # Attendance + corrections
+        cls.attendance_a1 = Attendance.objects.create(
+            student=cls.student_a1, enrollment=cls.enrollment_a1,
+            academic_year=cls.year_a, campus=cls.campus_a1,
+            class_obj=cls.class_a1, section=cls.section_a1,
+            date="2024-10-03", status="present",
+        )
+        cls.correction_a1 = AttendanceCorrection.objects.create(
+            attendance=cls.attendance_a1, student=cls.student_a1,
+            from_status="present", to_status="absent",
+            corrected_by=cls.teacher_a1_user,
+        )
+        cls.correction_b1 = AttendanceCorrection.objects.create(
+            attendance=cls.attendance_b1, student=cls.student_b1,
+            from_status="present", to_status="absent", corrected_by=None,
+        )
+
+        # Second School-A teacher (in-school ownership checks) + assignment
+        cls.subject_a1 = Subject.objects.create(
+            institution=cls.school_a, name="Mathematics A1", code="MATH-A1",
+        )
+        cls.teacher_a2_user = User.objects.create_user(
+            username="teacher_a2", email="teacher_a2@test.com", password="TestPass123!",
+        )
+        membership_ta2 = InstitutionMembership.objects.create(
+            user=cls.teacher_a2_user, institution=cls.school_a, status="active",
+        )
+        RoleAssignment.objects.create(membership=membership_ta2, role=Role.TEACHER)
+        cls.teacher_a2 = Teacher.objects.create(
+            institution=cls.school_a, employee_number="TCH-A2-001",
+            user=cls.teacher_a2_user, membership=membership_ta2,
+            primary_campus=cls.campus_a1, first_name="Teacher", last_name="A2", gender="female",
+        )
+        cls.assignment_a1 = TeacherAssignment.objects.create(
+            teacher=cls.teacher_a1, campus=cls.campus_a1,
+            class_obj=cls.class_a1, section=cls.section_a1,
+            subject=cls.subject_a1, academic_year=cls.year_a,
+        )
+
+        # LMS
+        cls.course_a1 = Course.objects.create(
+            institution=cls.school_a, campus=cls.campus_a1,
+            teacher=cls.teacher_a1, class_obj=cls.class_a1,
+            title="Course A1", is_published=True,
+        )
+        cls.course_a2 = Course.objects.create(
+            institution=cls.school_a, campus=cls.campus_a1,
+            teacher=cls.teacher_a2, class_obj=cls.class_a1,
+            title="Course A2", is_published=True,
+        )
+        cls.course_b1 = Course.objects.create(
+            institution=cls.school_b, campus=cls.campus_b1,
+            teacher=cls.teacher_b1, class_obj=cls.class_b1,
+            title="Course B1", is_published=True,
+        )
+        cls.lesson_a1 = Lesson.objects.create(course=cls.course_a1, title="Lesson A1")
+        cls.lesson_b1 = Lesson.objects.create(course=cls.course_b1, title="Lesson B1")
+        cls.quiz_a1 = Quiz.objects.create(course=cls.course_a1, title="Quiz A1", is_published=True)
+        cls.quiz_b1 = Quiz.objects.create(course=cls.course_b1, title="Quiz B1", is_published=True)
+
+        # Homework
+        cls.homework_a1 = Homework.objects.create(
+            institution=cls.school_a, campus=cls.campus_a1,
+            teacher=cls.teacher_a1, class_obj=cls.class_a1,
+            title="Homework A1", assigned_date="2024-10-10",
+            due_date="2024-10-20", max_marks=10,
+        )
+        cls.homework_b1 = Homework.objects.create(
+            institution=cls.school_b, campus=cls.campus_b1,
+            teacher=cls.teacher_b1, class_obj=cls.class_b1,
+            title="Homework B1", assigned_date="2024-10-10",
+            due_date="2024-10-20", max_marks=10,
+        )
+
+        # Principal (non-global role that unlocks accounts) for unlock scope tests
+        cls.principal_a_user = User.objects.create_user(
+            username="principal_a", email="principal_a@test.com", password="TestPass123!",
+        )
+        membership_pa = InstitutionMembership.objects.create(
+            user=cls.principal_a_user, institution=cls.school_a, status="active",
+        )
+        RoleAssignment.objects.create(membership=membership_pa, role=Role.PRINCIPAL)
+
+    # -- alumni --
+    def test_admin_a_sees_only_own_alumni(self):
+        self._login(self.admin_a)
+        response = self.client.get("/api/alumni/")
+        self.assertEqual(response.status_code, 200)
+        ids = [a["id"] for a in response.json().get("results", [])]
+        self.assertIn(self.alumni_a1.id, ids)
+        self.assertNotIn(self.alumni_b1.id, ids)
+
+    def test_admin_a_cannot_open_school_b_alumni_detail(self):
+        self._login(self.admin_a)
+        response = self.client.get(f"/api/alumni/{self.alumni_b1.id}/")
+        self.assertEqual(response.status_code, 404)
+
+    # -- inventory --
+    def test_admin_a_sees_only_own_inventory_categories(self):
+        self._login(self.admin_a)
+        response = self.client.get("/api/inventory/categories/")
+        ids = [c["id"] for c in response.json().get("results", [])]
+        self.assertIn(self.category_a1.id, ids)
+        self.assertNotIn(self.category_b1.id, ids)
+
+    def test_admin_a_cannot_open_school_b_supplier_detail(self):
+        self._login(self.admin_a)
+        response = self.client.get(f"/api/inventory/suppliers/{self.supplier_b1.id}/")
+        self.assertEqual(response.status_code, 404)
+
+    # -- attendance corrections --
+    def test_admin_a_sees_only_own_attendance_corrections(self):
+        self._login(self.admin_a)
+        response = self.client.get("/api/attendance/corrections/")
+        self.assertEqual(response.status_code, 200)
+        # Note: this endpoint is NOT paginated (NoPaginationMixin).
+        correction_ids = [c["id"] for c in response.json()]
+        self.assertIn(self.correction_a1.id, correction_ids)
+        self.assertNotIn(self.correction_b1.id, correction_ids)
+
+    # -- teacher assignments --
+    def test_admin_a_sees_only_school_a_teacher_assignments(self):
+        self._login(self.admin_a)
+        response = self.client.get("/api/teachers/assignments/")
+        ids = [a["id"] for a in response.json().get("results", [])]
+        self.assertIn(self.assignment_a1.id, ids)
+        self.assertNotIn(self.assignment_b1.id, ids)
+
+    def test_campus_admin_a1_sees_only_own_campus_assignments(self):
+        self._login(self.campus_admin_a1)
+        response = self.client.get("/api/teachers/assignments/")
+        ids = [a["id"] for a in response.json().get("results", [])]
+        self.assertIn(self.assignment_a1.id, ids)
+        self.assertNotIn(self.assignment_b1.id, ids)
+
+    # -- LMS lessons --
+    def test_teacher_a1_cannot_list_school_b_lessons(self):
+        self._login(self.teacher_a1_user)
+        response = self.client.get(f"/api/lms/courses/{self.course_b1.id}/lessons/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_teacher_a1_cannot_open_school_b_lesson(self):
+        self._login(self.teacher_a1_user)
+        response = self.client.get(
+            f"/api/lms/courses/{self.course_b1.id}/lessons/{self.lesson_b1.id}/"
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_teacher_a1_cannot_create_school_b_lesson(self):
+        self._login(self.teacher_a1_user)
+        response = self.client.post(
+            f"/api/lms/courses/{self.course_b1.id}/lessons/", {"title": "Hack"}
+        )
+        self.assertEqual(response.status_code, 404)
+
+    def test_non_owner_teacher_cannot_create_lesson_in_own_school(self):
+        self._login(self.teacher_a2_user)
+        response = self.client.post(
+            f"/api/lms/courses/{self.course_a1.id}/lessons/", {"title": "Hack"}
+        )
+        self.assertEqual(response.status_code, 403)
+
+    def test_owner_teacher_can_create_lesson(self):
+        self._login(self.teacher_a1_user)
+        # lesson_a1 already uses order=1 for course_a1; pass a unique order.
+        response = self.client.post(
+            f"/api/lms/courses/{self.course_a1.id}/lessons/",
+            {"title": "New Lesson", "order": 2},
+        )
+        self.assertEqual(response.status_code, 201)
+
+    # -- LMS quizzes --
+    def test_admin_a_cannot_open_school_b_quiz_detail(self):
+        self._login(self.admin_a)
+        response = self.client.get(f"/api/lms/quizzes/{self.quiz_b1.id}/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_admin_a_cannot_list_school_b_quiz_questions(self):
+        self._login(self.admin_a)
+        response = self.client.get(f"/api/lms/quizzes/{self.quiz_b1.id}/questions/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_non_owner_teacher_cannot_create_question_in_own_school(self):
+        self._login(self.teacher_a2_user)
+        response = self.client.post(
+            f"/api/lms/quizzes/{self.quiz_a1.id}/questions/new/",
+            {"text": "Hack?", "options": '["a"]', "correct_option": "a"},
+        )
+        self.assertEqual(response.status_code, 403)
+
+    # -- homework submissions --
+    def test_admin_a_cannot_submit_school_b_homework(self):
+        self._login(self.admin_a)
+        response = self.client.post(
+            f"/api/homework/{self.homework_b1.id}/submissions/",
+            {"content": "x", "student": self.student_a1.id},
+        )
+        self.assertEqual(response.status_code, 404)
+
+    # -- admin unlock scope --
+    def test_global_admin_bypasses_unlock_scoping(self):
+        self._login(self.admin_a)
+        response = self.client.post(f"/api/auth/admin/unlock/{self.admin_b.id}/")
+        self.assertEqual(response.status_code, 200)
+
+    def test_principal_cannot_unlock_cross_school_user(self):
+        self._login(self.principal_a_user)
+        response = self.client.post(f"/api/auth/admin/unlock/{self.admin_b.id}/")
+        self.assertEqual(response.status_code, 404)
+
+    def test_principal_can_unlock_own_school_user(self):
+        self._login(self.principal_a_user)
+        response = self.client.post(f"/api/auth/admin/unlock/{self.teacher_a2_user.id}/")
+        self.assertEqual(response.status_code, 200)
+
+
+class FinanceAndHRScopingRegressionTest(TenantIsolationTestBase):
+    """Phase 3A regression: institution scoping on finance write endpoints
+    (student fee overrides, fines, adjustments, journal entries, expenses) and
+    HR creation endpoints (applications, interviews).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        from apps.finance.models import Account
+        from apps.hr.models import Department, Designation, JobPosition, Candidate
+
+        # School-A fee structure (student_a1 + enrollment_a1 already exist)
+        cls.fee_category_a1 = FeeCategory.objects.create(
+            institution=cls.school_a,
+            name="Tuition A1",
+        )
+        cls.fee_structure_a1 = FeeStructure.objects.create(
+            academic_year=cls.year_a,
+            campus=cls.campus_a1,
+            class_obj=cls.class_a1,
+            category=cls.fee_category_a1,
+            amount=Decimal("5000.00"),
+            due_day=10,
+        )
+
+        # Accounts for journal+expense tests
+        cls.expense_account_a = Account.objects.create(
+            institution=cls.school_a, code="EXP-A", name="School A Expense",
+            account_type="expense",
+        )
+        cls.payment_account_a = Account.objects.create(
+            institution=cls.school_a, code="BANK-A", name="School A Bank",
+            account_type="asset",
+        )
+        cls.expense_account_b = Account.objects.create(
+            institution=cls.school_b, code="EXP-B", name="School B Expense",
+            account_type="expense",
+        )
+        cls.payment_account_b = Account.objects.create(
+            institution=cls.school_b, code="BANK-B", name="School B Bank",
+            account_type="asset",
+        )
+
+        # HR fixtures
+        cls.dept_a = Department.objects.create(
+            institution=cls.school_a, name="Academics A", code="ACA"
+        )
+        cls.designation_a = Designation.objects.create(
+            institution=cls.school_a, department=cls.dept_a,
+            name="Teacher A", code="TCH-A",
+        )
+        cls.position_a = JobPosition.objects.create(
+            institution=cls.school_a, department=cls.dept_a,
+            designation=cls.designation_a,
+            title="Math Teacher A", code="POS-A", description="teach math",
+        )
+        cls.candidate_a = Candidate.objects.create(
+            institution=cls.school_a, first_name="Candidate", last_name="A",
+            email="cand_a@test.com", source="other",
+        )
+        cls.dept_b = Department.objects.create(
+            institution=cls.school_b, name="Academics B", code="ACB"
+        )
+        cls.designation_b = Designation.objects.create(
+            institution=cls.school_b, department=cls.dept_b,
+            name="Teacher B", code="TCH-B",
+        )
+        cls.position_b = JobPosition.objects.create(
+            institution=cls.school_b, department=cls.dept_b,
+            designation=cls.designation_b,
+            title="Math Teacher B", code="POS-B", description="teach math",
+        )
+        cls.candidate_b = Candidate.objects.create(
+            institution=cls.school_b, first_name="Candidate", last_name="B",
+            email="cand_b@test.com", source="other",
+        )
+
+    # -- student fee overrides --
+    def test_cannot_create_override_for_cross_school_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/fee-overrides/", {
+            "student": self.student_b1.id,
+            "fee_structure": self.fee_structure_a1.id,
+            "amount": "1000.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_override_for_own_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/fee-overrides/", {
+            "student": self.student_a1.id,
+            "fee_structure": self.fee_structure_a1.id,
+            "amount": "1000.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- fines --
+    def test_cannot_create_fine_on_cross_school_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/fines/", {
+            "student": self.student_b1.id,
+            "academic_year": self.year_a.id,
+            "type": "disciplinary",
+            "amount": "500.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_fine_on_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/fines/", {
+            "student": self.student_a1.id,
+            "academic_year": self.year_a.id,
+            "type": "disciplinary",
+            "amount": "500.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- adjustments --
+    def test_cannot_create_adjustment_for_cross_school_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/adjustments/", {
+            "student": self.student_b1.id,
+            "type": "credit",
+            "amount": "250.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_adjustment_for_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/adjustments/", {
+            "student": self.student_a1.id,
+            "type": "credit",
+            "amount": "250.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- journal entries --
+    def test_cannot_create_journal_entry_with_cross_school_campus(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/journal-entries/", {
+            "campus": self.campus_b1.id,
+            "posting_date": "2024-10-01",
+            "description": "test",
+            "lines": [
+                {"account": self.expense_account_a.id, "debit": "100", "credit": "0"},
+                {"account": self.payment_account_a.id, "debit": "0", "credit": "100"},
+            ],
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_journal_entry_for_own_campus(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/journal-entries/", {
+            "campus": self.campus_a1.id,
+            "posting_date": "2024-10-01",
+            "description": "test",
+            "lines": [
+                {"account": self.expense_account_a.id, "debit": "100", "credit": "0"},
+                {"account": self.payment_account_a.id, "debit": "0", "credit": "100"},
+            ],
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+    # -- expenses --
+    def test_cannot_create_expense_with_cross_school_account(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/expenses/", {
+            "campus": self.campus_a1.id,
+            "expense_account": self.expense_account_b.id,
+            "payment_account": self.payment_account_a.id,
+            "amount": "100.00",
+            "expense_date": "2024-10-01",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_expense_with_own_accounts(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/expenses/", {
+            "campus": self.campus_a1.id,
+            "expense_account": self.expense_account_a.id,
+            "payment_account": self.payment_account_a.id,
+            "amount": "100.00",
+            "expense_date": "2024-10-01",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- HR applications --
+    def test_cannot_create_application_with_cross_school_candidate(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/hr/applications/", {
+            "candidate": self.candidate_b.id,
+            "position": self.position_a.id,
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_cannot_create_application_with_cross_school_position(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/hr/applications/", {
+            "candidate": self.candidate_a.id,
+            "position": self.position_b.id,
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_application_with_own_candidate_and_position(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/hr/applications/", {
+            "candidate": self.candidate_a.id,
+            "position": self.position_a.id,
+        })
+        self.assertEqual(response.status_code, 201)
+
+
+class CoreERPWriteScopeRegressionTest(TenantIsolationTestBase):
+    """Phase 3A regression: institution/campus scoping on core ERP write
+    paths — enrollments, book issues/reservations, teacher assignments,
+    and transport records.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        from apps.library.models import Book, BookCopy
+        from apps.hr.models import Department, Designation, JobPosition
+        from apps.schools.models import Subject
+
+        # Additional School-A teacher (adjustment of assignment scope) + position
+        cls.dept_a_core = Department.objects.create(
+            institution=cls.school_a, name="Core A", code="COR-A"
+        )
+        cls.designation_a_core = Designation.objects.create(
+            institution=cls.school_a, department=cls.dept_a_core,
+            name="Teacher Core A", code="TCO-A",
+        )
+        cls.position_a_core = JobPosition.objects.create(
+            institution=cls.school_a, department=cls.dept_a_core,
+            designation=cls.designation_a_core,
+            title="Core Teacher A", code="PCO-A", description="teach",
+        )
+        cls.book_a_core = Book.objects.create(
+            institution=cls.school_a, campus=cls.campus_a1,
+            title="Core Book A", category="other",
+        )
+        cls.copy_a2 = BookCopy.objects.create(
+            book=cls.book_a1,
+            barcode="A1-0002",
+        )
+        cls.subject_a_core = Subject.objects.create(
+            institution=cls.school_a, name="Core Subject A", code="SUB-A1",
+        )
+
+    # -- enrollments --
+    def test_cannot_enroll_cross_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/students/enrollments/", {
+            "student": self.student_b1.id,
+            "academic_year": self.year_a.id,
+            "campus": self.campus_a1.id,
+            "class_obj": self.class_a1.id,
+            "section": self.section_a1.id,
+            "roll_number": "RN-999",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_enroll_own_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/students/enrollments/", {
+            "student": self.student_a2.id,
+            "academic_year": self.year_a.id,
+            "campus": self.campus_a2.id,
+            "class_obj": self.class_a2.id,
+            "section": self.section_a2.id,
+            "roll_number": "RN-1001",
+        }, format="json")
+        self.assertIn(response.status_code, [201, 400])
+
+    # -- book issues --
+    def test_cannot_issue_foreign_book_copy_to_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/issues/", {
+            "book_copy": self.copy_b1.id,
+            "student": self.student_a1.id,
+            "due_date": "2024-10-15",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_cannot_issue_own_copy_to_cross_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/issues/", {
+            "book_copy": self.copy_a2.id,
+            "student": self.student_b1.id,
+            "due_date": "2024-10-15",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_issue_own_copy_to_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/issues/", {
+            "book_copy": self.copy_a2.id,
+            "student": self.student_a1.id,
+            "due_date": "2024-10-15",
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+    # -- book reservations --
+    def test_cannot_reserve_foreign_book(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/reservations/", {
+            "book": self.book_b1.id,
+            "student": self.student_a1.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_cannot_reserve_book_for_cross_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/reservations/", {
+            "book": self.book_a_core.id,
+            "student": self.student_b1.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_reserve_own_book_for_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/reservations/", {
+            "book": self.book_a_core.id,
+            "student": self.student_a1.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+    # -- teacher assignments --
+    def test_cannot_assign_cross_school_teacher(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/teachers/assignments/", {
+            "teacher": self.teacher_b1.id,
+            "campus": self.campus_a1.id,
+            "class_obj": self.class_a1.id,
+            "section": self.section_a1.id,
+            "subject": self.subject_a_core.id,
+            "academic_year": self.year_a.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_assign_own_school_teacher(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/teachers/assignments/", {
+            "teacher": self.teacher_a1.id,
+            "campus": self.campus_a1.id,
+            "class_obj": self.class_a1.id,
+            "section": self.section_a1.id,
+            "subject": self.subject_a_core.id,
+            "academic_year": self.year_a.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+
 if __name__ == "__main__":
     unittest.main()
