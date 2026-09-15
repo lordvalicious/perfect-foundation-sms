@@ -53,7 +53,10 @@ def _assert_campus_allowed(user, campus):
 class AssetCategoryListView(generics.ListCreateAPIView):
     serializer_class = AssetCategorySerializer
     permission_classes = [IsAccountantRole]
-    queryset = AssetCategory.objects.all()
+
+    def get_queryset(self):
+        # School-wide reference data: institution-scoped only, no campus split.
+        return apply_campus_scope(AssetCategory.objects.all(), self.request, None)
 
     def perform_create(self, serializer):
         serializer.save(institution=_active_institution(self.request))
@@ -62,13 +65,17 @@ class AssetCategoryListView(generics.ListCreateAPIView):
 class AssetCategoryDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AssetCategorySerializer
     permission_classes = [IsAccountantRole]
-    queryset = AssetCategory.objects.all()
+
+    def get_queryset(self):
+        return apply_campus_scope(AssetCategory.objects.all(), self.request, None)
 
 
 class SupplierListView(generics.ListCreateAPIView):
     serializer_class = SupplierSerializer
     permission_classes = [IsAccountantRole]
-    queryset = Supplier.objects.all()
+
+    def get_queryset(self):
+        return apply_campus_scope(Supplier.objects.all(), self.request, None)
 
     def perform_create(self, serializer):
         serializer.save(institution=_active_institution(self.request))
@@ -77,7 +84,9 @@ class SupplierListView(generics.ListCreateAPIView):
 class SupplierDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = SupplierSerializer
     permission_classes = [IsAccountantRole]
-    queryset = Supplier.objects.all()
+
+    def get_queryset(self):
+        return apply_campus_scope(Supplier.objects.all(), self.request, None)
 
 
 class AssetListView(generics.ListCreateAPIView):

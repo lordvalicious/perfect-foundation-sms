@@ -2,7 +2,7 @@ from django.db.models import Q
 from rest_framework import generics
 from rest_framework.exceptions import NotFound, ValidationError
 
-from apps.accounts.access import restrict_to_allowed_campuses
+from apps.accounts.access import apply_campus_scope, restrict_to_allowed_campuses
 from apps.accounts.permissions import IsAdminOrReadOnly
 from apps.accounts.scopes import get_teacher_profile, is_manager
 
@@ -214,8 +214,12 @@ class TeacherAssignmentListCreateView(generics.ListCreateAPIView):
         institution = getattr(self.request, "institution", None)
         if institution is not None:
             queryset = queryset.filter(teacher__institution=institution)
+        else:
+            queryset = queryset.none()
 
-        return queryset
+        # Campus restriction for non-global roles (keeps a campus_admin or
+        # principal from seeing assignments at other campuses of the school).
+        return apply_campus_scope(queryset, self.request, "campus_id", institution_field=None)
 
 
 class TeacherAssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -242,4 +246,6 @@ class TeacherAssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         else:
             queryset = queryset.none()
 
-        return queryset
+        return apply_campus_scope(
+            queryset, self.request, "campus_id", institution_field=None
+        )
