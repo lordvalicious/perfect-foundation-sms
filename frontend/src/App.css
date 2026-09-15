@@ -5124,8 +5124,13 @@ body.modal-open {
   padding: 2.2rem 2.4rem;
   margin-bottom: 1.6rem;
   color: #fff;
-  background: linear-gradient(120deg, #1e1b4b 0%, #312e81 45%, #4338ca 100%);
-  box-shadow: 0 18px 40px -18px rgba(67, 56, 202, 0.55);
+  background: linear-gradient(
+    120deg,
+    color-mix(in srgb, var(--brand-color) 58%, #1e1b4b) 0%,
+    color-mix(in srgb, var(--brand-color) 42%, #312e81) 45%,
+    color-mix(in srgb, var(--brand-color) 74%, #1c1437) 100%
+  );
+  box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--brand-color) 55%, transparent);
 }
 
 .dash-hero::before {
@@ -5447,7 +5452,7 @@ body.modal-open {
 .dash-camp-fill {
   height: 100%;
   border-radius: 999px;
-  background: linear-gradient(90deg, #6366f1, #8b5cf6);
+  background: linear-gradient(90deg, var(--brand-color, var(--primary)), var(--brand-strong, var(--primary-strong)));
   transition: width 0.7s ease;
 }
 

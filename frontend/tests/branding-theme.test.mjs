@@ -2,10 +2,13 @@
 // test runner).
 //
 // The feature must stay centralized and fail-closed:
-//  1. ONE engine (`brandTheme.js`) injects exactly `--brand-color` +
-//     `--text-on-brand`; every other token is derived in App.css via
-//     `color-mix`, with per-mode `var(--primary)` fallbacks so the default
-//     appearance is unchanged when no theme is set.
+//  1. ONE engine (`brandTheme.js`) injects the base `--brand-color` +
+//     `--text-on-brand` tokens AND mirrors the brand onto the `--primary*`
+//     design-system family (`--primary`, `--text-on-primary`,
+//     `--primary-strong/-soft/-glow`), so consumers that still read the
+//     legacy primary tokens follow the school color too. Every other token is
+//     derived in App.css via `color-mix`, with per-mode `var(--primary)`
+//     fallbacks so the default appearance is unchanged when no theme is set.
 //  2. The app shell clears the previous school's theme before fetching the
 //     new school's branding and only applies a confirmed, valid `theme_color`
 //     from the CURRENT school.
@@ -70,6 +73,41 @@ test("brandTheme.js exposes exactly the expected contract", () => {
   );
 });
 
+test("brand theme propagates to every --primary* consumer and clears fail-closed", () => {
+  assert.match(
+    brandTheme,
+    /root\.style\.setProperty\("--primary", hex\);/,
+    "applyBrandTheme must mirror the school color onto --primary"
+  );
+  assert.match(
+    brandTheme,
+    /root\.style\.setProperty\("--text-on-primary", brandTextOnColor\(hex\)\);/,
+    "applyBrandTheme must mirror the readable foreground onto --text-on-primary"
+  );
+  for (const target of ["strong", "soft", "glow"]) {
+    assert.match(
+      brandTheme,
+      new RegExp(
+        `setProperty\\("--primary-${target}", "var\\(--brand-${target}\\)"\\);`
+      ),
+      `--primary-${target} must point at the mode-aware --brand-${target} mixer`
+    );
+  }
+
+  for (const prop of [
+    "--primary",
+    "--text-on-primary",
+    "--primary-strong",
+    "--primary-soft",
+    "--primary-glow",
+  ]) {
+    assert.ok(
+      brandTheme.includes(`removeProperty("${prop}")`),
+      `clearBrandTheme must remove ${prop} so no stale school color leaks (tenant isolation)`
+    );
+  }
+});
+
 test("no parallel engine: only brandTheme.js may touch --brand-color directly", () => {
   for (const [name, source] of [
     ["schoolContext.jsx", schoolContext],
@@ -125,6 +163,12 @@ test("brand surfaces consume the centralized tokens", () => {
   assert.ok(
     (appCss.match(/var\(--brand-color, var\(--primary\)\)/g) || []).length >= 6,
     "the --brand-color, --primary fallback pattern must be preserved across consumers"
+  );
+
+  assert.match(
+    appCss,
+    /\.dash-hero \{[\s\S]*?background: linear-gradient\(\s*120deg,\s*color-mix\(in srgb, var\(--brand-color\)/,
+    "the dashboard hero must tint toward the school brand (keeping a dark, white-text-safe base)"
   );
 });
 
@@ -196,6 +240,23 @@ test("Branding page validates client-side and applies only the confirmed echo", 
     brandingPage,
     /"--brand-color": isHexColor\(form\.theme_color\)\s*\?[\s\S]*?DEFAULT_COLORS\.theme_color,\s*"--text-on-brand": brandTextOnColor\(/,
     "the preview must reuse the same brand tokens, scoped to the preview node and guarded to a valid hex"
+  );
+});
+
+test("Branding page persists all colors to the API (reload shows the brand)", () => {
+  assert.match(
+    brandingPage,
+    /await fetch\(BRANDING_URL, \{\s*method: "PUT",\s*headers: \{ "X-CSRFToken": csrfToken \},\s*credentials: "include",\s*body: formData,\s*\}\);/,
+    "save must PUT the full form (incl. theme_color) to /api/schools/branding/ with a CSRF token"
+  );
+  assert.match(
+    brandingPage,
+    /Object\.entries\(form\)\.forEach\(\(\[key, value\]\) => [\s\S]*?formData\.append\(key, value\);/,
+    "every saved field (primary_color, secondary_color, accent_color, theme_color) must persist"
+  );
+  assert.ok(
+    brandingPage.includes("theme_color: data.theme_color || DEFAULT_COLORS.theme_color"),
+    "a reload must populate theme_color from the saved branding record"
   );
 });
 

@@ -83,7 +83,7 @@ function ChartTooltip({ active, payload, label, fmt }) {
         <div key={String(p.dataKey)} className="dash-tooltip-row">
           <span
             className="dash-tooltip-dot"
-            style={{ background: p.color || p.fill || "#6366f1" }}
+            style={{ background: p.color || p.fill || "var(--brand-color, #6366f1)" }}
           />
           <span className="dash-tooltip-name">{p.name}</span>
           <strong>{fmt ? fmt(p.value) : Number(p.value).toLocaleString()}</strong>

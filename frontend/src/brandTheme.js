@@ -2,8 +2,12 @@
 // applying a school's theme color to the app shell — the Branding page preview
 // and save flow use these exact functions, never a parallel preview-only
 // engine. Light/Dark mode is untouched: the theme color is mode-independent
-// and only `--brand-color` + `--text-on-brand` are injected; every other
-// token (strong/soft/glow) derives from them via CSS `color-mix` in App.css.
+// and injects the base `--brand-color` + `--text-on-brand` tokens together
+// with the design-system `--primary*` family (which many components still
+// consume for chips, soft surfaces, focus shadows, selected/active states and
+// secondary buttons). `--brand-strong/-soft/-glow` stay mode-aware CSS
+// `color-mix` derivations in App.css; `--primary-strong/-soft/-glow` simply
+// reference those so BOTH token families follow the school color.
 
 export const THEME_PRESETS = [
   { name: "Blue", value: "#2563eb" },
@@ -55,8 +59,22 @@ export function applyBrandTheme(hex) {
 
   const root = document.documentElement;
 
+  // Base accents — referenced by buttons, tabs, focus rings, active nav.
   root.style.setProperty("--brand-color", hex);
   root.style.setProperty("--text-on-brand", brandTextOnColor(hex));
+
+  // Mirror the brand onto the `--primary*` design-system family so every
+  // consumer still reading the legacy fallback tokens (soft chips/surfaces,
+  // selected & hover states, focus shadows, secondary buttons, dark-dash
+  // hero gradients) follows the school color too. The soft/strong/glow
+  // variants are indirected through the mode-aware `--brand-*` mixers in
+  // App.css, so hover/emphasis behavior stays correct in light AND dark mode.
+  root.style.setProperty("--primary", hex);
+  root.style.setProperty("--text-on-primary", brandTextOnColor(hex));
+  root.style.setProperty("--primary-strong", "var(--brand-strong)");
+  root.style.setProperty("--primary-soft", "var(--brand-soft)");
+  root.style.setProperty("--primary-glow", "var(--brand-glow)");
+
   ensureThemeColorMeta().setAttribute("content", hex);
 }
 
@@ -69,6 +87,11 @@ export function clearBrandTheme() {
 
   root.style.removeProperty("--brand-color");
   root.style.removeProperty("--text-on-brand");
+  root.style.removeProperty("--primary");
+  root.style.removeProperty("--text-on-primary");
+  root.style.removeProperty("--primary-strong");
+  root.style.removeProperty("--primary-soft");
+  root.style.removeProperty("--primary-glow");
 
   const meta = document.querySelector('meta[name="theme-color"]');
 
