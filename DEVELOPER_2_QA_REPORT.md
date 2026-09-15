@@ -34,6 +34,7 @@ school-switch remount) with no frontend defect found.
 **QA REF # (A) — HIGH: FRONTEND-OWNED, FIXED**
 
 ### A-1. Teacher profile — "Campus" field never displays
+
 - Page: `TeachersPage` → `ProfileModal` (view profile) and `ProfilePage` (own profile).
 - Frontend request reproduced: `GET /api/teachers/<id>/` (admin session, credentials included).
 - Actual backend response: `200` with `primary_campus_name: "Main Campus"` — the payload
@@ -47,6 +48,7 @@ school-switch remount) with no frontend defect found.
 - Status: **RESOLVED** (`caad046`).
 
 ### A-2. Staff / HR unable to create a leave request
+
 - Page: `StaffOperationsPage` (`BASE = "/api/staff/"`), "New Request" form.
 - Frontend request reproduced: `POST /api/staff/leave/` with body
   `{ leave_type, start_date, end_date, reason }` (no `staff`).
@@ -73,6 +75,7 @@ school-switch remount) with no frontend defect found.
 **QA REF # (B) — HIGH: BACKEND-OWNED APP ISSUES (DOCUMENTED FOR DEVELOPER 1)**
 
 ### B-1. Teacher detail endpoint — cross-tenant unauthorized read (non-manager branch)
+
 - Module/Page: Teachers — `TeacherDetailView` used by `ProfileModal`/`ProfilePage`.
 - Frontend request reproduced: `GET /api/teachers/<id>/` as an authenticated NON-manager
   user (staff role) with **no linked teacher profile**.
@@ -97,11 +100,12 @@ school-switch remount) with no frontend defect found.
   teacher details. Add the same fallback used by `TeacherListCreateView`.
 
 ### B-2. `/api/communication/announcements/` — 500 on SQLite (dev/test backend)
+
 - Module/Page: Parent portal and Announcements — announcements fetch is one of the portal's
   data sources.
 - Frontend request reproduced: `GET /api/communication/announcements/?page=1`.
 - Actual: **500** `django.db.utils.NotSupportedError: contains lookup is not supported on
-  this database backend` (SQLite). Works on Postgres (production).
+this database backend` (SQLite). Works on Postgres (production).
 - Likely cause: `backend/apps/communication/views.py:197`
   `Q(audience_roles=[]) | Q(audience_roles__contains=[role])` — JSONField `__contains`
   lookup is not supported on the SQLite backend in this setup. Consider splitting the filter
@@ -178,7 +182,7 @@ this session.
 
 ---
 
-**QA REF # (H) — RECOMMENDATIONS / NEXT STEPS**
+**QA REF # (H) — RECOMMENDATIONS / t STEPS**
 
 1. Developer 1: fix `TeacherDetailView` non-manager branch (B-1) and add the
    `get_current_institution()` fallback used by the list view.
@@ -192,6 +196,7 @@ this session.
 ---
 
 ## Commit log (this session)
+
 - `caad046` `fix(frontend): show teacher campus and let managers file leave for staff`
   — `ProfileModal.jsx`, `ProfilePage.jsx`, `StaffOperationsPage.jsx`. Lint 0 errors, build passes.
 - (pending) `test(frontend): regression guards for teacher campus + staff leave selector`
@@ -201,6 +206,7 @@ this session.
   `npm test`.
 
 ## Testing performed (this session)
+
 - `npm test` — 22/22 pass (16 pre-existing + 6 new regression guards).
 - `npm run lint` — 0 errors (10 pre-existing PayrollPage warnings).
 - `npm run build` — passes.
@@ -210,6 +216,7 @@ this session.
 - Targeted API assertions on a fresh test DB simulating the FIXED UI payloads: 5/5
   (teacher detail 200 + `primary_campus_name` present; HR leave with `staff` → 201;
   staff own leave without `staff` → 201; HR without selection → 404 as designed).
+
 ---
 
 # FINAL INTEGRATION QA (post-Developer-1-merge)
@@ -221,6 +228,7 @@ and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master
 (local pointer at `eb7e2e9`; fixes came in through `origin/master`); branch HEAD verified clean.
 
 ## Baselines recorded
+
 - Frontend tests: 22/22 pass; ESLint: 0 errors (10 pre-existing PayrollPage warnings); Vite build: passes.
 - Backend suites run on the merged tree (fresh test DB, SQLite engine):
   - Targeted batches (261 tests, 0 failures): `accounts.test_regressions` 10/10;
@@ -234,10 +242,11 @@ and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master
   `config.settings.development` applies real throttle rates (`login: 60/hour`); running the
   full/account/event suites under `development` blows the throttles inside one process and
   produces mass 429->403/404 cascades unrelated to code (verified: `apps.accounts.tests`
-  + `apps.events.tests` = 40 failures under `development`, 62/62 OK under `test` settings
-  in 11s). No merge or frontend regression involved.
+  - `apps.events.tests` = 40 failures under `development`, 62/62 OK under `test` settings
+    in 11s). No merge or frontend regression involved.
 
 ## FINAL integration matrix (fresh test DB, exact frontend requests; 70/75 PASS)
+
 - TEACHER AUTHORIZATION (16/16): own profile 200 + `primary_campus_name`; admin/manager 200;
   unauthorized staff / receptionist / student / parent all 404 (leak CLOSED, was 200 before 98db9d3);
   cross-school teacher 404 for teacher + admin; cross-campus teacher: non-manager 404, admin 200;
@@ -259,7 +268,9 @@ and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master
 - CONTRACTS (6/6): auth/me, active-institution, active-campus, schools/modules/current, dashboard/overview 200.
 
 ## Surviving defect - handoff to Developer 1
+
 ### F-1 (P1, BACKEND, UNFIXED BY 98db9d3): announcements still 500 on SQLite for non-manager roles
+
 - Reproduction (fresh test DB, SQLite): `GET /api/communication/announcements/?page=1` with a `parent`
   (also teacher/student) session ->
   `django.db.utils.NotSupportedError: contains lookup is not supported on this database backend` -> HTTP 500.
@@ -280,6 +291,7 @@ and `d7a017b` (P0 tenant isolation) are present through the merge. Local `master
   no hang, no crash). Frontend requires no change.
 
 ## Frontend verdict after merged backend fixes
+
 - No new frontend defects found. Teacher 404/403 handled by `ProfileModal`/`ProfilePage`
   (`profileErrorMessage`, error state, no infinite loading); announcements page renders
   loading/error/empty states (`StateArea`); school switching unaffected (routes keyed by
@@ -318,29 +330,9 @@ fresh tree; totals 75/75 matrix green).
   no Postgres configured). SQLite-green only; not verified on Postgres.
 - **J — remaining issues**: F-2 (below, Dev1-owned backend) is the only open item.
 
-**QA REF (F-2) — RESOLVED-BY-DEVELOPER-1 (backend `916f934`, merged + re-verified by Dev2):
-Audit Log CSV export (`GET /api/audit/?format=csv`) now works end-to-end.**
+**QA REF (F-2) — NEW BACKEND DEFECT (P2, Dev1-owned, pre-existing, NOT introduced by a4e761c):
+Audit Log CSV export is broken end-to-end.**
 
-- Status: **CLOSED** with integration proof on this exact tree (HEAD contains `916f934`).
-- What was wrong (Dev2 finding, `8d369c2`): no CSV renderer registered → DRF content
-  negotiation raised `Http404` **before** the view's CSV branch → `?format=csv` always 404,
-  frontend `AuditLogsPage` export always failed.
-- Dev1 `916f934 fix(backend): restore audit log CSV export` added an `AuditLogCSVRenderer`
-  (`media_type="text/csv"`, `format="csv"`) and wired `renderer_classes` on
-  `AuditLogListView`; the `if fmt == "csv"` path in `list()` is now reachable.
-- Re-verification ON MERGED MASTER (this tree): `apps.audit` suite **38/38 OK**, including
-  Dev1's new `test_audit_csv_export.py` (13 cases: CSV 200 + `text/csv` content type +
-  correct headers/known-row + action & user filter respect + **tenant A↔B isolation** +
-  unauthorized 403 + pagination + JSON list unaffected). Full-suite re-run on merged
-  HEAD: **970 tests, 0 true failures** (21 partner-owned `apps.reports` errors + 1 skip,
-  out of Dev2 scope) — consistent with the pre-merge baseline.
-- Frontend: `AuditLogsPage` Export CSV contract (`apiDownload(URL?format=csv)`) is unchanged
-  and now receives 200 + `text/csv`; the error-handling path we already ship remains the
-  correct graceful fallback. **No frontend change required.**
-
-(Historical note kept below for the record.)
-
-**QA REF (F-2 ORIGINAL FINDING — pre-fix) — NEW BACKEND DEFECT (P2, Dev1-owned, pre-existing):**
 - Reproduction (fresh test DB, exact frontend request): `GET /api/audit/?format=csv` → **404**
   `Not Found: /api/audit/` (via `AuditLogsPage.handleExportCSV` → `apiDownload`).
 - Also reproduced with the live backend: `?format=csv` → 404; `?page=1&page_size=50&action=...`
@@ -360,7 +352,8 @@ Audit Log CSV export (`GET /api/audit/?format=csv`) now works end-to-end.**
   the `list()` CSV branch becomes reachable. Out of Dev2 scope (backend-owned, pre-existing;
   do not fix per role contract).
 
-## Ready to merge? 
+## Ready to merge?
+
 - YES from Developer 2 for frontend: branch contains master via `49c262c`, working tree matches
   origin/developer-2-frontend, all frontend + targeted backend suites green. The ONE open backend
   item is F-2 (audit CSV export, Dev1-owned renderer config) and it does not block the frontend diff

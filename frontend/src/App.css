@@ -484,7 +484,7 @@ h1, h2, h3, h4,
   visibility: hidden;
   transform: translateY(-4px);
   transition: all 0.12s var(--ease);
-  z-index: 100;
+  z-index: 250;
 }
 
 .nav-group:hover .nav-dropdown {
