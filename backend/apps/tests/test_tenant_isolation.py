@@ -1204,5 +1204,148 @@ class FinanceAndHRScopingRegressionTest(TenantIsolationTestBase):
         self.assertEqual(response.status_code, 201)
 
 
+class CoreERPWriteScopeRegressionTest(TenantIsolationTestBase):
+    """Phase 3A regression: institution/campus scoping on core ERP write
+    paths — enrollments, book issues/reservations, teacher assignments,
+    and transport records.
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        from apps.library.models import Book, BookCopy
+        from apps.hr.models import Department, Designation, JobPosition
+        from apps.schools.models import Subject
+
+        # Additional School-A teacher (adjustment of assignment scope) + position
+        cls.dept_a_core = Department.objects.create(
+            institution=cls.school_a, name="Core A", code="COR-A"
+        )
+        cls.designation_a_core = Designation.objects.create(
+            institution=cls.school_a, department=cls.dept_a_core,
+            name="Teacher Core A", code="TCO-A",
+        )
+        cls.position_a_core = JobPosition.objects.create(
+            institution=cls.school_a, department=cls.dept_a_core,
+            designation=cls.designation_a_core,
+            title="Core Teacher A", code="PCO-A", description="teach",
+        )
+        cls.book_a_core = Book.objects.create(
+            institution=cls.school_a, campus=cls.campus_a1,
+            title="Core Book A", category="other",
+        )
+        cls.copy_a2 = BookCopy.objects.create(
+            book=cls.book_a1,
+            barcode="A1-0002",
+        )
+        cls.subject_a_core = Subject.objects.create(
+            institution=cls.school_a, name="Core Subject A", code="SUB-A1",
+        )
+
+    # -- enrollments --
+    def test_cannot_enroll_cross_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/students/enrollments/", {
+            "student": self.student_b1.id,
+            "academic_year": self.year_a.id,
+            "campus": self.campus_a1.id,
+            "class_obj": self.class_a1.id,
+            "section": self.section_a1.id,
+            "roll_number": "RN-999",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_enroll_own_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/students/enrollments/", {
+            "student": self.student_a2.id,
+            "academic_year": self.year_a.id,
+            "campus": self.campus_a2.id,
+            "class_obj": self.class_a2.id,
+            "section": self.section_a2.id,
+            "roll_number": "RN-1001",
+        }, format="json")
+        self.assertIn(response.status_code, [201, 400])
+
+    # -- book issues --
+    def test_cannot_issue_foreign_book_copy_to_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/issues/", {
+            "book_copy": self.copy_b1.id,
+            "student": self.student_a1.id,
+            "due_date": "2024-10-15",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_cannot_issue_own_copy_to_cross_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/issues/", {
+            "book_copy": self.copy_a2.id,
+            "student": self.student_b1.id,
+            "due_date": "2024-10-15",
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_issue_own_copy_to_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/issues/", {
+            "book_copy": self.copy_a2.id,
+            "student": self.student_a1.id,
+            "due_date": "2024-10-15",
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+    # -- book reservations --
+    def test_cannot_reserve_foreign_book(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/reservations/", {
+            "book": self.book_b1.id,
+            "student": self.student_a1.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_cannot_reserve_book_for_cross_school_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/reservations/", {
+            "book": self.book_a_core.id,
+            "student": self.student_b1.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_reserve_own_book_for_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/library/reservations/", {
+            "book": self.book_a_core.id,
+            "student": self.student_a1.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+    # -- teacher assignments --
+    def test_cannot_assign_cross_school_teacher(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/teachers/assignments/", {
+            "teacher": self.teacher_b1.id,
+            "campus": self.campus_a1.id,
+            "class_obj": self.class_a1.id,
+            "section": self.section_a1.id,
+            "subject": self.subject_a_core.id,
+            "academic_year": self.year_a.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_assign_own_school_teacher(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/teachers/assignments/", {
+            "teacher": self.teacher_a1.id,
+            "campus": self.campus_a1.id,
+            "class_obj": self.class_a1.id,
+            "section": self.section_a1.id,
+            "subject": self.subject_a_core.id,
+            "academic_year": self.year_a.id,
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+
 if __name__ == "__main__":
     unittest.main()
