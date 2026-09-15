@@ -5,16 +5,22 @@ than their own assigned ones (IDOR protection).
 """
 
 import unittest
+from decimal import Decimal
+
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework import status
 
 from apps.schools.models import School, Campus
-from apps.accounts.models import User, InstitutionMembership, RoleAssignment, Role
+from apps.accounts.models import User, InstitutionMembership, RoleAssignment, Role, StaffProfile
 from apps.students.models import Student, Enrollment, Guardian
-from apps.teachers.models import Teacher
-from apps.finance.models import Invoice, Payment
+from apps.teachers.models import Teacher, TeacherAssignment
+from apps.finance.models import Invoice, Payment, FeeCategory, FeeStructure
+from apps.payroll.models import SalaryStructure, PayrollRecord
+from apps.attendance.models import Attendance
+from apps.hr.models import Employee, PayrollPeriod
+from apps.library.models import Book, BookCopy, BookIssue, BookReservation
 
 
 class TenantIsolationTestBase(TestCase):
@@ -260,6 +266,178 @@ class TenantIsolationTestBase(TestCase):
             status="active",
         )
 
+        # ---- Extra fixtures for IDOR / cross-campus coverage ----
+
+        # Bind the campus admin to campus A1 through a staff profile so campus
+        # scoping resolves to a real (non-global) campus.
+        StaffProfile.objects.create(
+            user=cls.campus_admin_a1,
+            membership=membership_ca1,
+            institution=cls.school_a,
+            primary_campus=cls.campus_a1,
+            employee_number="STAFF-CA-A1-001",
+            first_name="Campus",
+            last_name="Admin A1",
+            gender="male",
+        )
+
+        # School A teacher bound to campus A1 (role TEACHER).
+        cls.teacher_a1_user = User.objects.create_user(
+            username="teacher_a1",
+            email="teacher_a1@test.com",
+            password="TestPass123!",
+        )
+        membership_ta1 = InstitutionMembership.objects.create(
+            user=cls.teacher_a1_user,
+            institution=cls.school_a,
+            status="active",
+        )
+        RoleAssignment.objects.create(
+            membership=membership_ta1,
+            role=Role.TEACHER,
+        )
+        cls.teacher_a1 = Teacher.objects.create(
+            institution=cls.school_a,
+            employee_number="TCH-A1-001",
+            user=cls.teacher_a1_user,
+            membership=membership_ta1,
+            primary_campus=cls.campus_a1,
+            first_name="Teacher",
+            last_name="A1",
+            gender="female",
+        )
+
+        # School B finance / payroll / attendance fixtures (the objects a
+        # School A user must never be able to reach).
+        from apps.schools.models import Subject
+
+        cls.subject_b1 = Subject.objects.create(
+            institution=cls.school_b,
+            name="Mathematics B1",
+            code="MATH-B1",
+        )
+        cls.fee_category_b1 = FeeCategory.objects.create(
+            institution=cls.school_b,
+            name="Tuition B1",
+        )
+        cls.fee_structure_b1 = FeeStructure.objects.create(
+            academic_year=cls.year_b,
+            campus=cls.campus_b1,
+            class_obj=cls.class_b1,
+            category=cls.fee_category_b1,
+            amount=Decimal("5000.00"),
+            due_day=10,
+        )
+        cls.invoice_b1 = Invoice.objects.create(
+            invoice_number="INV-B1-001",
+            institution=cls.school_b,
+            campus=cls.campus_b1,
+            student=cls.student_b1,
+            enrollment=cls.enrollment_b1,
+            academic_year=cls.year_b,
+            issue_date="2024-09-01",
+            due_date="2024-10-01",
+            status="issued",
+        )
+
+        cls.teacher_b1 = Teacher.objects.create(
+            institution=cls.school_b,
+            employee_number="TCH-B1-001",
+            primary_campus=cls.campus_b1,
+            first_name="Teacher",
+            last_name="B1",
+            gender="male",
+        )
+        cls.assignment_b1 = TeacherAssignment.objects.create(
+            teacher=cls.teacher_b1,
+            campus=cls.campus_b1,
+            class_obj=cls.class_b1,
+            section=cls.section_b1,
+            subject=cls.subject_b1,
+            academic_year=cls.year_b,
+        )
+        cls.employee_b1 = Employee.objects.create(
+            institution=cls.school_b,
+            teacher=cls.teacher_b1,
+            employee_number="EMP-B1-001",
+            primary_campus=cls.campus_b1,
+        )
+        cls.period_b1 = PayrollPeriod.objects.create(
+            institution=cls.school_b,
+            name="October 2024",
+            start_date="2024-10-01",
+            end_date="2024-10-31",
+            payment_date="2024-11-01",
+        )
+        cls.structure_b1 = SalaryStructure.objects.create(
+            institution=cls.school_b,
+            employee=cls.employee_b1,
+            name="B1 Standard",
+            code="SA-B1-001",
+            basic_salary=Decimal("10000.00"),
+            effective_date="2024-01-01",
+        )
+        cls.record_b1 = PayrollRecord.objects.create(
+            employee=cls.employee_b1,
+            campus=cls.campus_b1,
+            salary_structure=cls.structure_b1,
+            payroll_period=cls.period_b1,
+            month=10,
+            year=2024,
+        )
+
+        cls.attendance_b1 = Attendance.objects.create(
+            student=cls.student_b1,
+            enrollment=cls.enrollment_b1,
+            academic_year=cls.year_b,
+            campus=cls.campus_b1,
+            class_obj=cls.class_b1,
+            section=cls.section_b1,
+            date="2024-10-02",
+            status="present",
+        )
+
+        # School A library book (institution-scoped) + copies/issues for A.
+        cls.book_a1 = Book.objects.create(
+            institution=cls.school_a,
+            campus=cls.campus_a1,
+            title="Mathematics A1",
+            category="math",
+        )
+        cls.copy_a1 = BookCopy.objects.create(
+            book=cls.book_a1,
+            barcode="A1-0001",
+        )
+        cls.issue_a1 = BookIssue.objects.create(
+            book_copy=cls.copy_a1,
+            student=cls.student_a1,
+            due_date="2024-10-15",
+            status="issued",
+        )
+
+        # School B library fixtures (must never be reachable from School A).
+        cls.book_b1 = Book.objects.create(
+            institution=cls.school_b,
+            campus=cls.campus_b1,
+            title="Mathematics B1",
+            category="math",
+        )
+        cls.copy_b1 = BookCopy.objects.create(
+            book=cls.book_b1,
+            barcode="B1-0001",
+        )
+        cls.issue_b1 = BookIssue.objects.create(
+            book_copy=cls.copy_b1,
+            student=cls.student_b1,
+            due_date="2024-10-15",
+            status="issued",
+        )
+        cls.reservation_b1 = BookReservation.objects.create(
+            book=cls.book_b1,
+            student=cls.student_b1,
+            status="pending",
+        )
+
     def setUp(self):
         self.client = APIClient()
         
@@ -331,9 +509,10 @@ class FinanceCrossSchoolAccessTest(TenantIsolationTestBase):
     def test_accountant_a_cannot_access_school_b_invoice_detail(self):
         """Accountant A should not access School B invoice detail."""
         self._login(self.accountant_a)
-        # Try to access an invoice from school B (would need to create one first)
-        # This tests the IDOR protection
-        pass
+        response = self.client.get(
+            f"/api/finance/invoices/{self.invoice_b1.id}/"
+        )
+        self.assertEqual(response.status_code, 404)
         
     def test_accountant_a_cannot_create_invoice_for_school_b(self):
         """Accountant A should not create invoice for School B student."""
@@ -352,14 +531,29 @@ class FinanceCrossSchoolAccessTest(TenantIsolationTestBase):
 
 class TeacherCrossCampusAccessTest(TenantIsolationTestBase):
     """Test cross-campus teacher access attempts."""
-    
-    def test_teacher_cannot_access_other_campus_assignments(self):
-        """Teacher should only see assignments for their assigned campus."""
-        pass
-    
+
+    def test_teacher_cannot_access_other_school_assignments(self):
+        """A School A teacher cannot read a School B assignment by ID."""
+        self._login(self.teacher_a1_user)
+        response = self.client.get(
+            f"/api/teachers/assignments/{self.assignment_b1.id}/"
+        )
+        self.assertEqual(response.status_code, 404)
+
     def test_teacher_cannot_submit_attendance_for_other_campus(self):
-        """Teacher should not mark attendance for students in other campus."""
-        pass
+        """Teacher bound to campus A1 cannot mark attendance in campus A2."""
+        self._login(self.teacher_a1_user)
+        response = self.client.post(
+            "/api/attendance/mark/",
+            {
+                "academic_year": self.year_a.id,
+                "student": self.student_a2.id,
+                "date": "2024-10-03",
+                "status": "present",
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 403)
 
 
 class CampusAdminAccessTest(TenantIsolationTestBase):
@@ -374,10 +568,11 @@ class CampusAdminAccessTest(TenantIsolationTestBase):
     def test_campus_admin_a1_cannot_access_campus_a2(self):
         """Campus admin for A1 cannot access A2 students."""
         self._login(self.campus_admin_a1)
-        # Create student in campus A2 if not exists
         response = self.client.get("/api/students/")
-        # Should only see campus A1 students
-        pass
+        self.assertEqual(response.status_code, 200)
+        student_ids = [s["id"] for s in response.json().get("results", [])]
+        self.assertIn(self.student_a1.id, student_ids)
+        self.assertNotIn(self.student_a2.id, student_ids)
     
     def test_campus_admin_a1_cannot_access_school_b(self):
         """Campus admin for A1 cannot access School B."""
@@ -436,20 +631,77 @@ class IDORProtectionTest(TenantIsolationTestBase):
     def test_invoice_idor(self):
         """Cannot access another school's invoice by ID."""
         self._login(self.accountant_a)
-        # Would need to create invoice in school B first
-        pass
-        
+        response = self.client.get(
+            f"/api/finance/invoices/{self.invoice_b1.id}/"
+        )
+        self.assertEqual(response.status_code, 404)
+
     def test_fee_structure_idor(self):
         """Cannot access another school's fee structure."""
-        pass
-        
+        self._login(self.accountant_a)
+        response = self.client.get(
+            f"/api/finance/fee-structures/{self.fee_structure_b1.id}/"
+        )
+        self.assertEqual(response.status_code, 404)
+
     def test_payroll_idor(self):
-        """Cannot access another school's payroll records."""
-        pass
-        
+        """Cannot access another school's payroll records or salary structures."""
+        self._login(self.accountant_a)
+        records_response = self.client.get(
+            f"/api/payroll/records/{self.record_b1.id}/"
+        )
+        self.assertEqual(records_response.status_code, 404)
+        structure_response = self.client.get(
+            f"/api/payroll/salary-structures/{self.structure_b1.id}/"
+        )
+        self.assertEqual(structure_response.status_code, 404)
+
     def test_attendance_idor(self):
-        """Cannot access another school's attendance records."""
-        pass
+        """Cannot see another school's attendance records by student filter."""
+        self._login(self.admin_a)
+        response = self.client.get(
+            f"/api/attendance/?student={self.student_b1.id}"
+        )
+        self.assertEqual(response.status_code, 200)
+        attendance_ids = [a["id"] for a in response.json().get("results", [])]
+        self.assertNotIn(self.attendance_b1.id, attendance_ids)
+
+    def test_library_issue_idor(self):
+        """Admin A cannot see or fetch School B book issues."""
+        self._login(self.admin_a)
+        list_response = self.client.get("/api/library/issues/")
+        self.assertEqual(list_response.status_code, 200)
+        issue_ids = [i["id"] for i in list_response.json().get("results", [])]
+        self.assertIn(self.issue_a1.id, issue_ids)
+        self.assertNotIn(self.issue_b1.id, issue_ids)
+
+        detail_response = self.client.get(
+            f"/api/library/issues/{self.issue_b1.id}/"
+        )
+        self.assertEqual(detail_response.status_code, 404)
+
+    def test_library_reservation_idor(self):
+        """Admin A cannot see or fetch School B book reservations."""
+        self._login(self.admin_a)
+        list_response = self.client.get("/api/library/reservations/")
+        self.assertEqual(list_response.status_code, 200)
+        reservation_ids = [r["id"] for r in list_response.json().get("results", [])]
+        self.assertNotIn(self.reservation_b1.id, reservation_ids)
+
+        detail_response = self.client.get(
+            f"/api/library/reservations/{self.reservation_b1.id}/"
+        )
+        self.assertEqual(detail_response.status_code, 404)
+
+    def test_library_copy_list_scoped_to_school_book(self):
+        """Admin A cannot see School B copies via the nested copies endpoint."""
+        self._login(self.admin_a)
+        response = self.client.get(
+            f"/api/library/books/{self.book_b1.id}/copies/"
+        )
+        self.assertEqual(response.status_code, 200)
+        copy_ids = [c["id"] for c in response.json().get("results", [])]
+        self.assertNotIn(self.copy_b1.id, copy_ids)
 
 
 class CampusScopingTest(TenantIsolationTestBase):

@@ -73,7 +73,7 @@ class BookIssueListView(generics.ListCreateAPIView):
             "book_copy__book",
             "student",
             "teacher",
-        ), self.request, "book_copy__book__campus_id")
+        ), self.request, "book_copy__book__campus_id", institution_field="book_copy__book__institution_id")
 
         status_filter = self.request.query_params.get("status")
 
@@ -96,7 +96,7 @@ class BookIssueDetailView(generics.RetrieveUpdateDestroyAPIView):
         return apply_campus_scope(
             BookIssue.objects.all(),
             self.request,
-            "book_copy__book__campus_id",
+            "book_copy__book__campus_id", institution_field="book_copy__book__institution_id",
         )
 
     def perform_update(self, serializer):
@@ -117,7 +117,7 @@ class BookReturnView(APIView):
         issue = apply_campus_scope(
             BookIssue.objects.filter(pk=pk),
             request,
-            "book_copy__book__campus_id",
+            "book_copy__book__campus_id", institution_field="book_copy__book__institution_id",
         ).first()
 
         if issue is None:
@@ -154,7 +154,7 @@ class BookReservationListCreateView(generics.ListCreateAPIView):
         queryset = apply_campus_scope(
             BookReservation.objects.select_related("book", "student", "teacher"),
             self.request,
-            "book__campus_id",
+            "book__campus_id", institution_field="book__institution_id",
         )
 
         status_filter = self.request.query_params.get("status")
@@ -176,7 +176,7 @@ class BookReservationDetailView(generics.RetrieveDestroyAPIView):
         return apply_campus_scope(
             BookReservation.objects.select_related("book", "student", "teacher"),
             self.request,
-            "book__campus_id",
+            "book__campus_id", institution_field="book__institution_id",
         )
 
 
@@ -187,7 +187,7 @@ class BookReservationFulfillView(APIView):
         reservation = apply_campus_scope(
             BookReservation.objects.filter(pk=pk),
             request,
-            "book__campus_id",
+            "book__campus_id", institution_field="book__institution_id",
         ).first()
 
         if reservation is None:
@@ -225,7 +225,7 @@ class BookReservationCancelView(APIView):
         reservation = apply_campus_scope(
             BookReservation.objects.filter(pk=pk),
             request,
-            "book__campus_id",
+            "book__campus_id", institution_field="book__institution_id",
         ).first()
 
         if reservation is None:
@@ -262,7 +262,7 @@ class BookCopyListCreateView(generics.ListCreateAPIView):
         if status_filter:
             queryset = queryset.filter(status=status_filter)
 
-        return apply_campus_scope(queryset, self.request, "book__campus_id")
+        return apply_campus_scope(queryset, self.request, "book__campus_id", institution_field="book__institution_id")
 
     def perform_create(self, serializer):
         book = serializer.validated_data["book"]
@@ -281,7 +281,7 @@ class BookCopyDetailView(generics.RetrieveUpdateDestroyAPIView):
         return apply_campus_scope(
             BookCopy.objects.select_related("book", "book__campus"),
             self.request,
-            "book__campus_id",
+            "book__campus_id", institution_field="book__institution_id",
         )
 
     def perform_update(self, serializer):

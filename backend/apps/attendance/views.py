@@ -106,7 +106,9 @@ class AttendanceListView(generics.ListAPIView):
         if student:
             queryset = queryset.filter(student_id=student)
 
-        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+        queryset = apply_campus_scope(
+            queryset, self.request, "campus_id", institution_field="campus__school_id"
+        )
 
         class_obj = self.request.query_params.get("class")
 
@@ -356,7 +358,9 @@ class AttendanceSummaryView(APIView):
         if academic_year:
             queryset = queryset.filter(academic_year_id=academic_year)
 
-        queryset = apply_campus_scope(queryset, request, "campus_id")
+        queryset = apply_campus_scope(
+            queryset, request, "campus_id", institution_field="campus__school_id"
+        )
 
         class_obj = request.query_params.get("class")
 
@@ -450,7 +454,9 @@ class AttendanceMonthlyView(APIView):
         if academic_year:
             queryset = queryset.filter(academic_year_id=academic_year)
 
-        queryset = apply_campus_scope(queryset, request, "campus_id")
+        queryset = apply_campus_scope(
+            queryset, request, "campus_id", institution_field="campus__school_id"
+        )
 
         if section:
             queryset = queryset.filter(section_id=section)
@@ -751,6 +757,8 @@ class AttendanceHistoryView(NoPaginationMixin, generics.ListAPIView):
         if to_date:
             queryset = queryset.filter(date__lte=to_date)
 
-        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+        queryset = apply_campus_scope(
+            queryset, self.request, "campus_id", institution_field="campus__school_id"
+        )
 
         return queryset
