@@ -14,6 +14,41 @@ from apps.schools.models import AcademicYear, Campus, Class, School, Section
 from apps.students.models import Enrollment, Student
 
 
+class NumberSequence(models.Model):
+    """Atomic, per-institution, per-year sequence for invoice/receipt numbers."""
+    institution = models.ForeignKey(
+        School, on_delete=models.CASCADE, related_name="number_sequences"
+    )
+    year = models.PositiveIntegerField()
+    prefix = models.CharField(max_length=20)
+    last_number = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["institution", "year", "prefix"],
+                name="unique_number_sequence_per_institution_year_prefix",
+            )
+        ]
+
+    @classmethod
+    def next_value(cls, institution: School, prefix: str) -> int:
+        from django.db import transaction
+        from django.utils import timezone
+
+        year = timezone.now().year
+        with transaction.atomic():
+            seq, _ = cls.objects.select_for_update().get_or_create(
+                institution=institution,
+                year=year,
+                prefix=prefix,
+                defaults={"last_number": 0},
+            )
+            seq.last_number += 1
+            seq.save(update_fields=["last_number"])
+            return seq.last_number
+
+
 class FeeCategory(SoftDeleteMixin):
     objects = SoftDeleteManager()
 
@@ -429,6 +464,15 @@ class Invoice(SoftDeleteMixin):
                     ]
                 )
 
+    @classmethod
+    def refresh_status_locked(cls, invoice_pk):
+        """Atomically refresh invoice status with row-level locking."""
+        from django.db import transaction
+
+        with transaction.atomic():
+            invoice = cls.objects.select_for_update().get(pk=invoice_pk)
+            invoice.refresh_status()
+
     def clean(self):
         errors = {}
 
@@ -641,7 +685,7 @@ class Payment(SoftDeleteMixin):
         super().save(*args, **kwargs)
 
         if self.status == "completed":
-            self.invoice.refresh_status()
+            Invoice.refresh_status_locked(self.invoice_id)
 
     @property
     def reversed_amount(self):
@@ -702,7 +746,7 @@ class PaymentReversal(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
-        self.payment.invoice.refresh_status()
+        Invoice.refresh_status_locked(self.payment.invoice_id)
 
 
 class Account(SoftDeleteMixin):
@@ -843,81 +887,88 @@ class JournalEntry(SoftDeleteMixin):
 
     def post(self, user):
         """Post a draft journal entry."""
-        if self.status != "draft":
-            raise ValueError("Only draft entries can be posted.")
-        
-        total_debit = sum((line.debit for line in self.lines.all()), Decimal("0.00"))
-        total_credit = sum((line.credit for line in self.lines.all()), Decimal("0.00"))
-        if total_debit != total_credit:
-            raise ValueError(f"Journal entry unbalanced: debit={total_debit}, credit={total_credit}")
-        
-        if not self.lines.exists():
-            raise ValueError("Journal entry must have at least one line.")
-        
-        from django.utils import timezone
-        self.status = "posted"
-        self.posted_by = user
-        self.posted_at = timezone.now()
-        self.save(update_fields=["status", "posted_by", "posted_at", "updated_at"])
-        
-        record_audit(
-            user=user,
-            action="journal_posted",
-            model_name="JournalEntry",
-            object_id=str(self.pk),
-            object_repr=str(self),
-            details={"total_debit": str(total_debit), "total_credit": str(total_credit)},
-        )
-        return self
+        from django.db import transaction
+
+        with transaction.atomic():
+            entry = JournalEntry.objects.select_for_update().get(pk=self.pk)
+            if entry.status != "draft":
+                raise ValueError("Only draft entries can be posted.")
+
+            total_debit = sum((line.debit for line in entry.lines.all()), Decimal("0.00"))
+            total_credit = sum((line.credit for line in entry.lines.all()), Decimal("0.00"))
+            if total_debit != total_credit:
+                raise ValueError(f"Journal entry unbalanced: debit={total_debit}, credit={total_credit}")
+
+            if not entry.lines.exists():
+                raise ValueError("Journal entry must have at least one line.")
+
+            from django.utils import timezone
+            entry.status = "posted"
+            entry.posted_by = user
+            entry.posted_at = timezone.now()
+            entry.save(update_fields=["status", "posted_by", "posted_at", "updated_at"])
+
+            record_audit(
+                user=user,
+                action="journal_posted",
+                model_name="JournalEntry",
+                object_id=str(entry.pk),
+                object_repr=str(entry),
+                details={"total_debit": str(total_debit), "total_credit": str(total_credit)},
+            )
+            return entry
 
     def void(self, user, reason):
         """Void a posted journal entry and create reversing entry."""
-        if self.status != "posted":
-            raise ValueError("Only posted entries can be voided.")
-        if self.reversed_entry_id:
-            raise ValueError("Entry already has a reversal.")
-
+        from django.db import transaction
         from django.utils import timezone
         from .services import JournalService
-        
-        # Create reversing entry
-        lines = []
-        for line in self.lines.all():
-            lines.append({
-                "account_id": line.account_id,
-                "debit": str(line.credit),
-                "credit": str(line.debit),
-                "memo": f"Reversal of {self.description}",
-            })
-        
-        reversal = JournalService(self.institution).create_journal_entry(
-            posting_date=date.today(),
-            description=f"Reversal: {self.description}",
-            lines=lines,
-            campus=self.campus,
-            source_type="journal_reversal",
-            source_id=str(self.pk),
-            user=user,
-        )
-        reversal.post(user)
 
-        # Mark original as void
-        self.status = "void"
-        self.voided_by = user
-        self.voided_at = timezone.now()
-        self.void_reason = reason
-        self.reversed_entry = reversal
-        self.save(update_fields=["status", "voided_by", "voided_at", "void_reason", "reversed_entry", "updated_at"])
+        with transaction.atomic():
+            entry = JournalEntry.objects.select_for_update().get(pk=self.pk)
+            if entry.status != "posted":
+                raise ValueError("Only posted entries can be voided.")
+            if entry.reversed_entry_id:
+                raise ValueError("Entry already has a reversal.")
 
-        record_audit(
-            user=user,
-            action="journal_voided",
-            model_name="JournalEntry",
-            object_id=str(self.pk),
-            object_repr=str(self),
-            details={"reversal_id": str(reversal.pk), "reason": reason},
-        )
-        return reversal
+            # Create reversing entry
+            lines = []
+            for line in entry.lines.all():
+                lines.append({
+                    "account_id": line.account_id,
+                    "debit": str(line.credit),
+                    "credit": str(line.debit),
+                    "memo": f"Reversal of {entry.description}",
+                })
+
+            reversal = JournalService(entry.institution).create_journal_entry(
+                posting_date=date.today(),
+                description=f"Reversal: {entry.description}",
+                lines=lines,
+                campus=entry.campus,
+                source_type="journal_reversal",
+                source_id=str(entry.pk),
+                user=user,
+            )
+            reversal.post(user)
+
+            # Mark original as void
+            entry.status = "void"
+            entry.voided_by = user
+            entry.voided_at = timezone.now()
+            entry.void_reason = reason
+            entry.reversed_entry = reversal
+            entry.save(update_fields=["status", "voided_by", "voided_at", "void_reason", "reversed_entry", "updated_at"])
+
+            record_audit(
+                user=user,
+                action="journal_voided",
+                model_name="JournalEntry",
+                object_id=str(entry.pk),
+                object_repr=str(entry),
+                details={"reversal_id": str(reversal.pk), "reason": reason},
+            )
+            return reversal
 
     @property
     def total_debit(self):
@@ -1645,7 +1696,7 @@ class PaymentRefund(SoftDeleteMixin):
     def save(self, *args, **kwargs):
         self.full_clean()
         super().save(*args, **kwargs)
-        self.payment.invoice.refresh_status()
+        Invoice.refresh_status_locked(self.payment.invoice_id)
 
 
 class StudentFeeOverride(SoftDeleteMixin):
