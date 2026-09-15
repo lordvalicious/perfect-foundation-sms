@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Banknote,
   BadgePoundSterling,
@@ -169,7 +169,7 @@ export default function PayrollPage() {
     }
   };
 
-  const handleProcess = async (recordId) => {
+  const handleProcess = useCallback(async (recordId) => {
     setProcessing(recordId);
     setMessage("");
     setError("");
@@ -189,9 +189,9 @@ export default function PayrollPage() {
     } finally {
       setProcessing(null);
     }
-  };
+  }, [load]);
 
-  const handleApprove = async (recordId) => {
+  const handleApprove = useCallback(async (recordId) => {
     setProcessing(recordId);
     setMessage("");
     setError("");
@@ -211,9 +211,9 @@ export default function PayrollPage() {
     } finally {
       setProcessing(null);
     }
-  };
+  }, [load]);
 
-  const handlePay = async (recordId) => {
+  const handlePay = useCallback(async (recordId) => {
     setProcessing(recordId);
     setMessage("");
     setError("");
@@ -233,10 +233,10 @@ export default function PayrollPage() {
     } finally {
       setProcessing(null);
     }
-  };
+  }, [load]);
 
   // Modal handlers
-  const openStructureModal = (mode, item = null) => {
+  const openStructureModal = useCallback((mode, item = null) => {
     if (mode === "create") {
       setStructureForm({
         employee: "",
@@ -260,7 +260,7 @@ export default function PayrollPage() {
     }
     setModal({ type: "structure", mode, item });
     setFormError("");
-  };
+  }, []);
 
   const closeStructureModal = () => {
     setModal(null);
@@ -360,7 +360,7 @@ export default function PayrollPage() {
     }
   };
 
-  const openRecordModal = (mode, item = null) => {
+  const openRecordModal = useCallback((mode, item = null) => {
     if (mode === "create") {
       setRecordForm({
         employee: "",
@@ -394,7 +394,7 @@ export default function PayrollPage() {
     }
     setModal({ type: "record", mode, item });
     setFormError("");
-  };
+  }, []);
 
   const closeRecordModal = () => {
     setModal(null);
@@ -465,7 +465,7 @@ export default function PayrollPage() {
     }
   };
 
-  const handleDelete = async (type, itemId) => {
+  const handleDelete = useCallback(async (type, itemId) => {
     if (!window.confirm(`Delete this ${type === "structure" ? "salary structure" : "payroll record"}?`)) return;
 
     setSaving(true);
@@ -483,10 +483,10 @@ export default function PayrollPage() {
     } finally {
       setSaving(false);
     }
-  };
+  }, [load]);
 
 
-  const rows = data[tab] || [];
+  const rows = useMemo(() => data[tab] || [], [data, tab]);
 
   // Render functions for table bodies
   const renderStructures = useCallback(() => (
