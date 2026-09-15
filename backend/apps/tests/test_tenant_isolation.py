@@ -984,5 +984,225 @@ class TenantScopedViewsRegressionTest(TenantIsolationTestBase):
         self.assertEqual(response.status_code, 200)
 
 
+class FinanceAndHRScopingRegressionTest(TenantIsolationTestBase):
+    """Phase 3A regression: institution scoping on finance write endpoints
+    (student fee overrides, fines, adjustments, journal entries, expenses) and
+    HR creation endpoints (applications, interviews).
+    """
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+
+        from apps.finance.models import Account
+        from apps.hr.models import Department, Designation, JobPosition, Candidate
+
+        # School-A fee structure (student_a1 + enrollment_a1 already exist)
+        cls.fee_category_a1 = FeeCategory.objects.create(
+            institution=cls.school_a,
+            name="Tuition A1",
+        )
+        cls.fee_structure_a1 = FeeStructure.objects.create(
+            academic_year=cls.year_a,
+            campus=cls.campus_a1,
+            class_obj=cls.class_a1,
+            category=cls.fee_category_a1,
+            amount=Decimal("5000.00"),
+            due_day=10,
+        )
+
+        # Accounts for journal+expense tests
+        cls.expense_account_a = Account.objects.create(
+            institution=cls.school_a, code="EXP-A", name="School A Expense",
+            account_type="expense",
+        )
+        cls.payment_account_a = Account.objects.create(
+            institution=cls.school_a, code="BANK-A", name="School A Bank",
+            account_type="asset",
+        )
+        cls.expense_account_b = Account.objects.create(
+            institution=cls.school_b, code="EXP-B", name="School B Expense",
+            account_type="expense",
+        )
+        cls.payment_account_b = Account.objects.create(
+            institution=cls.school_b, code="BANK-B", name="School B Bank",
+            account_type="asset",
+        )
+
+        # HR fixtures
+        cls.dept_a = Department.objects.create(
+            institution=cls.school_a, name="Academics A", code="ACA"
+        )
+        cls.designation_a = Designation.objects.create(
+            institution=cls.school_a, department=cls.dept_a,
+            name="Teacher A", code="TCH-A",
+        )
+        cls.position_a = JobPosition.objects.create(
+            institution=cls.school_a, department=cls.dept_a,
+            designation=cls.designation_a,
+            title="Math Teacher A", code="POS-A", description="teach math",
+        )
+        cls.candidate_a = Candidate.objects.create(
+            institution=cls.school_a, first_name="Candidate", last_name="A",
+            email="cand_a@test.com", source="other",
+        )
+        cls.dept_b = Department.objects.create(
+            institution=cls.school_b, name="Academics B", code="ACB"
+        )
+        cls.designation_b = Designation.objects.create(
+            institution=cls.school_b, department=cls.dept_b,
+            name="Teacher B", code="TCH-B",
+        )
+        cls.position_b = JobPosition.objects.create(
+            institution=cls.school_b, department=cls.dept_b,
+            designation=cls.designation_b,
+            title="Math Teacher B", code="POS-B", description="teach math",
+        )
+        cls.candidate_b = Candidate.objects.create(
+            institution=cls.school_b, first_name="Candidate", last_name="B",
+            email="cand_b@test.com", source="other",
+        )
+
+    # -- student fee overrides --
+    def test_cannot_create_override_for_cross_school_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/fee-overrides/", {
+            "student": self.student_b1.id,
+            "fee_structure": self.fee_structure_a1.id,
+            "amount": "1000.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_override_for_own_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/fee-overrides/", {
+            "student": self.student_a1.id,
+            "fee_structure": self.fee_structure_a1.id,
+            "amount": "1000.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- fines --
+    def test_cannot_create_fine_on_cross_school_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/fines/", {
+            "student": self.student_b1.id,
+            "academic_year": self.year_a.id,
+            "type": "disciplinary",
+            "amount": "500.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_fine_on_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/fines/", {
+            "student": self.student_a1.id,
+            "academic_year": self.year_a.id,
+            "type": "disciplinary",
+            "amount": "500.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- adjustments --
+    def test_cannot_create_adjustment_for_cross_school_student(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/adjustments/", {
+            "student": self.student_b1.id,
+            "type": "credit",
+            "amount": "250.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_adjustment_for_own_student(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/adjustments/", {
+            "student": self.student_a1.id,
+            "type": "credit",
+            "amount": "250.00",
+            "reason": "test",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- journal entries --
+    def test_cannot_create_journal_entry_with_cross_school_campus(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/journal-entries/", {
+            "campus": self.campus_b1.id,
+            "posting_date": "2024-10-01",
+            "description": "test",
+            "lines": [
+                {"account": self.expense_account_a.id, "debit": "100", "credit": "0"},
+                {"account": self.payment_account_a.id, "debit": "0", "credit": "100"},
+            ],
+        }, format="json")
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_journal_entry_for_own_campus(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/journal-entries/", {
+            "campus": self.campus_a1.id,
+            "posting_date": "2024-10-01",
+            "description": "test",
+            "lines": [
+                {"account": self.expense_account_a.id, "debit": "100", "credit": "0"},
+                {"account": self.payment_account_a.id, "debit": "0", "credit": "100"},
+            ],
+        }, format="json")
+        self.assertEqual(response.status_code, 201)
+
+    # -- expenses --
+    def test_cannot_create_expense_with_cross_school_account(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/finance/expenses/", {
+            "campus": self.campus_a1.id,
+            "expense_account": self.expense_account_b.id,
+            "payment_account": self.payment_account_a.id,
+            "amount": "100.00",
+            "expense_date": "2024-10-01",
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_expense_with_own_accounts(self):
+        self._login(self.admin_a)
+        response = self.client.post("/api/finance/expenses/", {
+            "campus": self.campus_a1.id,
+            "expense_account": self.expense_account_a.id,
+            "payment_account": self.payment_account_a.id,
+            "amount": "100.00",
+            "expense_date": "2024-10-01",
+        })
+        self.assertEqual(response.status_code, 201)
+
+    # -- HR applications --
+    def test_cannot_create_application_with_cross_school_candidate(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/hr/applications/", {
+            "candidate": self.candidate_b.id,
+            "position": self.position_a.id,
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_cannot_create_application_with_cross_school_position(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/hr/applications/", {
+            "candidate": self.candidate_a.id,
+            "position": self.position_b.id,
+        })
+        self.assertEqual(response.status_code, 403)
+
+    def test_can_create_application_with_own_candidate_and_position(self):
+        self._login(self.accountant_a)
+        response = self.client.post("/api/hr/applications/", {
+            "candidate": self.candidate_a.id,
+            "position": self.position_a.id,
+        })
+        self.assertEqual(response.status_code, 201)
+
+
 if __name__ == "__main__":
     unittest.main()
