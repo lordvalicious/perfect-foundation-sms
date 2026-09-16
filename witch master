@@ -1,0 +1,10 @@
+65e1fe4 (HEAD -> developer-b/phase-3, origin/developer-b/phase-3) chore: update subproject commit reference to latest version
+b241ba9 fix: mark subproject as dirty to indicate uncommitted changes
+8eb47ae feat: add frontend test results for PHASE3B_R1 to improve test coverage and validation
+1117d00 feat(frontend): §18 navbar dropdown stacking fix + regression battery (Phase 3B)
+0e7ec6b (origin/phase-3-integration, origin/master, origin/integration-qa, origin/developer-a/phase-3, origin/HEAD, phase-3-integration, master, integration-qa) feat: update theme color handling to ensure consistent application across components and improve visual coherence
+078b978 feat: enhance apply_campus_scope to include institution_field for improved data scoping
+e2bc139 refactor: optimize handlers and memoize values in PayrollPage component
+f4291d2 feat: add QA CSV live probe script for auditing CSV exports
+5c87e79 (origin/developer-b/frontend-ui, origin/developer-a/backend-security, developer-b/frontend-ui) fix: add optional chaining to prevent errors when accessing potentially undefined properties
+ce99dba (origin/developer-2-frontend, developer-2-frontend) Merge branch 'developer-1-backend'
