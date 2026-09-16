@@ -118,6 +118,22 @@ export function SchoolProvider({ children }) {
       setLoading(true);
       if (mode === "switch") setIsSwitching(true);
 
+      // Only Super Admin users should fetch the super-admin schools endpoint.
+      // Non-Super-Admin users (Principal, vice_principal, campus_admin,
+      // academic, accountant, teacher, parent, student, etc.) should not call
+      // it because the backend returns 403 and that would cause the school
+      // context initialization to fail for those roles.
+      const isSuperAdmin =
+        user?.is_superuser === true || user?.primary_role === "super_admin";
+
+      const superAdminApiCall = isSuperAdmin
+        ? apiFetch(
+            "/api/auth/super-admin/schools/",
+            { signal: controller.signal },
+            "Could not load schools."
+          )
+        : null; // null will be treated as "no data" in the handler below
+
       return Promise.allSettled([
         apiFetch(
           "/api/auth/active-institution/",
@@ -134,22 +150,23 @@ export function SchoolProvider({ children }) {
           { signal: controller.signal },
           "Could not load active campus."
         ),
-        // Only platform admins can read this; for everyone else it 403s and is
-        // ignored below.
-        apiFetch(
-          "/api/auth/super-admin/schools/",
-          { signal: controller.signal },
-          "Could not load schools."
-        ),
-      ]).then(([instResult, modsResult, campusResult, schoolsResult]) => {
+        superAdminApiCall,
+      ]).then(([
+        instResult,
+        modsResult,
+        campusResult,
+        schoolsResult,
+      ]) => {
         if (controller.signal.aborted) return;
 
         const inst = instResult.status === "fulfilled" ? instResult.value : null;
         const mods = modsResult.status === "fulfilled" ? modsResult.value : null;
         const campusData =
           campusResult.status === "fulfilled" ? campusResult.value : null;
-        const allSchools =
-          schoolsResult.status === "fulfilled" ? schoolsResult.value : null;
+        // schoolsResult may be null when the super-admin endpoint was
+        // intentionally skipped for non-Super-Admin users; fall back to null
+        // so the apply() function receives a predictable value.
+        const allSchools = schoolsResult ?? null;
 
         const school =
           inst?.institution ||
