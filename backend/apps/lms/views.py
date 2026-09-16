@@ -5,7 +5,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.access import apply_campus_scope
+from apps.accounts.access import apply_campus_scope, get_institution
 
 from .models import Course, Lesson, LessonCompletion
 from .serializers import CourseSerializer, LessonSerializer
@@ -17,6 +17,44 @@ def _user_teacher(request):
 
 def _user_student(request):
     return getattr(request.user, "student_profile", None)
+
+
+def _get_scoped_course(request, course_id):
+    """Return a Course if it belongs to the caller's institution; 404 otherwise.
+
+    This replaces the unsafe ``get_object_or_404(Course, pk=...)`` pattern that
+    let any authenticated user reach any course by guessing the ID.
+    """
+    return get_object_or_404(
+        apply_campus_scope(Course.objects.all(), request),
+        pk=course_id,
+    )
+
+
+def _assert_lesson_ownership(user, course, *,
+                            require_teacher=False, require_staff_write=False):
+    """Raise PermissionDenied unless the caller owns the course.
+
+    ``require_teacher``: POST/PUT/DELETE paths — only the course teacher or a
+    superuser may write.
+
+    ``require_staff_write``: if True, a non-teacher staff member with
+    ``require_staff_write`` may write (used where course.teacher can be None
+    for staff-created ad-hoc content). For now, only teacher ownership is
+    enforced (same as CourseDetailView).
+    """
+    if user.is_superuser:
+        return
+
+    teacher = getattr(user, "teacher_profile", None)
+
+    if teacher is not None:
+        if course.teacher_id == teacher.id:
+            return
+        raise PermissionDenied("You are not the teacher for this course.")
+
+    if require_teacher:
+        raise PermissionDenied("Only the course teacher may perform this action.")
 
 
 class CourseListCreateView(generics.ListCreateAPIView):
@@ -115,33 +153,31 @@ class LessonListCreateView(generics.ListCreateAPIView):
         if not course_id:
             return Lesson.objects.none()
 
-        # Get the course and verify institution scoping
-        course = get_object_or_404(
-            Course.objects.filter(
-                institution__isnull=False
-            ),
-            pk=course_id
-        )
+        # Institution- + campus-scoped course lookup (prevents cross-tenant lesson read).
+        course = _get_scoped_course(self.request, course_id)
 
-        # Check institution access for non-superusers
         user = self.request.user
-        if not user.is_superuser:
-            teacher = getattr(user, "teacher_profile", None)
-            if teacher is not None:
-                # Teacher can only access courses they teach
-                if course.teacher_id != teacher.id:
-                    raise PermissionDenied("You do not have access to this course.")
-            # Students can only access published courses they're enrolled in
-            from apps.students.models import Student
-            student = getattr(user, "student_profile", None)
-            if student is not None:
-                enrolled_courses = student.enrollments.filter(
-                    status="active"
-                ).values_list("class_obj_id", flat=True)
-                if course.class_obj_id not in enrolled_courses:
-                    if not course.is_published:
-                        raise PermissionDenied("Course not available.")
 
+        if user.is_superuser:
+            return course.lessons.all()
+
+        teacher = _user_teacher(self.request)
+        if teacher is not None:
+            if course.teacher_id != teacher.id:
+                raise PermissionDenied("You do not have access to this course.")
+            return course.lessons.all()
+
+        student = _user_student(self.request)
+        if student is not None:
+            enrolled_course_ids = student.enrollments.filter(
+                status="active"
+            ).values_list("class_obj_id", flat=True)
+            if course.class_obj_id not in enrolled_course_ids:
+                raise PermissionDenied("Course not available.")
+            return course.lessons.all()
+
+        # Staff with no teacher/student profile get the course (now institution-scoped),
+        # which is acceptable for read-only course materials access.
         return course.lessons.all()
 
     def perform_create(self, serializer):
@@ -149,15 +185,8 @@ class LessonListCreateView(generics.ListCreateAPIView):
         if not course_id:
             raise PermissionDenied("Course ID is required.")
 
-        course = get_object_or_404(Course, pk=course_id)
-
-        # Verify instructor access
-        user = self.request.user
-        teacher = getattr(user, "teacher_profile", None)
-        if teacher is not None and course.teacher_id != teacher.id:
-            if not user.is_superuser:
-                raise PermissionDenied("Only the course's teacher can add lessons.")
-
+        course = _get_scoped_course(self.request, course_id)
+        _assert_lesson_ownership(self.request.user, course, require_teacher=True)
         serializer.save(course=course)
 
 
@@ -170,28 +199,25 @@ class MarkLessonCompleteView(APIView):
         if student is None:
             raise PermissionDenied("Only students complete lessons.")
 
-        # Get the lesson and verify institution scoping
-        course_id_val = Lesson.objects.values("course_id").get(pk=lesson_id)["course_id"]
-        course = get_object_or_404(
-            Course.objects.filter(institution__isnull=False),
-            pk=course_id_val
-        )
+        # Fetch the lesson first so we have the course object available.
+        lesson = get_object_or_404(Lesson.objects.select_related("course"), pk=lesson_id)
 
-        # Check institution access for non-superusers
+        # Institution gate: reject if the course belongs to another tenant.
+        course = lesson.course
+        institution = get_institution(request)
+        if institution is not None and course.institution_id != institution.id:
+            raise PermissionDenied("You do not have access to this lesson.")
+
+        # Enrollment gate: student must have an active enrolment in the course class.
         user = request.user
         if not user.is_superuser:
-            teacher = getattr(user, "teacher_profile", None)
-            if teacher is not None and lesson.course.teacher_id != teacher.id:
-                raise PermissionDenied("You do not have access to this lesson.")
-            from apps.students.models import Student
-            student_model = getattr(user, "student_profile", None)
-            if student_model is not None:
-                if not student_model.enrollments.filter(
-                    status="active", class_obj_id=course.class_obj_id
-                ).exists():
-                    raise PermissionDenied("You are not enrolled in this course.")
-
-        lesson = get_object_or_404(Lesson, pk=lesson_id)
+            student_profile = getattr(user, "student_profile", None)
+            if student_profile is None:
+                raise PermissionDenied("No student profile.")
+            if not student_profile.enrollments.filter(
+                status="active", class_obj_id=course.class_obj_id
+            ).exists():
+                raise PermissionDenied("You are not enrolled in this course.")
 
         completion = LessonCompletion.objects.filter(
             lesson=lesson, student=student
@@ -206,10 +232,10 @@ class MarkLessonCompleteView(APIView):
             )
             completed = True
 
-        total = lesson.course.lessons.count()
+        total = course.lessons.count()
         done = LessonCompletion.objects.filter(
             student=student,
-            lesson__course_id=lesson.course_id,
+            lesson__course_id=course.id,
         ).count()
 
         progress = round(done / total * 100) if total else 0
@@ -268,30 +294,26 @@ class LessonDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not course_id:
             return Lesson.objects.none()
 
-        # Get the course and verify institution scoping
-        course = get_object_or_404(
-            Course.objects.filter(
-                institution__isnull=False
-            ),
-            pk=course_id
-        )
-
-        # Check institution access for non-superusers
+        course = _get_scoped_course(self.request, course_id)
         user = self.request.user
-        if not user.is_superuser:
-            teacher = getattr(user, "teacher_profile", None)
-            if teacher is not None:
-                if course.teacher_id != teacher.id:
-                    raise PermissionDenied("You do not have access to this course.")
-            from apps.students.models import Student
-            student = getattr(user, "student_profile", None)
-            if student is not None:
-                enrolled_courses = student.enrollments.filter(
-                    status="active"
-                ).values_list("class_obj_id", flat=True)
-                if course.class_obj_id not in enrolled_courses:
-                    if not course.is_published:
-                        raise PermissionDenied("Course not available.")
+
+        if user.is_superuser:
+            return course.lessons.all()
+
+        teacher = _user_teacher(self.request)
+        if teacher is not None:
+            if course.teacher_id != teacher.id:
+                raise PermissionDenied("You do not have access to this course.")
+            return course.lessons.all()
+
+        student = _user_student(self.request)
+        if student is not None:
+            enrolled_course_ids = student.enrollments.filter(
+                status="active"
+            ).values_list("class_obj_id", flat=True)
+            if course.class_obj_id not in enrolled_course_ids:
+                raise PermissionDenied("Course not available.")
+            return course.lessons.all()
 
         return course.lessons.all()
 
@@ -299,23 +321,10 @@ class LessonDetailView(generics.RetrieveUpdateDestroyAPIView):
         course_id = self.kwargs.get("course_id")
         if not course_id:
             raise PermissionDenied("Course ID is required.")
-
-        course = get_object_or_404(Course, pk=course_id)
-
-        # Verify instructor access
-        user = self.request.user
-        teacher = getattr(user, "teacher_profile", None)
-        if teacher is not None and course.teacher_id != teacher.id:
-            if not user.is_superuser:
-                raise PermissionDenied("Only the course's teacher can edit lessons.")
-
+        course = _get_scoped_course(self.request, course_id)
+        _assert_lesson_ownership(self.request.user, course, require_teacher=True)
         serializer.save(course=course)
 
     def perform_destroy(self, instance):
-        user = self.request.user
-        course = instance.course
-        teacher = getattr(user, "teacher_profile", None)
-        if teacher is not None and course.teacher_id != teacher.id:
-            if not user.is_superuser:
-                raise PermissionDenied("Only the course's teacher can delete lessons.")
+        _assert_lesson_ownership(self.request.user, instance.course, require_teacher=True)
         instance.delete()

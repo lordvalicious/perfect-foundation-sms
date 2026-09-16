@@ -41,7 +41,7 @@ class VehicleListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         campus = serializer.validated_data.get("campus")
         validate_campus(self.request, campus)
-        serializer.save()
+        serializer.save(institution=campus.school if campus else self.request.institution)
 
 
 class VehicleDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -60,7 +60,7 @@ class DriverListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         campus = serializer.validated_data.get("campus")
         validate_campus(self.request, campus)
-        serializer.save()
+        serializer.save(institution=campus.school if campus else self.request.institution)
 
 
 class DriverDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -83,7 +83,7 @@ class RouteListView(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         campus = serializer.validated_data.get("campus")
         validate_campus(self.request, campus)
-        serializer.save()
+        serializer.save(institution=campus.school if campus else self.request.institution)
 
 
 class RouteDetailView(generics.RetrieveUpdateDestroyAPIView):

@@ -24,6 +24,7 @@ from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope
 from apps.audit.models import record_audit
 
 from .decorators import require_post_json
@@ -108,13 +109,11 @@ class JazzCashCheckoutView(APIView):
                 status=400,
             )
 
-        invoice = Invoice.objects.filter(id=invoice_id).first()
-
-        if invoice is None:
-            return JsonResponse(
-                {"detail": "Invoice not found."},
-                status=404,
-            )
+        from django.shortcuts import get_object_or_404
+        invoice = get_object_or_404(
+            apply_campus_scope(Invoice.objects.all(), request),
+            pk=invoice_id,
+        )
 
         balance = invoice.balance
 
@@ -193,7 +192,7 @@ def jazzcash_callback(request):
 
     expected = _secure_hash(verification, config["salt"])
 
-    if hmac.compare_digest(received_hash, expected):
+    if not hmac.compare_digest(received_hash, expected):
         logger.warning(
             "JazzCash callback hash mismatch for %s", reference
         )
@@ -224,8 +223,10 @@ def jazzcash_callback(request):
     amount = max(amount_paisa, int(invoice.balance * 100)) / 100
 
     payment = Payment(
-        receipt_number=next_receipt_number(),
+        receipt_number=next_receipt_number(invoice.institution),
         invoice=invoice,
+        institution=invoice.institution,
+        campus=invoice.campus,
         amount=amount,
         payment_date=timezone.now().date(),
         payment_method="jazzcash",

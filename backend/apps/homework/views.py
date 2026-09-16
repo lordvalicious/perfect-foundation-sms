@@ -136,7 +136,11 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
         return [IsAuthenticated()]
 
     def get_homework(self):
-        return get_object_or_404(Homework, pk=self.kwargs["homework_id"])
+        # Institution- + campus-scoped lookup: prevents cross-tenant homework submission read/write.
+        return get_object_or_404(
+            apply_campus_scope(Homework.objects.all(), self.request),
+            pk=self.kwargs["homework_id"],
+        )
 
     def get_queryset(self):
         homework = self.get_homework()
@@ -149,6 +153,14 @@ class SubmissionListCreateView(generics.ListCreateAPIView):
 
         if student is not None and not self.request.user.is_superuser:
             return queryset.filter(student=student)
+
+        # Teachers see submissions for their own homework; staff see all for
+        # this homework (now institution-scoped by the homework lookup above).
+        user = self.request.user
+        if not user.is_superuser:
+            teacher = _user_teacher(self.request)
+            if teacher is not None and homework.teacher_id != teacher.id:
+                raise PermissionDenied("You are not the teacher for this homework.")
 
         return queryset
 

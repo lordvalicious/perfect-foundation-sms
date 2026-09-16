@@ -2,6 +2,8 @@ from django.db.models import Q
 from rest_framework import generics
 from rest_framework.permissions import IsAuthenticated
 
+from apps.accounts.access import apply_campus_scope
+
 from .models import AlumniProfile
 from .serializers import AlumniProfileSerializer
 
@@ -11,7 +13,11 @@ class AlumniListCreateView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = AlumniProfile.objects.select_related("campus")
+        queryset = apply_campus_scope(
+            AlumniProfile.objects.select_related("campus"),
+            self.request,
+            "campus_id",
+        )
 
         search = self.request.query_params.get("search", "").strip()
 
@@ -38,4 +44,10 @@ class AlumniListCreateView(generics.ListCreateAPIView):
 class AlumniDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = AlumniProfileSerializer
     permission_classes = [IsAuthenticated]
-    queryset = AlumniProfile.objects.select_related("campus")
+
+    def get_queryset(self):
+        return apply_campus_scope(
+            AlumniProfile.objects.select_related("campus"),
+            self.request,
+            "campus_id",
+        )

@@ -1,8 +1,8 @@
 from django.db.models import Q
 from rest_framework import generics
-from rest_framework.exceptions import NotFound, ValidationError
+from rest_framework.exceptions import NotFound, ValidationError, PermissionDenied
 
-from apps.accounts.access import restrict_to_allowed_campuses
+from apps.accounts.access import apply_campus_scope, restrict_to_allowed_campuses, assert_campus_allowed
 from apps.accounts.permissions import IsAdminOrReadOnly
 from apps.accounts.scopes import get_teacher_profile, is_manager
 
@@ -214,8 +214,40 @@ class TeacherAssignmentListCreateView(generics.ListCreateAPIView):
         institution = getattr(self.request, "institution", None)
         if institution is not None:
             queryset = queryset.filter(teacher__institution=institution)
+        else:
+            queryset = queryset.none()
 
-        return queryset
+        # Campus restriction for non-global roles (keeps a campus_admin or
+        # principal from seeing assignments at other campuses of the school).
+        return apply_campus_scope(queryset, self.request, "campus_id", institution_field=None)
+
+    def _validate_write_scope(self, serializer):
+        institution = getattr(self.request, "institution", None)
+        if institution is not None:
+            teacher = serializer.validated_data.get("teacher")
+            if teacher is not None and teacher.institution_id != institution.id:
+                raise PermissionDenied(
+                    "Teacher does not belong to the active institution."
+                )
+        campus = serializer.validated_data.get("campus")
+        if campus is not None:
+            assert_campus_allowed(self.request.user, campus.pk, request=self.request)
+
+    def perform_create(self, serializer):
+        self._validate_write_scope(serializer)
+        serializer.save()
+
+    def perform_update(self, serializer):
+        self._validate_write_scope(serializer)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        institution = getattr(self.request, "institution", None)
+        if institution is not None and instance.teacher.institution_id != institution.id:
+            raise PermissionDenied(
+                "Assignment belongs to a different institution."
+            )
+        instance.delete()
 
 
 class TeacherAssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
@@ -242,4 +274,28 @@ class TeacherAssignmentDetailView(generics.RetrieveUpdateDestroyAPIView):
         else:
             queryset = queryset.none()
 
-        return queryset
+        return apply_campus_scope(
+            queryset, self.request, "campus_id", institution_field=None
+        )
+
+    def perform_update(self, serializer):
+        institution = getattr(self.request, "institution", None)
+        teacher = serializer.validated_data.get("teacher") or serializer.instance.teacher
+        if institution is not None and teacher.institution_id != institution.id:
+            raise PermissionDenied(
+                "Teacher does not belong to the active institution."
+            )
+        campus = serializer.validated_data.get("campus")
+        if campus is None and serializer.instance:
+            campus = serializer.instance.campus
+        if campus is not None:
+            assert_campus_allowed(self.request.user, campus.pk, request=self.request)
+        serializer.save()
+
+    def perform_destroy(self, instance):
+        institution = getattr(self.request, "institution", None)
+        if institution is not None and instance.teacher.institution_id != institution.id:
+            raise PermissionDenied(
+                "Assignment belongs to a different institution."
+            )
+        instance.delete()

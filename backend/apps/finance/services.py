@@ -28,6 +28,7 @@ from .models import (
     JournalLine,
     Account,
     Expense,
+    NumberSequence,
 )
 
 
@@ -38,21 +39,15 @@ def _year_suffix():
 def next_invoice_number(institution: School) -> str:
     """Generate the next unique invoice number for an institution, e.g. INV-2026-0001."""
     prefix = f"INV-{_year_suffix()}-"
-    count = Invoice.objects.filter(
-        institution=institution,
-        invoice_number__startswith=prefix
-    ).count()
-    return f"{prefix}{count + 1:04d}"
+    seq = NumberSequence.next_value(institution, "INV")
+    return f"{prefix}{seq:04d}"
 
 
 def next_receipt_number(institution: School) -> str:
     """Generate the next unique receipt number for an institution, e.g. RCPT-2026-0001."""
     prefix = f"RCPT-{_year_suffix()}-"
-    count = Payment.objects.filter(
-        institution=institution,
-        receipt_number__startswith=prefix
-    ).count()
-    return f"{prefix}{count + 1:04d}"
+    seq = NumberSequence.next_value(institution, "RCPT")
+    return f"{prefix}{seq:04d}"
 
 
 class FeeInvoiceService:

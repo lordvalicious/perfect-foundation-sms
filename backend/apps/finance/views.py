@@ -28,6 +28,7 @@ from .models import (
     FeeCategory,
     FeeStructure,
     Invoice,
+    InvoiceItem,
     Payment,
     PaymentReversal,
     Account,
@@ -134,6 +135,12 @@ class ExpenseListCreateView(generics.ListCreateAPIView):
         if campus:
             from apps.accounts.access import assert_campus_allowed
             assert_campus_allowed(self.request.user, campus.pk, request=self.request)
+        for field in ("expense_account", "payment_account"):
+            account = serializer.validated_data.get(field)
+            if account is not None and account.institution_id != self.request.institution.id:
+                raise PermissionDenied(
+                    f"{field} does not belong to the active institution."
+                )
         serializer.save(institution=self.request.institution, created_by=self.request.user)
 
 
@@ -969,7 +976,9 @@ class BulkInvoiceCreateView(APIView):
         for enrollment in enrollments:
             try:
                 invoice = Invoice.objects.create(
-                    invoice_number=next_invoice_number(),
+                    invoice_number=next_invoice_number(request.institution),
+                    institution=request.institution,
+                    campus=campus_id,
                     enrollment=enrollment,
                     student=enrollment.student,
                     academic_year=enrollment.academic_year,
@@ -1098,7 +1107,7 @@ class BulkPaymentCreateView(APIView):
 
             try:
                 payment = Payment.objects.create(
-                    receipt_number=next_receipt_number(),
+                    receipt_number=next_receipt_number(request.institution),
                     invoice=locked_invoice,
                     amount=amount,
                     payment_date=payment_date,
@@ -1403,6 +1412,9 @@ class StudentFeeOverrideListCreateView(generics.ListCreateAPIView):
         fee_structure = serializer.validated_data["fee_structure"]
         if fee_structure.academic_year.school_id != self.request.institution.id:
             raise PermissionDenied("Fee structure belongs to a different institution.")
+        student = serializer.validated_data.get("student")
+        if student is not None and student.institution_id != self.request.institution.id:
+            raise PermissionDenied("Student does not belong to the active institution.")
         serializer.save(institution=self.request.institution)
 
         record_audit(
@@ -1716,6 +1728,8 @@ class FineListCreateView(generics.ListCreateAPIView):
         if academic_year.school_id != self.request.institution.id:
             raise PermissionDenied("Academic year is outside the active institution.")
         student = serializer.validated_data["student"]
+        if student.institution_id != self.request.institution.id:
+            raise PermissionDenied("Student does not belong to the active institution.")
         from apps.accounts.access import assert_campus_allowed
         enrollment = student.enrollments.filter(status="active").first()
         if enrollment is not None:
@@ -1831,6 +1845,8 @@ class AdjustmentListCreateView(generics.ListCreateAPIView):
             raise PermissionDenied("Payment is outside the active institution.")
         student = serializer.validated_data.get("student")
         if student is not None:
+            if student.institution_id != self.request.institution.id:
+                raise PermissionDenied("Student does not belong to the active institution.")
             from apps.accounts.access import assert_campus_allowed
             enrollment = student.enrollments.filter(status="active").first()
             if enrollment is not None:
@@ -1977,7 +1993,16 @@ class JournalEntryListCreateView(generics.ListCreateAPIView):
         return apply_campus_scope(queryset, self.request, "campus_id")
 
     def perform_create(self, serializer):
-        serializer.save(institution=self.request.institution, created_by=self.request.user)
+        campus = serializer.validated_data.get("campus")
+        if campus is not None:
+            from apps.accounts.access import assert_campus_allowed
+            assert_campus_allowed(
+                self.request.user, campus.id, request=self.request
+            )
+        serializer.save(
+            institution=self.request.institution,
+            created_by=self.request.user,
+        )
 
 
 class JournalEntryDetailView(generics.RetrieveAPIView):

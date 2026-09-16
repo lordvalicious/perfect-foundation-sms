@@ -1079,6 +1079,19 @@ class ApplicationListCreateView(generics.ListCreateAPIView):
         return queryset.order_by("-applied_on")
 
     def perform_create(self, serializer):
+        candidate = serializer.validated_data.get("candidate")
+        position = serializer.validated_data.get("position")
+        institution = self.request.institution
+
+        if candidate is not None and candidate.institution_id != institution.id:
+            raise PermissionDenied(
+                "Candidate does not belong to the active institution."
+            )
+        if position is not None and position.institution_id != institution.id:
+            raise PermissionDenied(
+                "Position does not belong to the active institution."
+            )
+
         serializer.save()
 
 
@@ -1112,6 +1125,27 @@ class InterviewListCreateView(generics.ListCreateAPIView):
         return queryset.order_by("scheduled_on")
 
     def perform_create(self, serializer):
+        application = serializer.validated_data.get("application")
+        interviewer = serializer.validated_data.get("interviewer")
+        institution = self.request.institution
+
+        # The application cannot have an institution field; its candidate does.
+        if application is not None and (
+            application.candidate_id is None
+            or Application.objects.filter(
+                pk=application.pk,
+                candidate__institution=institution,
+            ).exists() is False
+        ):
+            raise PermissionDenied(
+                "Application does not belong to the active institution."
+            )
+
+        if interviewer is not None and interviewer.institution_id != institution.id:
+            raise PermissionDenied(
+                "Interviewer does not belong to the active institution."
+            )
+
         serializer.save(scheduled_by=self.request.user)
 
 

@@ -26,6 +26,7 @@ from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
+from apps.accounts.access import apply_campus_scope
 from apps.audit.models import record_audit
 
 from .decorators import require_post_json
@@ -119,12 +120,11 @@ class EasyPaisaCheckoutView(APIView):
                 {"detail": "invoice_id is required."}, status=400
             )
 
-        invoice = Invoice.objects.filter(id=invoice_id).first()
-
-        if invoice is None:
-            return JsonResponse(
-                {"detail": "Invoice not found."}, status=404
-            )
+        from django.shortcuts import get_object_or_404
+        invoice = get_object_or_404(
+            apply_campus_scope(Invoice.objects.all(), request),
+            pk=invoice_id,
+        )
 
         balance = invoice.balance
 
@@ -233,8 +233,10 @@ def easypaisa_callback(request):
         return JsonResponse({"status": "declined", "code": confirmed})
 
     payment = Payment(
-        receipt_number=next_receipt_number(),
+        receipt_number=next_receipt_number(invoice.institution),
         invoice=invoice,
+        institution=invoice.institution,
+        campus=invoice.campus,
         amount=invoice.balance,
         payment_date=timezone.now().date(),
         payment_method="easypaisa",
