@@ -485,10 +485,16 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
   const { currentSchool, availableSchools, activeCampus, campusList, setActiveCampusId, switchSchool, isSwitching, loading: schoolLoading, scopedHasRole: hasRole, branding } = useSchool();
 
   // Keyboard users: Escape closes the topmost open modal so every dialog in
-  // the app becomes keyboard-dismissable without per-dialog handlers.
+  // the app becomes keyboard-dismissable without per-dialog handlers. An open
+  // school/campus switcher is dismissed first so it can never stay expanded.
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== "Escape" || mobileNavOpen) return;
+      if (schoolDropdownOpen || campusDropdownOpen) {
+        setSchoolDropdownOpen(false);
+        setCampusDropdownOpen(false);
+        return;
+      }
       const overlays = document.querySelectorAll(".modal-overlay");
       if (overlays.length === 0) return;
       const top = overlays[overlays.length - 1];
@@ -497,7 +503,7 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [mobileNavOpen]);
+  }, [mobileNavOpen, schoolDropdownOpen, campusDropdownOpen]);
 
   // Drive the mobile slide-in drawer. The CSS contract (App.css) shows the
   // drawer/backdrop only when <body> carries .nav-open.
@@ -817,7 +823,11 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
 
           <button
             className="mobile-nav-toggle"
-            onClick={() => setMobileNavOpen((v) => !v)}
+            onClick={() => {
+              setSchoolDropdownOpen(false);
+              setCampusDropdownOpen(false);
+              setMobileNavOpen((v) => !v);
+            }}
             title="Menu"
             aria-label={mobileNavOpen ? "Close menu" : "Open menu"}
             aria-expanded={mobileNavOpen}

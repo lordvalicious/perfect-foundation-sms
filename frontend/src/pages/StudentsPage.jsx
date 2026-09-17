@@ -12,6 +12,16 @@ import { buildErrorMessage } from "../api";
 
 const STUDENTS_API_URL = "/api/students/";
 
+const emptyCampusData = {
+  students: [],
+  count: 0,
+  page: 1,
+  next: null,
+  previous: null,
+  loading: true,
+  error: "",
+};
+
 function getCookie(name) {
   const value = `; ${document.cookie}`;
   const parts = value.split(`; ${name}=`);
@@ -190,12 +200,19 @@ function StudentsPage() {
     return fetch(`${STUDENTS_API_URL}?${params.toString()}`, {
       credentials: "include",
     })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to load students.");
+      .then(async (response) => {
+        if (response.ok) {
+          return response.json();
         }
 
-        return response.json();
+        if (response.status === 403) {
+          const body = await response.json().catch(() => null);
+          throw new Error(
+            body?.detail || "You don't have permission to view these students."
+          );
+        }
+
+        throw new Error("Failed to load students.");
       })
       .then((data) => {
         setCampusData((prev) => ({
@@ -216,6 +233,7 @@ function StudentsPage() {
         setCampusData((prev) => ({
           ...prev,
           [campusId]: {
+            ...emptyCampusData,
             ...(prev[campusId] || {}),
             loaded: true,
             loading: false,
@@ -386,12 +404,19 @@ function StudentsPage() {
       fetch(`${STUDENTS_API_URL}?${params.toString()}`, {
         credentials: "include",
       })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error("Failed to load students.");
+        .then(async (response) => {
+          if (response.ok) {
+            return response.json();
           }
 
-          return response.json();
+          if (response.status === 403) {
+            const body = await response.json().catch(() => null);
+            throw new Error(
+              body?.detail || "You don't have permission to view these students."
+            );
+          }
+
+          throw new Error("Failed to load students.");
         })
         .then((data) => {
           setCampusData((prev) => ({
@@ -412,6 +437,7 @@ function StudentsPage() {
           setCampusData((prev) => ({
             ...prev,
             [campus.id]: {
+              ...emptyCampusData,
               ...(prev[campus.id] || {}),
               loaded: true,
               loading: false,
@@ -1194,16 +1220,10 @@ function StudentsPage() {
       ) : (
         <div className="campus-student-lists">
           {campusOptions.map((campus) => {
-            const data =
-              campusData[campus.id] || {
-                students: [],
-                count: 0,
-                page: 1,
-                next: null,
-                previous: null,
-                loading: true,
-                error: "",
-              };
+            const data = {
+              ...emptyCampusData,
+              ...(campusData[campus.id] || {}),
+            };
 
             const campusTotalPages = Math.max(
               1,

@@ -11,10 +11,10 @@ import {
 const BRANDING_URL = "/api/schools/branding/";
 
 const DEFAULT_COLORS = {
-  primary_color: "#1a73e8",
+  primary_color: "#4f46e5",
   secondary_color: "#34a853",
   accent_color: "#fbbc04",
-  theme_color: "#1a73e8",
+  theme_color: "#4f46e5",
 };
 
 export default function BrandingPage() {
