@@ -5131,9 +5131,9 @@ body.modal-open {
   color: #fff;
   background: linear-gradient(
     120deg,
-    color-mix(in srgb, var(--brand-color) 58%, #1e1b4b) 0%,
-    color-mix(in srgb, var(--brand-color) 42%, #312e81) 45%,
-    color-mix(in srgb, var(--brand-color) 74%, #1c1437) 100%
+    color-mix(in srgb, var(--brand-color) 58%, #000) 0%,
+    color-mix(in srgb, var(--brand-color) 84%, #000) 45%,
+    color-mix(in srgb, var(--brand-color) 46%, #000) 100%
   );
   box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--brand-color) 55%, transparent);
 }
@@ -5170,7 +5170,7 @@ body.modal-open {
   font-size: 0.82rem;
   letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: #c7d2fe;
+  color: color-mix(in srgb, #fff 74%, var(--brand-color));
   margin: 0;
 }
 
@@ -5183,7 +5183,7 @@ body.modal-open {
 }
 
 .dash-hero-sub {
-  color: #c7d2fe;
+  color: color-mix(in srgb, #fff 74%, var(--brand-color));
   margin: 0.7rem 0 0;
   max-width: 48ch;
   font-size: 0.95rem;
@@ -5204,7 +5204,7 @@ body.modal-open {
 
 .dash-date {
   font-size: 0.88rem;
-  color: #c7d2fe;
+  color: color-mix(in srgb, #fff 74%, var(--brand-color));
   margin-top: 0.2rem;
 }
 
@@ -5218,7 +5218,7 @@ body.modal-open {
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.22);
   font-size: 0.78rem;
-  color: #e0e7ff;
+  color: color-mix(in srgb, #fff 86%, var(--brand-color));
 }
 
 .dash-active-school {
@@ -5232,7 +5232,7 @@ body.modal-open {
   border: 1px solid rgba(255, 255, 255, 0.28);
   font-size: 0.8rem;
   font-weight: 600;
-  color: #e0e7ff;
+  color: color-mix(in srgb, #fff 86%, var(--brand-color));
 }
 
 .dash-actions {

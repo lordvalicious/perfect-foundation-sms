@@ -163,10 +163,13 @@ export function SchoolProvider({ children }) {
         const mods = modsResult.status === "fulfilled" ? modsResult.value : null;
         const campusData =
           campusResult.status === "fulfilled" ? campusResult.value : null;
-        // schoolsResult may be null when the super-admin endpoint was
-        // intentionally skipped for non-Super-Admin users; fall back to null
-        // so the apply() function receives a predictable value.
-        const allSchools = schoolsResult ?? null;
+        // schoolsResult is a Promise.allSettled entry, not the payload itself:
+        // unwrap `.value` only when the call fulfilled so the Super Admin's
+        // full school list actually reaches apply(). For non-Super-Admin users
+        // the call is `null`, which allSettled reports as a fulfilled null, so
+        // this still falls back to the user's memberships.
+        const allSchools =
+          schoolsResult?.status === "fulfilled" ? schoolsResult.value : null;
 
         const school =
           inst?.institution ||
