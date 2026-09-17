@@ -7,7 +7,7 @@
 // wrapper — NOT the payload. The provider must unwrap `.value`, otherwise the
 // school list is discarded and `availableSchools` collapses to the user's single
 // membership, which silently hides the dropdown gate
-// (`availableSchools.length > 1`) in App.jsx.
+// (`availableSchools.length > 0`) in App.jsx.
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -36,7 +36,7 @@ test("schoolContext unwraps the allSettled school list (not the result wrapper)"
 
 test("the navbar ships an openable platform-admin school dropdown", () => {
   assert.ok(
-    appJsx.includes("schoolDropdownOpen && availableSchools.length > 1"),
+    appJsx.includes("schoolDropdownOpen && availableSchools.length > 0"),
     "the dropdown must be gated on the open flag and the available school count"
   );
   assert.ok(

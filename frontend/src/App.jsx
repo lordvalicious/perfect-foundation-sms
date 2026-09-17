@@ -652,7 +652,7 @@ function Layout({ children, modules = { loaded: false, enabled: [], isPlatformAd
                     </span>
                     <ChevronDown size={12} />
                   </button>
-                  {schoolDropdownOpen && availableSchools.length > 1 && (
+                  {schoolDropdownOpen && availableSchools.length > 0 && (
                     <div className="school-switcher-dropdown">
                       {availableSchools.map((s) => (
                         <button
