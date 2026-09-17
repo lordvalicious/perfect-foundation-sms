@@ -258,6 +258,58 @@ class UserAllowedCampusTests(TestCase):
         )
         self.assertNotIn(other_campus.pk, user_allowed_campus_ids(user))
 
+    def test_principal_without_profile_gets_institution_campuses(self):
+        """A principal heads the whole school, even with no StaffProfile.
+
+        Regression: a principal provisioned only with a membership + role
+        assignment (no ``primary_campus``) previously resolved to an empty
+        campus scope, so every ``/api/students/?campus=…`` request 403'd.
+        """
+        user = make_user("prin", Role.PRINCIPAL, self.school)
+
+        self.assertFalse(is_global(user))
+        self.assertEqual(
+            user_allowed_campus_ids(user),
+            {self.campus_a.pk, self.campus_b.pk},
+        )
+
+    def test_vice_principal_without_profile_gets_institution_campuses(self):
+        user = make_user("vprin", Role.VICE_PRINCIPAL, self.school)
+        self.assertEqual(
+            user_allowed_campus_ids(user),
+            {self.campus_a.pk, self.campus_b.pk},
+        )
+
+    def test_principal_scope_locked_to_own_institution(self):
+        """A principal must never see another school's campus."""
+        other_school = School.objects.create(name="Other School")
+        other_campus = Campus.objects.create(
+            school=other_school,
+            name="Other Campus",
+        )
+        user = make_user("prin-scope", Role.PRINCIPAL, self.school)
+
+        allowed = user_allowed_campus_ids(user)
+
+        self.assertEqual(allowed, {self.campus_a.pk, self.campus_b.pk})
+        self.assertNotIn(other_campus.pk, allowed)
+
+    def test_principal_gets_no_campuses_for_foreign_institution(self):
+        """Leadership widening only applies to the resolved institution."""
+        other_school = School.objects.create(name="Other School")
+        Campus.objects.create(school=other_school, name="Other Campus")
+        user = make_user("prin-foreign", Role.PRINCIPAL, self.school)
+
+        self.assertEqual(
+            user_allowed_campus_ids(user, institution=other_school),
+            set(),
+        )
+
+    def test_campus_admin_without_profile_keeps_empty_scope(self):
+        """Campus-level roles stay profile-scoped — not school-wide."""
+        user = make_user("cadmin-none", Role.CAMPUS_ADMIN, self.school)
+        self.assertEqual(user_allowed_campus_ids(user), set())
+
 
 class CampusAccessTests(TestCase):
     def setUp(self):
@@ -327,6 +379,19 @@ class CampusAccessTests(TestCase):
         request = make_request(admin, f"/?campus={other_campus.pk}")
         with self.assertRaises(PermissionDenied):
             campus_access(request)
+
+    def test_principal_without_profile_can_request_own_school_campus(self):
+        principal = make_user("prin-campus", Role.PRINCIPAL, self.school)
+        request = make_request(principal, f"/?campus={self.campus_a.pk}")
+
+        result = campus_access(request)
+
+        self.assertFalse(result["global"])
+        self.assertEqual(result["requested"], self.campus_a.pk)
+        self.assertEqual(
+            result["allowed_ids"],
+            {self.campus_a.pk, self.campus_b.pk},
+        )
 
 
 class AssertCampusAllowedTests(TestCase):

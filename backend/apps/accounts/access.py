@@ -15,10 +15,13 @@ Implements the ERP permission rules:
 Role to campus-scope mapping:
 
 - ``super_admin``, ``admin``, ``org_admin``, ``head_office``,
-  ``academic`` -> GLOBAL (every campus).
-- ``campus_admin``, ``principal``, ``vice_principal``, ``accountant``,
-  ``hr``, ``receptionist``, ``librarian``, ``guard``, ``teacher``,
-  ``staff`` -> own campus only (from the user's profile).
+  ``academic`` -> GLOBAL (every campus of the active institution).
+- ``principal``, ``vice_principal`` -> own campus from the profile; a
+  leader with no campus assignment falls back to every campus of the
+  active institution (school-wide, never another school).
+- ``campus_admin``, ``accountant``, ``hr``, ``receptionist``,
+  ``librarian``, ``guard``, ``teacher``, ``staff`` -> own campus only
+  (from the user's profile).
 - ``student`` / ``parent`` -> the campus(es) linked to the student or the
   guardian's children. Their record-level scope is applied separately by
   the per-app scoping helpers.
@@ -108,6 +111,12 @@ def user_allowed_campus_ids(user, institution=None):
     campuses yields an empty scope (fail closed), so a campus id from another
     school can never be injected.
 
+    School leadership (``principal`` / ``vice_principal``) with no campus
+    assignment falls back to every active campus of their active institution:
+    they head the whole school, so a missing ``StaffProfile.primary_campus``
+    must not reduce them to an empty scope. Leaders assigned to a specific
+    campus keep that narrower scope, and the fallback never crosses schools.
+
     Everyone else gets the campuses recorded on their own profile plus the
     campuses linked to their teacher assignments / student enrollments so
     existing records without a ``primary_campus`` keep working.
@@ -183,6 +192,35 @@ def user_allowed_campus_ids(user, institution=None):
                 .filter(student_id__in=child_ids, status="active")
                 .values_list("campus_id", flat=True)
             )
+
+    # School leadership (principal / vice principal) that has NO campus
+    # assignment still heads the whole active school: fall back to every
+    # active campus of the resolved institution instead of an empty scope
+    # (which made every campus-scoped list — e.g. /api/students/?campus=…
+    # — 403 for such a user). Leaders explicitly assigned to a campus keep
+    # their narrower scope. This stays institution-scoped: campuses are
+    # only ever added from the resolved active institution (or the user's
+    # own primary institution), so no other school can leak through here.
+    leadership_institution = institution or getattr(
+        user, "primary_institution", None
+    )
+
+    if (
+        not ids
+        and leadership_institution is not None
+        and user.has_any_role(
+            [Role.PRINCIPAL, Role.VICE_PRINCIPAL],
+            institution=leadership_institution,
+        )
+    ):
+        from apps.schools.models import Campus
+
+        ids.update(
+            Campus.objects.filter(
+                status="active",
+                school=leadership_institution,
+            ).values_list("id", flat=True)
+        )
 
     return ids
 
