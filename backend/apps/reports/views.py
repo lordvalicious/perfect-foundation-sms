@@ -1853,12 +1853,11 @@ class ReportGenerateView(APIView):
         from django.test import RequestFactory
         from rest_framework.request import Request as DRFRequest
 
-        factory = RequestFactory()
         query_string = "&".join(f"{k}={v}" for k, v in filters.items() if v)
         url = f"/api/reports/{report_type}/?{query_string}"
 
+        factory = RequestFactory()
         raw_req = factory.get(url)
-        raw_req.user = request.user
         req = DRFRequest(raw_req)
         req._user = request.user
 

@@ -20,24 +20,6 @@ from apps.accounts.models import (
 from apps.reports.models import ReportDefinition, ReportCategory
 from apps.accounts.test_access import make_user
 
-# Patch django.test.RequestFactory.get to return DRF Request instead of WSGIRequest
-# This works around a bug in PDFExportView/PrintView where they create
-# WSGIRequest via RequestFactory.get() but the report views expect DRF Request.
-import django.test
-_original_django_request_factory_get = django.test.RequestFactory.get
-
-def _patched_django_request_factory_get(self, path, data=None, **extra):
-    from rest_framework.request import Request
-    # Call the original function directly to avoid recursion
-    wsgi_request = _original_django_request_factory_get(self, path, data, **extra)
-    # Convert WSGIRequest to DRF Request by wrapping it, but only if not already a DRF Request
-    from rest_framework.request import Request
-    if not isinstance(wsgi_request, Request):
-        return Request(wsgi_request)
-    return wsgi_request
-
-django.test.RequestFactory.get = _patched_django_request_factory_get
-
 
 class CoreCatalogTests(APITestCase):
     """Tests for the core reports catalog API endpoints."""

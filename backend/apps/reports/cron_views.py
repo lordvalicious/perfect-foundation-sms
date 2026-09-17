@@ -27,19 +27,31 @@ def _build_digest(request):
     """Compile the weekly numbers from the existing report views."""
     from django.utils.module_loading import import_string
     from django.utils import timezone
-    from django.test import RequestFactory
+    from django.http import HttpRequest
     from rest_framework.request import Request as DRFRequest
+    from urllib.parse import parse_qs
 
     today = timezone.localdate()
     month_start = today.replace(day=1)
 
-    factory = RequestFactory()
-
     def sub(report_type, **filters):
         view_class = import_string(REPORT_VIEW_MAP[report_type])
         query = "&".join(f"{k}={v}" for k, v in filters.items() if v)
-        raw = factory.get(f"/api/reports/{report_type}/?{query}")
-        req = DRFRequest(raw)
+        url = f"/api/reports/{report_type}/?{query}" if query else f"/api/reports/{report_type}/"
+
+        # Create proper Django HttpRequest instead of using RequestFactory
+        raw_req = HttpRequest()
+        raw_req.method = "GET"
+        raw_req.path = url
+        raw_req.GET = {}
+        if "?" in url:
+            from urllib.parse import parse_qs
+            query_part = url.split("?", 1)[1]
+            raw_req.GET = parse_qs(query_part)
+        raw_req.user = request.user
+        raw_req.META = {"HTTP_HOST": "testserver"}
+
+        req = DRFRequest(raw_req)
         req._user = request.user
 
         try:

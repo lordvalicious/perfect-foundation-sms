@@ -371,12 +371,31 @@ class PDFExportView(APIView):
             return Response({"detail": "This report does not support PDF export"}, status=400)
 
         # Get report data by calling the report endpoint
-        from django.test import RequestFactory
-        factory = RequestFactory()
-        report_request = factory.get(report_def.endpoint_url, request.GET.dict())
-        report_request.user = request.user
-        report_request.institution = getattr(request, "institution", None)
-        report_request.institution_membership = getattr(request, "institution_membership", None)
+        from django.http import HttpRequest
+        from rest_framework.request import Request as DRFRequest
+        from urllib.parse import parse_qs
+
+        # Build URL with query parameters
+        query_params = request.GET.dict()
+        query_string = "&".join(f"{k}={v}" for k, v in query_params.items() if v)
+        url = f"{report_def.endpoint_url}?{query_string}" if query_string else report_def.endpoint_url
+
+        # Create a proper Django HttpRequest to avoid RequestFactory issues
+        raw_req = HttpRequest()
+        raw_req.method = "GET"
+        raw_req.path = url
+        raw_req.GET = {}
+        if "?" in url:
+            from urllib.parse import parse_qs
+            query_part = url.split("?", 1)[1]
+            raw_req.GET = parse_qs(query_part)
+        raw_req.user = request.user
+        raw_req.META = {"HTTP_HOST": "testserver"}
+        raw_req.institution = getattr(request, "institution", None)
+        raw_req.institution_membership = getattr(request, "institution_membership", None)
+
+        report_request = DRFRequest(raw_req)
+        report_request._user = request.user
 
         # Import and call the view
         from django.urls import resolve
@@ -384,7 +403,7 @@ class PDFExportView(APIView):
             match = resolve(report_def.endpoint_url)
             view_func = match.func
             view_class = view_func.cls if hasattr(view_func, 'cls') else None
-        except:
+        except Exception:
             return Response({"detail": "Could not resolve report endpoint"}, status=500)
 
         if view_class:
@@ -440,19 +459,36 @@ class PrintView(APIView):
         if not report_def.supports_print:
             return Response({"detail": "This report does not support printing"}, status=400)
 
-        # Get report data
-        from django.test import RequestFactory
-        factory = RequestFactory()
-        report_request = factory.get(report_def.endpoint_url, request.GET.dict())
-        report_request.user = request.user
-        report_request.institution = getattr(request, "institution", None)
+        # Get report data using proper request construction (no RequestFactory)
+        from django.http import HttpRequest
+        from rest_framework.request import Request as DRFRequest
+        from urllib.parse import parse_qs
+
+        query_params = request.GET.dict()
+        query_string = "&".join(f"{k}={v}" for k, v in query_params.items() if v)
+        url = f"{report_def.endpoint_url}?{query_string}" if query_string else report_def.endpoint_url
+
+        raw_req = HttpRequest()
+        raw_req.method = "GET"
+        raw_req.path = url
+        raw_req.GET = {}
+        if "?" in url:
+            from urllib.parse import parse_qs
+            query_part = url.split("?", 1)[1]
+            raw_req.GET = parse_qs(query_part)
+        raw_req.user = request.user
+        raw_req.META = {"HTTP_HOST": "testserver"}
+        raw_req.institution = getattr(request, "institution", None)
+
+        report_request = DRFRequest(raw_req)
+        report_request._user = request.user
 
         from django.urls import resolve
         try:
             match = resolve(report_def.endpoint_url)
             view_func = match.func
             view_class = view_func.cls if hasattr(view_func, 'cls') else None
-        except:
+        except Exception:
             return Response({"detail": "Could not resolve report endpoint"}, status=500)
 
         if view_class:

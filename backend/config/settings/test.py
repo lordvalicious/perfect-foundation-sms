@@ -10,6 +10,9 @@ DATABASES = {
     }
 }
 
+# Ensure project-level templates are discoverable in tests (e.g., backend/templates/reports/print.html)
+TEMPLATES[0]["DIRS"] = [BASE_DIR / "templates"]
+
 # Disable throttling for tests to avoid rate-limit interference
 REST_FRAMEWORK = REST_FRAMEWORK.copy()
 REST_FRAMEWORK["DEFAULT_THROTTLE_CLASSES"] = []

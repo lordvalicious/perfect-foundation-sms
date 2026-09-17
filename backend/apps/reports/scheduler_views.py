@@ -337,11 +337,18 @@ class ScheduledReportCronView(APIView):
         executed = 0
         for schedule in due_schedules:
             try:
-                # Create a mock request for execution
-                from django.test import RequestFactory
-                factory = RequestFactory()
-                mock_request = factory.post("/")
-                mock_request.user = schedule.created_by
+                # Create a mock request for execution using proper HttpRequest
+                from django.http import HttpRequest
+                from rest_framework.request import Request as DRFRequest
+
+                mock_raw = HttpRequest()
+                mock_raw.method = "POST"
+                mock_raw.path = "/"
+                mock_raw.META = {"HTTP_HOST": "testserver"}
+                mock_raw.user = schedule.created_by
+
+                mock_request = DRFRequest(mock_raw)
+                mock_request._user = schedule.created_by
                 mock_request.institution = schedule.created_by.primary_institution
 
                 runner = ScheduledReportRunView()
