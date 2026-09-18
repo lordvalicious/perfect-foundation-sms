@@ -22,6 +22,15 @@
           "value": "csp-endpoint=\"/api/csp-report/\""
         }
       ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, must-revalidate"
+        }
+      ]
     }
   ]
 }

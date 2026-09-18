@@ -46,3 +46,6 @@ Thumbs.db
 # Browser / session cookies
 cookie.txt
 cookies.txt
+
+# Numeric debug artifacts accidentally created at repo root
+/[0-9]*
