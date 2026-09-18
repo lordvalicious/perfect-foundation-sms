@@ -5,6 +5,7 @@ from django.http import JsonResponse
 from django.urls import include, path, re_path  # type: ignore[reportMissingModuleSource]
 from django.utils import timezone
 from apps.core.views import home_view, run_migrations_view
+from apps.audit.views import CSPViolationReportView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 
@@ -115,6 +116,9 @@ urlpatterns = [
         "api/communication/",
         include("apps.communication.urls"),
     ),
+
+    # CSP violation reporting endpoint (alias for CSP report-uri /api/csp-report/)
+    path("api/csp-report/", CSPViolationReportView.as_view(), name="csp-report-alias"),
 
     path(
         "api/audit/",

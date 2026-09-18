@@ -18,6 +18,8 @@ class CSPViolationReportingTests(TestCase):
     """Tests for POST /api/audit/csp-report/ endpoint."""
 
     def setUp(self):
+        self._clear_throttle_cache()
+
         self.school_a = School.objects.create(name="Northfield Academy")
         self.campus_a = Campus.objects.create(school=self.school_a, name="Campus A")
         self.super_admin = make_user("sadmin", Role.SUPER_ADMIN, self.school_a)
@@ -35,6 +37,89 @@ class CSPViolationReportingTests(TestCase):
         self.client = APIClient()
         self.PASSWORD = "TestPass123!"
         self.endpoint = "/api/audit/csp-report/"
+        self.endpoint_alias = "/api/csp-report/"
+
+    def tearDown(self):
+        self._clear_throttle_cache()
+
+    def _clear_throttle_cache(self):
+        """Clear the throttle cache to avoid cross-test rate limiting."""
+        from django.core.cache import caches
+        for cache_name in ["default", "ratelimit"]:
+            cache = caches[cache_name]
+            # Clear different cache backend types
+            if hasattr(cache, '_cache'):
+                cache._cache.clear()
+            elif hasattr(cache, '_data'):
+                cache._data.clear()
+            elif hasattr(cache, 'clear'):
+                cache.clear()
+
+    def _as(self, user):
+        self.client.force_authenticate(user=None)
+        self.assertTrue(
+            self.client.login(username=user.username, password=self.PASSWORD)
+        )
+        self.client.force_authenticate(user=user)
+        return self.client
+
+    def _json(self, response):
+        try:
+            return json.loads(response.content)
+        except json.JSONDecodeError:
+            return {}
+
+    def _test_endpoint(self, endpoint, payload):
+        """Helper to test a CSP report payload on a given endpoint."""
+        response = self.client.post(endpoint, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        violation = CSPViolation.objects.first()
+        self.assertIsNotNone(violation)
+        return violation
+
+    # =========================================================================
+    # 1. Valid legacy payload
+    # =========================================================================
+    def test_legacy_payload_creates_violation(self):
+        """POST valid legacy csp-report format creates CSPViolation."""
+        payload = {
+            "csp-report": {
+                "document-uri": "https://example.com/page.html",
+                "referrer": "https://referrer.com/",
+                "blocked-uri": "https://evil.com/script.js",
+                "violated-directive": "script-src",
+                "effective-directive": "script-src",
+                "original-policy": "default-src 'self'; script-src 'self'",
+                "disposition": "enforce",
+                "script-sample": "alert('xss')",
+                "source-file": "https://example.com/page.html",
+                "line-number": 42,
+                "column-number": 10,
+                "status-code": 200,
+                "resource-type": "script",
+            }
+        }
+
+        response = self.client.post(self.endpoint, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        violation = CSPViolation.objects.first()
+        self.assertIsNotNone(violation)
+        self.assertEqual(violation.document_uri, "https://example.com/page.html")
+        self.assertEqual(violation.referrer, "https://referrer.com/")
+        self.assertEqual(violation.blocked_uri, "https://evil.com/script.js")
+        self.assertEqual(violation.violated_directive, "script-src")
+        self.assertEqual(violation.effective_directive, "script-src")
+        self.assertEqual(violation.original_policy, "default-src 'self'; script-src 'self'")
+        self.assertEqual(violation.disposition, "enforce")
+        self.assertEqual(violation.script_sample, "alert('xss')")
+        self.assertEqual(violation.source_file, "https://example.com/page.html")
+        self.assertEqual(violation.line_number, 42)
+        self.assertEqual(violation.column_number, 10)
+        self.assertEqual(violation.status_code, 200)
+        self.assertEqual(violation.resource_type, "script")
+        self.assertIsNone(violation.user)
+        self.assertIsNone(violation.institution)
 
     def _as(self, user):
         self.client.force_authenticate(user=None)
@@ -315,12 +400,6 @@ class CSPViolationReportingTests(TestCase):
     # =========================================================================
     # 5. Rate limiting (429)
     # =========================================================================
-    @override_settings(
-        CACHES={
-            "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
-            "ratelimit": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
-        }
-    )
     def test_rate_limit_exceeded_returns_429(self):
         """Exceeding rate limit returns 429."""
         payload = {
@@ -461,6 +540,125 @@ class CSPViolationReportingTests(TestCase):
         csp = response["Content-Security-Policy"]
         self.assertIn("script-src 'self' 'unsafe-inline'", csp)
         self.assertIn("style-src 'self' 'unsafe-inline'", csp)
+
+    # =========================================================================
+    # 9. CSP Report Alias Endpoint Regression Tests
+    # =========================================================================
+    def test_alias_endpoint_legacy_payload(self):
+        """POST valid legacy payload to /api/csp-report/ creates CSPViolation."""
+        payload = {
+            "csp-report": {
+                "document-uri": "https://example.com/page.html",
+                "violated-directive": "script-src",
+            }
+        }
+
+        response = self.client.post(self.endpoint_alias, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        violation = CSPViolation.objects.first()
+        self.assertIsNotNone(violation)
+        self.assertEqual(violation.document_uri, "https://example.com/page.html")
+        self.assertEqual(violation.violated_directive, "script-src")
+
+    def test_alias_endpoint_modern_payload(self):
+        """POST modern payload to /api/csp-report/ creates CSPViolation."""
+        payload = {
+            "type": "csp-violation",
+            "body": {
+                "documentURL": "https://example.com/page.html",
+                "violatedDirective": "script-src",
+            }
+        }
+
+        response = self.client.post(self.endpoint_alias, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        violation = CSPViolation.objects.first()
+        self.assertIsNotNone(violation)
+        self.assertEqual(violation.document_uri, "https://example.com/page.html")
+        self.assertEqual(violation.violated_directive, "script-src")
+
+    def test_alias_endpoint_get_returns_405(self):
+        """GET /api/csp-report/ returns 405 Method Not Allowed."""
+        response = self.client.get(self.endpoint_alias)
+        self.assertEqual(response.status_code, status.HTTP_405_METHOD_NOT_ALLOWED)
+
+    def test_alias_endpoint_oversized_returns_413(self):
+        """Oversized request to /api/csp-report/ returns 413."""
+        large_script = "x" * 70000
+        payload = {
+            "csp-report": {
+                "document-uri": "https://example.com/",
+                "violated-directive": "script-src",
+                "script-sample": large_script,
+            }
+        }
+
+        response = self.client.post(
+            self.endpoint_alias,
+            payload,
+            format="json",
+            HTTP_CONTENT_LENGTH=str(len(json.dumps(payload))),
+        )
+        self.assertEqual(response.status_code, 413)
+        self.assertEqual(CSPViolation.objects.count(), 0)
+
+    def test_alias_endpoint_rate_limiting(self):
+        """Rate limiting applies to /api/csp-report/."""
+        payload = {
+            "csp-report": {
+                "document-uri": "https://example.com/",
+                "violated-directive": "script-src",
+            }
+        }
+
+        # Make requests up to the limit
+        for i in range(100):
+            response = self.client.post(self.endpoint_alias, payload, format="json")
+            self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        # Next request should be rate limited
+        response = self.client.post(self.endpoint_alias, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+
+    def test_alias_endpoint_tenant_isolation(self):
+        """Tenant isolation works on /api/csp-report/."""
+        self.school_b = School.objects.create(name="Southfield Academy")
+        payload = {
+            "csp-report": {
+                "document-uri": "https://example.com/",
+                "violated-directive": "script-src",
+                "institution_id": self.school_b.id,
+            }
+        }
+
+        self._as(self.campus_admin)
+        response = self.client.post(self.endpoint_alias, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        violation = CSPViolation.objects.first()
+        self.assertEqual(violation.institution, self.school_a)
+        self.assertNotEqual(violation.institution, self.school_b)
+
+    def test_alias_endpoint_sanitization(self):
+        """Sanitization works on /api/csp-report/."""
+        payload = {
+            "csp-report": {
+                "document-uri": "https://example.com/page?query=value#fragment",
+                "violated-directive": "script-src",
+                "script-sample": "const api_key = 'secret123'; alert(1);",
+                "user-agent": "Mozilla/5.0 " + "x" * 600,
+            }
+        }
+
+        response = self.client.post(self.endpoint_alias, payload, format="json")
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
+        violation = CSPViolation.objects.first()
+        self.assertEqual(violation.document_uri, "https://example.com/page")
+        self.assertIn("api_key=***", violation.script_sample)
+        self.assertEqual(len(violation.user_agent), 503)
 
 
 class CSPViolationModelTests(TestCase):
