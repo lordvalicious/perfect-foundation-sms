@@ -39,7 +39,9 @@ class ContentSecurityPolicyMiddleware(MiddlewareMixin):
         "form-action 'self'; "
         "frame-ancestors 'none'; "
         "manifest-src 'self'; "
-        "worker-src 'self';"
+        "worker-src 'self'; "
+        "report-uri /api/csp-report/; "
+        "report-to csp-endpoint"
     )
 
     # CSP policy for development (allows localhost API)
@@ -55,7 +57,9 @@ class ContentSecurityPolicyMiddleware(MiddlewareMixin):
         "form-action 'self'; "
         "frame-ancestors 'none'; "
         "manifest-src 'self'; "
-        "worker-src 'self';"
+        "worker-src 'self'; "
+        "report-uri /api/csp-report/; "
+        "report-to csp-endpoint"
     )
 
     def process_response(self, request, response):
