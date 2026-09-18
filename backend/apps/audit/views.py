@@ -121,8 +121,9 @@ class CSPViolationReportView(APIView):
         document_uri = body.get("document-uri") or body.get("documentURL", "")
         referrer = body.get("referrer") or body.get("referrer", "")  # same key in both formats
         blocked_uri = body.get("blocked-uri") or body.get("blockedURL", "")
-        violated_directive = body.get("violated-directive") or body.get("violatedDirective", "")
-        effective_directive = body.get("effective-directive") or body.get("effectiveDirective", "")
+        # Modern Reporting API uses effectiveDirective as primary; fallback to violatedDirective for backwards compat
+        violated_directive = body.get("violated-directive") or body.get("violatedDirective", "") or body.get("effectiveDirective", "") or body.get("effective-directive", "")
+        effective_directive = body.get("effective-directive") or body.get("effectiveDirective", "") or body.get("violatedDirective", "") or body.get("violated-directive", "")
         original_policy = body.get("original-policy") or body.get("originalPolicy", "")
         disposition = body.get("disposition", "enforce")
         script_sample = body.get("script-sample") or body.get("scriptSample", "")
@@ -187,7 +188,16 @@ class CSPViolationReportView(APIView):
                 if field == "document-uri":
                     field_modern = "documentURL"
                 elif field == "violated-directive":
+                    # Modern Reporting API uses effectiveDirective as primary directive field
+                    # Accept either violatedDirective or effectiveDirective
                     field_modern = "violatedDirective"
+                    field_modern_alt = "effectiveDirective"
+                    if field not in body and field_modern not in body and field_modern_alt not in body:
+                        return Response(
+                            {"detail": f"Missing required field: {field} (expected violatedDirective or effectiveDirective)"},
+                            status=400,
+                        )
+                    continue
                 if field not in body and field_modern not in body:
                     return Response(
                         {"detail": f"Missing required field: {field}"},
