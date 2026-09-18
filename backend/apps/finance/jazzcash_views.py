@@ -17,6 +17,9 @@ import hashlib
 import hmac
 import logging
 import os
+import urllib.error
+import urllib.parse
+import urllib.request
 from datetime import datetime, timedelta
 
 from django.http import JsonResponse
@@ -80,6 +83,76 @@ def _timestamp_parts():
         now.strftime("%Y%m%d%H%M%S"),
         expiry.strftime("%Y%m%d%H%M%S"),
     )
+
+
+def build_checkout_params(config, invoice, request, reference, now_stamp, expiry_stamp):
+    """Construct the signed JazzCash merchant-form parameter set.
+
+    This runs entirely server-side: the merchant password and integrity
+    salt are consumed here and must never be returned to a client.
+    """
+    return {
+        "pp_Version": "1.1",
+        "pp_TxnType": "MWALLET",
+        "pp_Language": "EN",
+        "pp_MerchantId": config["merchant_id"],
+        "pp_SubMerchantId": "",
+        "pp_Password": config["password"],
+        "pp_BillReference": invoice.invoice_number,
+        "pp_Description": f"School fees {invoice.invoice_number}",
+        "pp_TxnRefNo": reference,
+        "pp_Amount": int(invoice.balance * 100),
+        "pp_TxnDateTime": now_stamp,
+        "pp_BillExpiryDate": expiry_stamp,
+        "pp_TxnExpiryDateTime": expiry_stamp,
+        "pp_ReturnURL": request.build_absolute_uri(
+            "/api/finance/jazzcash/callback/"
+        ),
+        "ppmpf_1": str(invoice.id),
+    }
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    """Capture the gateway's redirect instead of following it server-side."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+_REDIRECT_CODES = {301, 302, 303, 307, 308}
+
+
+def submit_checkout_to_gateway(post_url, params):
+    """POST the signed checkout to the JazzCash portal server-side.
+
+    Returns ``(checkout_url, error)``. On a redirect the gateway's target
+    URL is returned so the client can continue at the hosted payment page;
+    on any other outcome an ``error`` string is returned and the secret
+    parameter set never reaches the client.
+    """
+    encoded = urllib.parse.urlencode(params).encode("utf-8")
+    req = urllib.request.Request(post_url, data=encoded, method="POST")
+
+    try:
+        opener = urllib.request.build_opener(_NoRedirect)
+        with opener.open(req, timeout=20) as response:
+            status = getattr(response, "status", 200)
+            if status in _REDIRECT_CODES:
+                location = response.headers.get("Location")
+                if location:
+                    return response.geturl() + location if False else location, None
+            return None, f"gateway_http_{status}"
+    except urllib.error.HTTPError as exc:
+        location = exc.headers.get("Location")
+        if exc.code in _REDIRECT_CODES and location:
+            return location, None
+        logger.warning(
+            "JazzCash checkout submission returned HTTP %s", exc.code
+        )
+        return None, f"gateway_http_{exc.code}"
+    except Exception as exc:
+        logger.warning("JazzCash checkout submission failed: %s", exc)
+        return None, "gateway_unreachable"
 
 
 class JazzCashCheckoutView(APIView):
@@ -162,9 +235,26 @@ class JazzCashCheckoutView(APIView):
             },
         )
 
+        checkout_url, gateway_error = submit_checkout_to_gateway(
+            config["post_url"], params
+        )
+
+        if gateway_error:
+            logger.warning(
+                "JazzCash checkout submission failed: %s", gateway_error
+            )
+            return JsonResponse(
+                {
+                    "detail": "Could not start the JazzCash checkout.",
+                    "code": gateway_error,
+                },
+                status=502,
+            )
+
         return JsonResponse({
-            "post_url": config["post_url"],
-            "params": params,
+            "checkout_url": checkout_url,
+            "invoice_id": invoice.id,
+            "reference": reference,
         })
 
 

@@ -132,6 +132,37 @@ cat dump.sql | python manage.py dbshell
   `DJANGO_CSRF_TRUSTED_ORIGINS` to the real domains (they already include
   your Vercel origin).
 
+## 6. Operations: CSP violation retention
+
+CSP violation reports are sanitized and stored in the `CSPViolation` table.
+Records are retained for **90 days** by default and must be purged on a
+schedule to keep the table bounded.
+
+### Cleanup command
+
+```sh
+python manage.py cleanup_csp_violations --days=90
+```
+
+- **Purpose:** delete `CSPViolation` records older than the retention period.
+- **Default retention:** `90` days (see `--days` help).
+- **Override:** `--days=<N>` sets a custom retention period; `--days` must be
+  a positive integer (`0` and negative values are rejected to prevent
+  accidental full-table deletion).
+- **Deletion predicate:** `timestamp < now - retention` (timezone-aware,
+  using the record's authoritative received timestamp). Single database-side
+  queryset delete — records are never loaded into Python.
+- **Safety:** time-based only (never by user/institution/IP/directive); safe
+  to run repeatedly; safe with zero matching records; deletes across **all**
+  institutions. Output is an operational count only — no report payloads,
+  IPs, user agents, or URLs are printed.
+- **Scheduling responsibility:** the Vercel serverless backend has no
+  persistent shell and Vercel Cron can only invoke HTTP endpoints. A cleanup
+  HTTP endpoint is intentionally **not** exposed. Management command
+  implemented; production scheduling remains an operational responsibility —
+  run the command from any host with access to the production Django
+  environment (external cron, CI, or manual operator run).
+
 ## Notes / limitations
 
 - **Neon free tier**: 0.5 GB storage, no expiry, and the database sleeps

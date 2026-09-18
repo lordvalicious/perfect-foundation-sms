@@ -2037,3 +2037,216 @@ class AccountantIsolationTests(TestCase):
             format="json",
         )
         self.assertEqual(resp.status_code, 403)
+
+
+# ----- JazzCash Checkout Security Tests (F1) -----
+class JazzCashCheckoutSecurityTests(TestCase):
+    """Regression tests for F1: pp_Password must never reach the client.
+
+    The view builds params server-side and submits via
+    submit_checkout_to_gateway(); the client only receives
+    checkout_url + invoice_id + reference — no secrets.
+    """
+
+    def _make_school(self):
+        school = School.objects.create(name="Test School")
+        campus = Campus.objects.create(school=school, name="Test Campus")
+        student = Student.objects.create(
+            first_name="Test", last_name="Student", admission_number="ST-001"
+        )
+        guardian = Guardian.objects.create(name="Test Parent", relationship="Father", phone="03000000000")
+        student.guardian = guardian
+        student.save()
+        enrollment = Enrollment.objects.create(
+            student=student,
+            class_obj=Class.objects.create(unit=campus, name="Primary"),
+            section=Section.objects.create(class_obj=Class.objects.create(unit=campus, name="Grade 1"), name="A"),
+            academic_year=AcademicYear.objects.create(
+                school=school, name="2026-2027", start_date=date(2026, 8, 1), end_date=date(2027, 7, 31)
+            ),
+            campus=campus,
+            status="active",
+        )
+        return school, campus, student, enrollment
+
+    def _make_invoice(self, school, enrollment):
+        return Invoice.objects.create(
+            invoice_number="JC-TEST-001",
+            student=enrollment.student,
+            enrollment=enrollment,
+            academic_year=enrollment.academic_year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            institution=school,
+        )
+
+    def _make_authenticated_client(self, school):
+        user = User.objects.create_user(username="jc_tester", email="jc@test.edu", password="pass")
+        membership = InstitutionMembership.objects.create(user=user, institution=school)
+        RoleAssignment.objects.create(membership=membership, role=Role.ACCOUNTANT)
+        client = APIClient()
+        client.force_login(user)
+        return user, client
+
+    def _mock_gateway_redirect(self, patch):
+        patch(
+            "apps.finance.jazzcash_views.submit_checkout_to_gateway",
+            return_value=("https://sandbox.example.test/checkout/abc", None),
+        )
+
+    @patch.dict(
+        "os.environ",
+        {
+            "JAZZCASH_MERCHANT_ID": "test_merchant",
+            "JAZZCASH_PASSWORD": "TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK",
+            "JAZZCASH_INTEGRITY_SALT": "test_salt_123",
+            "JAZZCASH_ENV": "sandbox",
+        },
+    )
+    def test_authenticated_checkout_no_credential_leakage(self):
+        """A authenticated user gets a checkout URL without any password leak."""
+        school, campus, student, enrollment = self._make_school()
+        invoice = self._make_invoice(school, enrollment)
+        user, client = self._make_authenticated_client(school)
+
+        with self._mock_gateway_redirect(patch):
+            resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("checkout_url", data)
+        self.assertEqual(data["invoice_id"], invoice.pk)
+        self.assertIn("reference", data)
+
+        # --- no password anywhere in the response ---
+        response_str = json.dumps(data)
+        self.assertNotIn("pp_Password", response_str)
+        self.assertNotIn("TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK", response_str)
+
+        # --- response shape is exactly the three public fields ---
+        self.assertEqual(set(data.keys()), {"checkout_url", "invoice_id", "reference"})
+
+    @patch.dict(
+        "os.environ",
+        {
+            "JAZZCASH_MERCHANT_ID": "test_merchant",
+            "JAZZCASH_PASSWORD": "TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK",
+            "JAZZCASH_INTEGRITY_SALT": "test_salt_123",
+            "JAZZCASH_ENV": "sandbox",
+        },
+    )
+    def test_response_contains_no_merchant_credentials(self):
+        """The JSON response must contain ONLY checkout_url, invoice_id, reference."""
+        school, campus, student, enrollment = self._make_school()
+        invoice = self._make_invoice(school, enrollment)
+        user, client = self._make_authenticated_client(school)
+
+        with self._mock_gateway_redirect(patch):
+            resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertNotIn("params", data)
+        self.assertNotIn("post_url", data)
+        self.assertNotIn("merchant_id", data)
+        self.assertNotIn("JAZZCASH_MERCHANT_ID", data)
+        self.assertNotIn("JAZZCASH_PASSWORD", data)
+        self.assertNotIn("JAZZCASH_INTEGRITY_SALT", data)
+        self.assertNotIn("pp_MerchantID", data)
+        self.assertNotIn("pp_Password", data)
+
+    @patch.dict(
+        "os.environ",
+        {
+            "JAZZCASH_MERCHANT_ID": "test_merchant",
+            "JAZZCASH_PASSWORD": "TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK",
+            "JAZZCASH_INTEGRITY_SALT": "test_salt_123",
+            "JAZZCASH_ENV": "sandbox",
+        },
+    )
+    def test_server_side_params_still_contain_credential(self):
+        """The server-side gateway submission still has the password."""
+        school, campus, student, enrollment = self._make_school()
+        invoice = self._make_invoice(school, enrollment)
+        user, client = self._make_authenticated_client(school)
+
+        with self._mock_gateway_redirect(patch):
+            # Capture the call arguments
+            with patch("apps.finance.jazzcash_views.submit_checkout_to_gateway") as mock_submit:
+                mock_submit.return_value = ("https://sandbox.example.test/checkout/abc", None)
+                resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+
+        # The mock was called with params that include the test password
+        call_kwargs = mock_submit.call_args
+        passed_params = call_kwargs[0][1]  # second positional arg is params dict
+        self.assertIn("pp_Password", passed_params)
+        self.assertEqual(
+            passed_params["pp_Password"],
+            "TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK",
+        )
+
+    @patch.dict(
+        "os.environ",
+        {
+            "JAZZCASH_MERCHANT_ID": "test_merchant",
+            "JAZZCASH_PASSWORD": "TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK",
+            "JAZZCASH_INTEGRITY_SALT": "test_salt_123",
+            "JAZZCASH_ENV": "sandbox",
+        },
+    )
+    def test_anonymous_request_rejected(self):
+        """Unauthenticated POST to the endpoint returns 403."""
+        school, campus, student, enrollment = self._make_school()
+        invoice = self._make_invoice(school, enrollment)
+
+        with self._mock_gateway_redirect(patch):
+            resp = self.client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+
+        self.assertEqual(resp.status_code, 403)
+
+    @patch.dict(
+        "os.environ",
+        {
+            "JAZZCASH_MERCHANT_ID": "test_merchant",
+            "JAZZCASH_PASSWORD": "TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK",
+            "JAZZCASH_INTEGRITY_SALT": "test_salt_123",
+            "JAZZCASH_ENV": "sandbox",
+        },
+    )
+    def test_missing_jazzconfig_fails_closed(self):
+        """When credentials are missing the endpoint returns 503."""
+        # Remove the test env vars temporarily
+        with patch.dict("os.environ", {}, clear=True):
+            school, campus, student, enrollment = self._make_school()
+            invoice = self._make_invoice(school, enrollment)
+            user, client = self._make_authenticated_client(school)
+
+            with self._mock_gateway_redirect(patch):
+                resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+
+        self.assertEqual(resp.status_code, 503)
+        # Ensure no secret values leak in the error detail
+        self.assertNotIn("JAZZCASH_PASSWORD", resp.json().get("detail", ""))
+
+    @patch.dict(
+        "os.environ",
+        {
+            "JAZZCASH_MERCHANT_ID": "test_merchant",
+            "JAZZCASH_PASSWORD": "TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK",
+            "JAZZCASH_INTEGRITY_SALT": "test_salt_123",
+            "JAZZCASH_ENV": "sandbox",
+        },
+    )
+    def test_invoice_no_outstanding_balance(self):
+        """An invoice with zero balance returns 400."""
+        school, campus, student, enrollment = self._make_school()
+        # Create invoice with zero balance by not setting fee structure / amount
+        invoice = self._make_invoice(school, enrollment)
+        # Set balance to 0 manually (Invoice.balance is derived from invoice items)
+        invoice.balance = 0
+        invoice.save()
+
+        with self._mock_gateway_redirect(patch):
+            resp = self.client_a.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+
+        self.assertEqual(resp.status_code, 400)
