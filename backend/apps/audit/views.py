@@ -4,7 +4,6 @@ import re
 from urllib.parse import urlparse, urlunparse
 
 from django.conf import settings
-from django.conf import settings
 from django.db.models import Q
 from django.http import HttpResponse
 from rest_framework import generics, status
@@ -50,131 +49,23 @@ class CSPViolationReportView(APIView):
             return url
 
     def _truncate(self, s, max_len):
-        if s and len(s) > 80:
-            return s[:80] + "..."
+        if s and len(s) > max_len:
+            return s[:max_len] + "..."
         return s
 
     def _sanitize_script_sample(self, sample):
         if not sample:
             return ""
         # Truncate to 80 chars
-        sample = sample[:80] + "..." if len(sample) > 80 else sample
+        sample = self._truncate(sample, 80)
         # Redact secrets
-        import re
         sample = re.sub(
-            r'(api[_-]?key|token|secret|password|authorization)["\']?\s*[:=]\s*["\']?[^"\'\s]+',
+            r'(api[_-]?key|token|secret|password|authorization|secretkey|access[_-]?token)["\']?\s*[:=]\s*["\']?[^"\'\s]+',
             r'\1=***',
             sample,
             flags=re.IGNORECASE
         )
         return sample
-
-    def _sanitize_url(self, url):
-        """Remove query string and fragment from URL."""
-        if not url:
-            return ""
-        try:
-            parsed = urlparse(url)
-            return urlunparse((
-                parsed.scheme, parsed.netloc, parsed.path, '', '', ''
-            ))
-        except Exception:
-            return url
-
-    def _get_client_ip(self, request):
-        """Extract client IP from request."""
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
-
-    def _extract_report_data(self, report, request):
-        """Extract and sanitize report data from the CSP violation report."""
-        def sanitize_url(url):
-            """Remove query string and fragment from URL."""
-            if not url:
-                return ""
-            try:
-                parsed = urlparse(url)
-                return urlunparse((
-                    parsed.scheme, parsed.netloc, parsed.path, '', '', ''
-                ))
-            except Exception:
-                return url
-
-        def truncate(s, max_len):
-            if s and len(s) > 80:
-                return s[:80] + "..."
-            return s
-
-        def sanitize_script_sample(sample):
-            if not sample:
-                return ""
-            # Truncate to 80 chars
-            sample = sample[:80] + "..." if len(sample) > 80 else sample
-            # Redact secrets
-            import re
-            sample = re.sub(
-                r'(api[_-]?key|token|secret|password|authorization)["\']?\s*[:=]\s*["\']?[^"\'\s]+',
-                r'\1=***',
-                sample,
-                flags=re.IGNORECASE
-            )
-            return sample
-
-        # Extract and sanitize fields
-        document_uri = report.get("document-uri", "")
-        referrer = report.get("referrer", "")
-        blocked_uri = report.get("blocked-uri", "")
-        violated_directive = report.get("violated-directive", "")
-        effective_directive = report.get("effective-directive", "")
-        original_policy = report.get("original-policy", "")
-        disposition = report.get("disposition", "enforce")
-        script_sample = report.get("script-sample", "")
-        source_file = report.get("source-file", "")
-        line_number = report.get("line-number")
-        column_number = report.get("column-number")
-        status_code = report.get("status-code")
-        resource_type = report.get("resource-type", "")
-
-        # Sanitize URLs
-        document_uri = self._sanitize_url(document_uri)
-        referrer = self._sanitize_url(referrer)
-        blocked_uri = self._sanitize_url(blocked_uri)
-
-        # Sanitize script sample
-        script_sample = truncate(script_sample, 80)
-
-        # Sanitize script sample
-        script_sample = sanitize_script_sample(script_sample)
-
-        return {
-            "document-uri": document_uri,
-            "referrer": referrer,
-            "blocked-uri": blocked_uri,
-            "violated-directive": violated_directive,
-            "effective-directive": effective_directive,
-            "original-policy": original_policy,
-            "disposition": disposition,
-            "script-sample": script_sample,
-            "source-file": report.get("source-file", ""),
-            "line-number": report.get("line-number"),
-            "column-number": report.get("column-number"),
-            "status-code": report.get("status-code", 0),
-            "resource-type": report.get("resource-type", ""),
-        }
-
-    def _sanitize_url(self, url):
-        """Remove query string and fragment from URL."""
-        if not url:
-            return ""
-        try:
-            parsed = urlparse(url)
-            return urlunparse((
-                parsed.scheme, parsed.netloc, parsed.path, '', '', ''
-            ))
-        except Exception:
-            return url
 
     def _get_client_ip(self, request):
         """Extract client IP from request."""
@@ -185,7 +76,7 @@ class CSPViolationReportView(APIView):
 
     def _extract_report_data(self, report, request):
         """Extract and sanitize report data from the CSP violation report.
-        
+
         Supports both legacy 'csp-report' format and modern Reporting API v1 format.
         """
         def sanitize_url(url):
@@ -201,8 +92,8 @@ class CSPViolationReportView(APIView):
                 return url
 
         def truncate(s, max_len):
-            if s and len(s) > 80:
-                return s[:80] + "..."
+            if s and len(s) > max_len:
+                return s[:max_len] + "..."
             return s
 
         def sanitize_script_sample(sample):
@@ -211,9 +102,8 @@ class CSPViolationReportView(APIView):
             # Truncate to 80 chars
             sample = sample[:80] + "..." if len(sample) > 80 else sample
             # Redact secrets
-            import re
             sample = re.sub(
-                r'(api[_-]?key|token|secret|password|authorization)["\']?\s*[:=]\s*["\']?[^"\'\s]+',
+                r'(api[_-]?key|token|secret|password|authorization|secretkey|access[_-]?token)["\']?\s*[:=]\s*["\']?[^"\'\s]+',
                 r'\1=***',
                 sample,
                 flags=re.IGNORECASE
@@ -223,15 +113,15 @@ class CSPViolationReportView(APIView):
         # Handle both legacy 'csp-report' format and modern Reporting API format
         # Legacy format: { "csp-report": { "document-uri": "...", ... } }
         # Modern format: { "type": "csp-violation", "body": { "documentURL": "...", ... } }
-        
+
         # Check if this is the modern Reporting API format
         body = report.get("body", report)
-        
+
         # Extract and sanitize fields (supporting both legacy and modern field names)
         document_uri = body.get("document-uri") or body.get("documentURL", "")
-        referrer = body.get("referrer") or body.get("referrer", "")
+        referrer = body.get("referrer") or body.get("referrer", "")  # same key in both formats
         blocked_uri = body.get("blocked-uri") or body.get("blockedURL", "")
-        violated_directive = body.get("violated-directive") or body.get("violated-directive", "")
+        violated_directive = body.get("violated-directive") or body.get("violatedDirective", "")
         effective_directive = body.get("effective-directive") or body.get("effectiveDirective", "")
         original_policy = body.get("original-policy") or body.get("originalPolicy", "")
         disposition = body.get("disposition", "enforce")
@@ -241,15 +131,15 @@ class CSPViolationReportView(APIView):
         column_number = body.get("column-number") or body.get("columnNumber")
         status_code = body.get("status-code") or body.get("statusCode")
         resource_type = body.get("resource-type") or body.get("resourceType", "")
+        user_agent = body.get("user-agent") or body.get("userAgent", "")
 
         # Sanitize URLs
         document_uri = self._sanitize_url(document_uri)
         referrer = self._sanitize_url(referrer)
         blocked_uri = self._sanitize_url(blocked_uri)
+        source_file = self._sanitize_url(source_file)
 
         # Sanitize script sample
-        script_sample = body.get("script-sample") or body.get("scriptSample", "")
-        script_sample = self._truncate(script_sample, 80)
         script_sample = self._sanitize_script_sample(script_sample)
 
         return {
@@ -261,31 +151,13 @@ class CSPViolationReportView(APIView):
             "original-policy": original_policy,
             "disposition": disposition,
             "script-sample": script_sample,
-            "source-file": body.get("source-file") or body.get("sourceFile", ""),
-            "line-number": report.get("line-number") or body.get("lineNumber"),
-            "column-number": report.get("column-number") or body.get("columnNumber"),
-            "status-code": report.get("status-code") or report.get("statusCode"),
-            "resource-type": body.get("resource-type") or body.get("resourceType", ""),
+            "source-file": source_file,
+            "line-number": line_number,
+            "column-number": column_number,
+            "status-code": status_code if status_code is not None else 0,
+            "resource-type": resource_type,
+            "user-agent": user_agent,
         }
-
-    def _sanitize_url(self, url):
-        """Remove query string and fragment from URL."""
-        if not url:
-            return ""
-        try:
-            parsed = urlparse(url)
-            return urlunparse((
-                parsed.scheme, parsed.netloc, parsed.path, '', '', ''
-            ))
-        except Exception:
-            return url
-
-    def _get_client_ip(self, request):
-        """Extract client IP from request."""
-        forwarded = request.META.get("HTTP_X_FORWARDED_FOR")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.META.get("REMOTE_ADDR")
 
     def post(self, request):
         # Check request body size before processing (max 64KB for CSP reports)
@@ -299,18 +171,35 @@ class CSPViolationReportView(APIView):
         # Handle both legacy 'csp-report' format and new Reporting API format
         if "csp-report" in request.data:
             report = request.data["csp-report"]
+            is_modern = False
         else:
             # New Reporting API format
             report = request.data
+            is_modern = True
 
         # Validate required fields
         required_fields = ["document-uri", "violated-directive"]
         for field in required_fields:
-            if field not in request.data and field not in report:
-                return Response(
-                    {"detail": f"Missing required field: {field}"},
-                    status=400,
-                )
+            if is_modern:
+                # Modern format: check in body
+                body = report.get("body", {})
+                field_modern = field.replace("-", "")  # convert to camelCase style
+                if field == "document-uri":
+                    field_modern = "documentURL"
+                elif field == "violated-directive":
+                    field_modern = "violatedDirective"
+                if field not in body and field_modern not in body:
+                    return Response(
+                        {"detail": f"Missing required field: {field}"},
+                        status=400,
+                    )
+            else:
+                # Legacy format: check in report directly
+                if field not in report:
+                    return Response(
+                        {"detail": f"Missing required field: {field}"},
+                        status=400,
+                    )
 
         report_data = self._extract_report_data(report, request)
 
