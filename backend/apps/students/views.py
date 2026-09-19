@@ -11,6 +11,7 @@ from rest_framework.exceptions import (
     ValidationError as RestValidationError,
 )
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 from decimal import Decimal
 
@@ -1151,9 +1152,21 @@ class TransferCertificateCancelView(APIView):
 
 
 class TransferCertificateVerifyView(APIView):
-    """Public endpoint to verify a transfer certificate by verification code."""
+    """Public endpoint to verify a transfer certificate by verification code.
+
+    Returns a deliberately minimal payload confirming that the certificate
+    exists and is currently issued. Sensitive student PII (date of birth,
+    admission number, reason, conduct, issuer) is intentionally NOT exposed
+    here - use the authenticated detail endpoints for those fields.
+
+    Unknown, cancelled or draft certificates return 404. Because the endpoint
+    is public, requests are throttled per client via the
+    ``transfer_certificate_verify`` throttle scope.
+    """
 
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "transfer_certificate_verify"
 
     def get(self, request, code):
         certificate = get_object_or_404(
@@ -1161,28 +1174,14 @@ class TransferCertificateVerifyView(APIView):
                 institution__isnull=False,
                 verification_code=code.upper(),
                 status="issued",
-            ),
-            pk=pk,
+            )
         )
-        # For public verification, return limited info
         data = {
             "certificate_number": certificate.certificate_number,
-            "verification_code": certificate.verification_code,
             "student_name": certificate.full_name,
-            "admission_number": certificate.admission_number,
-            "date_of_birth": certificate.date_of_birth,
             "campus": certificate.campus.name,
-            "academic_year": certificate.academic_year.name,
-            "class_name": certificate.class_obj.name,
-            "section_name": certificate.section.name,
-            "admission_date": certificate.admission_date,
-            "leaving_date": certificate.leaving_date,
-            "reason": certificate.get_reason_display(),
-            "final_grade": certificate.final_grade,
-            "conduct": certificate.conduct,
-            "status": certificate.status,
             "issued_at": certificate.issued_at,
-            "issued_by": certificate.issued_by.get_full_name() if certificate.issued_by else None,
+            "status": certificate.status,
         }
         return Response(data)
 

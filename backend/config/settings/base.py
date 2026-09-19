@@ -242,6 +242,9 @@ REST_FRAMEWORK = {
         "password_reset": "10/hour",
         "email_verify": "10/hour",
         "public_apply": "20/hour",
+        # Public transfer-certificate verification: high-entropy 8-char codes,
+        # throttled to keep brute-force/enumeration impractical.
+        "transfer_certificate_verify": "10/min",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
