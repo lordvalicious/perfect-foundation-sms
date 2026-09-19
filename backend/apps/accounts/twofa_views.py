@@ -10,6 +10,7 @@ from django.db import models
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
 from .models import TwoFABackupCode
@@ -168,9 +169,22 @@ class TwoFABackupCodesView(APIView):
 
 
 class TwoFAVerifyBackupCodeView(APIView):
-    """Verify a backup code for 2FA login."""
+    """Verify a backup code for 2FA login.
+
+    Deliberately returns one uniform 401 body for every failure (missing
+    fields, unknown identifier, account without 2FA, wrong/used code) so the
+    endpoint leaks nothing about whether an identifier exists or a code is
+    merely wrong. Because the endpoint is unauthenticated it is throttled per
+    client via the ``twofa_backup_verify`` scope. Code hashes are compared
+    with hmac.compare_digest (constant time); salted HMAC rows and legacy
+    bare-SHA rows are both supported.
+    """
 
     permission_classes = []
+    throttle_classes = [ScopedRateThrottle]
+    throttle_scope = "twofa_backup_verify"
+
+    FAILURE_DETAIL = "Invalid credentials."
 
     def post(self, request):
         from django.contrib.auth import get_user_model
@@ -179,19 +193,12 @@ class TwoFAVerifyBackupCodeView(APIView):
         identifier = request.data.get("username") or request.data.get("email", "")
         backup_code = str(request.data.get("backup_code") or "").strip().upper()
 
-        if not identifier or not backup_code:
-            return Response(
-                {"detail": "Username/email and backup code required."}, status=400
-            )
-
         user = User.objects.filter(
             models.Q(email__iexact=identifier) | models.Q(username=identifier)
         ).first()
 
-        if not user or not user.twofa_enabled:
-            return Response(
-                {"detail": "Invalid credentials."}, status=401
-            )
+        if not identifier or not backup_code or not user or not user.twofa_enabled:
+            return Response({"detail": self.FAILURE_DETAIL}, status=401)
 
         # Check backup codes
         unused_codes = user.twofa_backup_codes.filter(used_at__isnull=True)
@@ -202,14 +209,12 @@ class TwoFAVerifyBackupCodeView(APIView):
                 # Legacy pre-hardening rows (bare SHA-256).
                 candidate = hashlib.sha256(backup_code.encode()).hexdigest()
 
-            if candidate == code_obj.code_hash:
+            if hmac.compare_digest(candidate, code_obj.code_hash):
                 code_obj.used_at = timezone.now()
                 code_obj.save(update_fields=["used_at"])
                 return Response({"valid": True})
 
-        return Response(
-            {"detail": "Invalid or used backup code."}, status=401
-        )
+        return Response({"detail": self.FAILURE_DETAIL}, status=401)
 
 
 class TwoFADisableView(APIView):

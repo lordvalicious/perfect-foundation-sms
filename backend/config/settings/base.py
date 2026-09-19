@@ -245,6 +245,9 @@ REST_FRAMEWORK = {
         # Public transfer-certificate verification: high-entropy 8-char codes,
         # throttled to keep brute-force/enumeration impractical.
         "transfer_certificate_verify": "10/min",
+        # 2FA backup-code verification is unauthenticated; throttles
+        # brute-force of the 8-char codes and keeps failures uniform.
+        "twofa_backup_verify": "10/min",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }

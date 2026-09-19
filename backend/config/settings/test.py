@@ -24,6 +24,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "public_apply": "1000000/hour",
     "email_verify": "1000000/hour",
     "transfer_certificate_verify": "1000000/hour",
+    "twofa_backup_verify": "1000000/hour",
 }
 
 PASSWORD_HASHERS = [
