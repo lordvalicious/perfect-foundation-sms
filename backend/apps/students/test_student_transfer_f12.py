@@ -36,7 +36,7 @@ class StudentTransferTenantIsolationTests(TestCase):
         self.school_a = School.objects.create(name="Northfield Academy")
         self.campus_a1 = Campus.objects.create(school=self.school_a, name="Campus A1")
         self.campus_a2 = Campus.objects.create(school=self.school_a, name="Campus A2")
-        
+
         # School B
         self.school_b = School.objects.create(name="Southfield Academy")
         self.campus_b1 = Campus.objects.create(school=self.school_b, name="Campus B1")
@@ -150,39 +150,39 @@ class StudentTransferTenantIsolationTests(TestCase):
     def test_cross_institution_student_transfer_denied(self):
         """Campus admin from School A cannot transfer student from School B."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a1.pk, "student_id": self.student_b.pk, "reason": "test"},
             format="json",
         )
-        
+
         # Student from School B should not be found when requested by School A admin
         self.assertEqual(response.status_code, 404)
 
     def test_cross_institution_campus_target_denied(self):
         """Campus admin from School A cannot target campus in School B."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_b1.pk, "student_id": self.student_a.pk, "reason": "test"},
             format="json",
         )
-        
+
         # Campus from School B should not be found when requested by School A admin
         self.assertEqual(response.status_code, 404)
 
     def test_auto_detect_within_institution_allowed(self):
         """Campus admin can auto-detect student within their institution."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a1.pk, "reason": "test"},
             format="json",
         )
-        
+
         # Auto-detect should find student in user's institution
         self.assertEqual(response.status_code, 201)
         transfer_id = response.json()["transfer_id"]
@@ -191,26 +191,26 @@ class StudentTransferTenantIsolationTests(TestCase):
     def test_cross_institution_auto_detect_denied(self):
         """Campus admin from School A cannot auto-detect student from School B when student_id provided."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a1.pk, "student_id": self.student_b.pk, "reason": "test"},
             format="json",
         )
-        
+
         # Student from School B should not be found when requested by School A admin
         self.assertEqual(response.status_code, 404)
 
     def test_same_campus_transfer_allowed(self):
         """Campus admin can transfer student within their assigned campus."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a1.pk, "student_id": self.student_a.pk, "reason": "transfer"},
             format="json",
         )
-        
+
         self.assertEqual(response.status_code, 201)
         transfer_id = response.json()["transfer_id"]
         self.assertIsNotNone(transfer_id)
@@ -218,26 +218,26 @@ class StudentTransferTenantIsolationTests(TestCase):
     def test_cross_campus_same_institution_denied(self):
         """Campus admin cannot transfer student to a different campus within same institution."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a2.pk, "student_id": self.student_a.pk, "reason": "cross campus"},
             format="json",
         )
-        
+
         # Campus admin only assigned to Campus A1, so Campus A2 should be denied
         self.assertEqual(response.status_code, 403)
 
     def test_campus_admin_same_campus_transfer_allowed(self):
         """Campus admin can transfer student within their assigned campus."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a1.pk, "student_id": self.student_a.pk, "reason": "same campus"},
             format="json",
         )
-        
+
         self.assertEqual(response.status_code, 201)
 
     def test_campus_admin_cross_campus_same_institution_denied(self):
@@ -245,13 +245,13 @@ class StudentTransferTenantIsolationTests(TestCase):
         # Campus admin A1 is assigned to Campus A1
         # Should be denied when trying to transfer to Campus A2
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a2.pk, "student_id": self.student_a.pk, "reason": "cross campus"},
             format="json",
         )
-        
+
         # Campus admin only assigned to A1, so A2 should be denied
         self.assertEqual(response.status_code, 403)
 
@@ -259,48 +259,218 @@ class StudentTransferTenantIsolationTests(TestCase):
         """Non-admin users cannot create transfers."""
         teacher_user = make_user("teacher", Role.TEACHER, self.school_a)
         client = self._as(teacher_user)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_a1.pk, "student_id": self.student_a.pk, "reason": "test"},
             format="json",
         )
-        
+
         self.assertEqual(response.status_code, 403)
 
     def test_invalid_campus_id_denied(self):
         """Invalid campus ID returns 404."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": 99999, "student_id": self.student_a.pk, "reason": "test"},
             format="json",
         )
-        
+
         self.assertEqual(response.status_code, 404)
 
     def test_missing_campus_id_denied(self):
         """Missing campus ID returns 400."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"student_id": self.student_a.pk, "reason": "test"},
             format="json",
         )
-        
+
         self.assertEqual(response.status_code, 400)
 
     def test_cross_institution_student_campus_mismatch_denied(self):
         """Student from School A, target campus in School B denied."""
         client = self._as(self.campus_admin_a1)
-        
+
         response = client.post(
             self._transfer_url(),
             {"to_campus_id": self.campus_b1.pk, "student_id": self.student_a.pk, "reason": "test"},
             format="json",
         )
-        
+
         # Campus B1 is in School B, but user is from School A
         self.assertEqual(response.status_code, 404)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
