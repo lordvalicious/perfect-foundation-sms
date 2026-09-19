@@ -110,7 +110,12 @@ class ExamListView(generics.ListCreateAPIView):
                 Q(name__icontains=search)
             )
 
-        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "campus_id",
+            institution_field="academic_year__school",
+        )
 
         class_obj = self.request.query_params.get("class")
 
@@ -196,7 +201,12 @@ class ExamDetailView(generics.RetrieveUpdateDestroyAPIView):
 
                 queryset = queryset.filter(class_obj_id__in=class_ids)
 
-        queryset = apply_campus_scope(queryset, self.request, "campus_id")
+        queryset = apply_campus_scope(
+            queryset,
+            self.request,
+            "campus_id",
+            institution_field="academic_year__school",
+        )
 
         return queryset
 

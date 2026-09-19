@@ -136,6 +136,28 @@ class GoogleLoginView(APIView):
                 status=403,
             )
 
+        if user.twofa_enabled and user.twofa_secret:
+            import pyotp
+
+            code = str(request.data.get("otp") or "").strip()
+
+            if not code or not pyotp.TOTP(user.twofa_secret).verify(
+                code, valid_window=1
+            ):
+                from .views import record_failed_login
+
+                record_failed_login(request, user, email)
+                return JsonResponse(
+                    {
+                        "detail": (
+                            "Enter the 6-digit code from your "
+                            "authenticator app."
+                        ),
+                        "otp_required": True,
+                    },
+                    status=401,
+                )
+
         django_login(request, user)
 
         memberships = user.get_active_memberships()

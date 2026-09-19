@@ -2,8 +2,10 @@ from datetime import date, timedelta
 from decimal import Decimal
 
 import base64
+import json
 import re
 import zlib
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.test import TestCase
@@ -2051,16 +2053,17 @@ class JazzCashCheckoutSecurityTests(TestCase):
     def _make_school(self):
         school = School.objects.create(name="Test School")
         campus = Campus.objects.create(school=school, name="Test Campus")
-        student = Student.objects.create(
-            first_name="Test", last_name="Student", admission_number="ST-001"
-        )
+        unit = AcademicUnit.objects.create(campus=campus, name="Primary")
         guardian = Guardian.objects.create(name="Test Parent", relationship="Father", phone="03000000000")
-        student.guardian = guardian
-        student.save()
+        student = Student.objects.create(
+            first_name="Test", last_name="Student", admission_number="ST-001", guardian=guardian
+        )
+        class_obj = Class.objects.create(unit=unit, name="Primary")
+        section = Section.objects.create(class_obj=class_obj, name="A")
         enrollment = Enrollment.objects.create(
             student=student,
-            class_obj=Class.objects.create(unit=campus, name="Primary"),
-            section=Section.objects.create(class_obj=Class.objects.create(unit=campus, name="Grade 1"), name="A"),
+            class_obj=class_obj,
+            section=section,
             academic_year=AcademicYear.objects.create(
                 school=school, name="2026-2027", start_date=date(2026, 8, 1), end_date=date(2027, 7, 31)
             ),
@@ -2070,7 +2073,7 @@ class JazzCashCheckoutSecurityTests(TestCase):
         return school, campus, student, enrollment
 
     def _make_invoice(self, school, enrollment):
-        return Invoice.objects.create(
+        invoice = Invoice.objects.create(
             invoice_number="JC-TEST-001",
             student=enrollment.student,
             enrollment=enrollment,
@@ -2079,6 +2082,11 @@ class JazzCashCheckoutSecurityTests(TestCase):
             due_date=date.today() + timedelta(days=30),
             institution=school,
         )
+        category = FeeCategory.objects.create(name="Tuition", frequency="monthly")
+        InvoiceItem.objects.create(
+            invoice=invoice, category=category, description="Tuition", amount=Decimal("3000.00")
+        )
+        return invoice
 
     def _make_authenticated_client(self, school):
         user = User.objects.create_user(username="jc_tester", email="jc@test.edu", password="pass")
@@ -2089,7 +2097,7 @@ class JazzCashCheckoutSecurityTests(TestCase):
         return user, client
 
     def _mock_gateway_redirect(self, patch):
-        patch(
+        return patch(
             "apps.finance.jazzcash_views.submit_checkout_to_gateway",
             return_value=("https://sandbox.example.test/checkout/abc", None),
         )
@@ -2110,7 +2118,7 @@ class JazzCashCheckoutSecurityTests(TestCase):
         user, client = self._make_authenticated_client(school)
 
         with self._mock_gateway_redirect(patch):
-            resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+            resp = client.post("/api/finance/jazzcash/checkout/", {"invoice_id": invoice.pk}, format="json")
 
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -2142,7 +2150,7 @@ class JazzCashCheckoutSecurityTests(TestCase):
         user, client = self._make_authenticated_client(school)
 
         with self._mock_gateway_redirect(patch):
-            resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+            resp = client.post("/api/finance/jazzcash/checkout/", {"invoice_id": invoice.pk}, format="json")
 
         self.assertEqual(resp.status_code, 200)
         data = resp.json()
@@ -2174,7 +2182,7 @@ class JazzCashCheckoutSecurityTests(TestCase):
             # Capture the call arguments
             with patch("apps.finance.jazzcash_views.submit_checkout_to_gateway") as mock_submit:
                 mock_submit.return_value = ("https://sandbox.example.test/checkout/abc", None)
-                resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+                resp = client.post("/api/finance/jazzcash/checkout/", {"invoice_id": invoice.pk}, format="json")
 
         # The mock was called with params that include the test password
         call_kwargs = mock_submit.call_args
@@ -2200,7 +2208,7 @@ class JazzCashCheckoutSecurityTests(TestCase):
         invoice = self._make_invoice(school, enrollment)
 
         with self._mock_gateway_redirect(patch):
-            resp = self.client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+            resp = self.client.post("/api/finance/jazzcash/checkout/", {"invoice_id": invoice.pk}, format="json")
 
         self.assertEqual(resp.status_code, 403)
 
@@ -2222,11 +2230,11 @@ class JazzCashCheckoutSecurityTests(TestCase):
             user, client = self._make_authenticated_client(school)
 
             with self._mock_gateway_redirect(patch):
-                resp = client.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+                resp = client.post("/api/finance/jazzcash/checkout/", {"invoice_id": invoice.pk}, format="json")
 
         self.assertEqual(resp.status_code, 503)
         # Ensure no secret values leak in the error detail
-        self.assertNotIn("JAZZCASH_PASSWORD", resp.json().get("detail", ""))
+        self.assertNotIn("TEST_JAZZCASH_PASSWORD_DO_NOT_LEAK", resp.json().get("detail", ""))
 
     @patch.dict(
         "os.environ",
@@ -2240,13 +2248,19 @@ class JazzCashCheckoutSecurityTests(TestCase):
     def test_invoice_no_outstanding_balance(self):
         """An invoice with zero balance returns 400."""
         school, campus, student, enrollment = self._make_school()
-        # Create invoice with zero balance by not setting fee structure / amount
-        invoice = self._make_invoice(school, enrollment)
-        # Set balance to 0 manually (Invoice.balance is derived from invoice items)
-        invoice.balance = 0
-        invoice.save()
+        # Invoice created without items → derived balance is already 0 (read-only property)
+        invoice = Invoice.objects.create(
+            invoice_number="JC-ZERO-001",
+            student=enrollment.student,
+            enrollment=enrollment,
+            academic_year=enrollment.academic_year,
+            issue_date=date.today(),
+            due_date=date.today() + timedelta(days=30),
+            institution=school,
+        )
+        user, client = self._make_authenticated_client(school)
 
         with self._mock_gateway_redirect(patch):
-            resp = self.client_a.post("/api/finance/jazzcash/", {"invoice_id": invoice.pk}, format="json")
+            resp = client.post("/api/finance/jazzcash/checkout/", {"invoice_id": invoice.pk}, format="json")
 
         self.assertEqual(resp.status_code, 400)

@@ -261,7 +261,10 @@ class StockMovementListView(generics.ListCreateAPIView):
     def create(self, request, *args, **kwargs):
         data = request.data
 
-        asset = get_object_or_404(Asset, pk=data.get("asset"))
+        asset = get_object_or_404(
+            apply_campus_scope(Asset.objects.all(), self.request, "campus_id"),
+            pk=data.get("asset"),
+        )
         campus = get_object_or_404(Campus, pk=data.get("campus"))
         assert_campus_allowed(self.request.user, campus.pk)
 

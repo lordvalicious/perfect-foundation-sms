@@ -22,6 +22,44 @@ class StockError(ValueError):
     """Domain error for invalid stock operations (mapped to HTTP 400)."""
 
 
+def _validate_institution_consistency(*, asset, campus, destination_campus, institution):
+    """Fail closed on any cross-tenant stock movement.
+
+    Runs before any row is written so a rejected operation can never partially
+    mutate state. The asset is the tenant anchor: when it already belongs to an
+    institution, the source campus, destination campus, and caller-resolved
+    institution must all agree with it. Legacy assets with no institution
+    value stay movable (they become owned by the acting school on first move).
+    """
+    asset_institution = getattr(asset, "institution_id", None)
+
+    if asset_institution is None:
+        return
+
+    if campus is not None:
+        campus_school = getattr(campus, "school_id", None)
+        if campus_school is not None and campus_school != asset_institution:
+            raise StockError(
+                "The asset belongs to a different institution than the "
+                "source campus."
+            )
+
+    if destination_campus is not None:
+        dest_school = getattr(destination_campus, "school_id", None)
+        if dest_school is not None and dest_school != asset_institution:
+            raise StockError(
+                "The asset belongs to a different institution than the "
+                "destination campus."
+            )
+
+    if institution is not None:
+        institution_pk = getattr(institution, "pk", institution)
+        if institution_pk != asset_institution:
+            raise StockError(
+                "The asset does not belong to your institution."
+            )
+
+
 def apply_movement(
     *,
     asset,
@@ -46,6 +84,13 @@ def apply_movement(
         raise StockError("A destination campus is required for transfers.")
     if campus == destination_campus:
         raise StockError("Source and destination campus must differ.")
+
+    _validate_institution_consistency(
+        asset=asset,
+        campus=campus,
+        destination_campus=destination_campus,
+        institution=institution,
+    )
 
     with transaction.atomic():
         if movement_type == "transfer_out":
