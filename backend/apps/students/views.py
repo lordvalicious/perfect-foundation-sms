@@ -33,7 +33,7 @@ from apps.accounts.scopes import (
     parent_scope_filter,
     teacher_scope_filter,
 )
-from apps.schools.models import AcademicYear
+from apps.schools.models import AcademicYear, Campus
 
 from .models import (
     Guardian,
@@ -1779,12 +1779,28 @@ class StudentTransferCreateView(APIView):
                 status=status.HTTP_400_BAD_REQUEST,
             )
         
+        from apps.accounts.models import StudentTransfer, Role
+        from apps.accounts.access import restrict_to_allowed_campuses
+
+        user_roles = user.get_roles(user.primary_institution)
+        is_super_admin = Role.SUPER_ADMIN in user_roles
+        is_campus_admin = Role.CAMPUS_ADMIN in user_roles
+
+        if not is_super_admin and not is_campus_admin:
+            return Response(
+                {"detail": "You do not have permission to transfer students."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
         try:
-            to_campus = Campus.objects.get(pk=to_campus_id)
+            campus_filter = {"pk": to_campus_id}
+            if not is_super_admin:
+                campus_filter["school"] = user.primary_institution
+            to_campus = Campus.objects.get(**campus_filter)
         except Campus.DoesNotExist:
             return Response(
                 {"detail": "Invalid campus ID."},
-                status=status.HTTP_400_BAD_REQUEST,
+                status=status.HTTP_404_NOT_FOUND,
             )
         
         # Identify the student: use provided student_id, otherwise auto-detect
@@ -1792,8 +1808,12 @@ class StudentTransferCreateView(APIView):
         
         student = None
         if student_id:
+            # Super admins can access students across institutions
+            student_filter = {"pk": student_id}
+            if not is_super_admin:
+                student_filter["institution"] = user.primary_institution
             try:
-                student = Student.objects.get(pk=student_id)
+                student = Student.objects.get(**student_filter)
             except Student.DoesNotExist:
                 return Response(
                     {"detail": "Student not found."},
@@ -1801,18 +1821,25 @@ class StudentTransferCreateView(APIView):
                 )
         if student is None:
             # Auto-detect: use the first active enrollment from the user's primary institution
+            # Super admins can auto-detect across institutions (but typically won't use auto-detect)
+            enrollment_filter = {"status": "active"}
+            if not is_super_admin:
+                enrollment_filter["institution"] = user.primary_institution
             student = (
                 Student.objects
-                .filter(institution=user.primary_institution, status="active")
-                .order_by("-enrollment__created_at")
+                .filter(**enrollment_filter)
+                .order_by("-enrollments__created_at")
                 .select_related("primary_campus")
                 .first()
             )
             if student is None:
                 # Try to find by active enrollment
+                enrollment_filter2 = {"status": "active"}
+                if not is_super_admin:
+                    enrollment_filter2["institution"] = user.primary_institution
                 student = (
                     Enrollment.objects
-                    .filter(institution=user.primary_institution, status="active")
+                    .filter(**enrollment_filter2)
                     .values_list("student_id", flat=True)
                     .distinct()
                     .first()
@@ -1826,13 +1853,6 @@ class StudentTransferCreateView(APIView):
                 status=status.HTTP_404_NOT_FOUND,
             )
         
-        from accounts.models import StudentTransfer, Role
-        from accounts.access import restrict_to_allowed_campuses
-        
-        user_roles = user.get_roles(user.primary_institution)
-        is_super_admin = Role.SUPER_ADMIN in user_roles
-        is_campus_admin = Role.CAMPUS_ADMIN in user_roles
-        
         if not is_super_admin and not is_campus_admin:
             return Response(
                 {"detail": "You do not have permission to transfer students."},
@@ -1842,10 +1862,9 @@ class StudentTransferCreateView(APIView):
         # For campus admins, restrict to their assigned campus.
         if not is_super_admin:
             allowed = restrict_to_allowed_campuses(
-                InstitutionMembership.objects.none(),
+                Campus.objects.filter(school=user.primary_institution),
                 user,
-                "campus_id",
-                institution_field="institution",
+                "pk",
             )
             target_campus_ids = allowed.values_list("id", flat=True)
             if to_campus.id not in target_campus_ids:
@@ -1861,6 +1880,10 @@ class StudentTransferCreateView(APIView):
         if from_campus is None and student.enrollments.exists():
             from_campus = student.enrollments.first().campus
         
+        # Ensure from_campus is set (required for audit trail)
+        if from_campus is None:
+            from_campus = to_campus
+
         transfer = StudentTransfer.objects.create(
             student=student,
             from_campus=from_campus,
