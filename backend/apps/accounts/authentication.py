@@ -44,14 +44,18 @@ class EmailOrUsernameBackend(ModelBackend):
                 username=identifier
             ).first()
 
-        if user is None or not user.check_password(password):
+        if user is None:
             return None
 
-        # Check if account is locked
+        # Check if the account is locked BEFORE any password-hash work, so a
+        # locked account never incurs the bcrypt/argon2 cost of a comparison.
         if user.locked_until and user.locked_until > timezone.now():
             return None
 
         if not self.user_can_authenticate(user):
+            return None
+
+        if not user.check_password(password):
             return None
 
         return user

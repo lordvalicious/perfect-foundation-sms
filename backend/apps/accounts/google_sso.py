@@ -136,6 +136,28 @@ class GoogleLoginView(APIView):
                 status=403,
             )
 
+        # Lockout enforcement: a locked account must not be able to open a
+        # session by routing around the password login via Google SSO. Mirrors
+        # the 403 shape/semantics LoginView uses.
+        from django.utils import timezone
+
+        if user.locked_until and user.locked_until > timezone.now():
+            lockout_remaining = int(
+                (user.locked_until - timezone.now()).total_seconds() / 60
+            ) + 1
+            return JsonResponse(
+                {
+                    "detail": (
+                        f"Account temporarily locked. Try again in "
+                        f"{lockout_remaining} minutes."
+                    ),
+                    "locked_until": user.locked_until.isoformat(),
+                },
+                status=403,
+            )
+
+        from .views import clear_failed_logins, record_failed_login
+
         if user.twofa_enabled and user.twofa_secret:
             import pyotp
 
@@ -144,8 +166,6 @@ class GoogleLoginView(APIView):
             if not code or not pyotp.TOTP(user.twofa_secret).verify(
                 code, valid_window=1
             ):
-                from .views import record_failed_login
-
                 record_failed_login(request, user, email)
                 return JsonResponse(
                     {
@@ -159,6 +179,10 @@ class GoogleLoginView(APIView):
                 )
 
         django_login(request, user)
+
+        # Successful Google sign-in clears any outstanding failed-attempt
+        # state, matching the password LoginView's behavior.
+        clear_failed_logins(user)
 
         memberships = user.get_active_memberships()
 
