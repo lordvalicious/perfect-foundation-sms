@@ -18,7 +18,9 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
 from apps.accounts.access import get_institution, assert_campus_allowed, user_allowed_campus_ids, is_global
-from apps.accounts.scopes import is_manager, is_teacher, is_parent, parent_student_ids, teacher_student_ids
+from apps.accounts.scopes import is_manager, is_teacher, is_parent, is_student, parent_student_ids, teacher_student_ids
+from apps.students.models import Student
+from apps.teachers.models import Teacher
 
 # Paths that are always public (login-page assets, favicon)
 PUBLIC_PREFIXES = [
@@ -97,7 +99,9 @@ def _check_employee_document_access(file_path, user, institution):
     try:
         from apps.hr.models import EmployeeDocument
         doc = EmployeeDocument.objects.select_related(
-            "employee", "employee__institution", "employee__primary_campus", "employee__user"
+            "employee", "employee__institution", "employee__primary_campus",
+            "employee__teacher", "employee__teacher__user",
+            "employee__staff_profile", "employee__staff_profile__user",
         ).get(file=file_path)
     except EmployeeDocument.DoesNotExist:
         return False
@@ -117,7 +121,13 @@ def _check_employee_document_access(file_path, user, institution):
     # Role-based access: uploader, employee self, manager, accountant/hr
     if doc.uploaded_by_id == user.id:
         return True
-    if doc.employee.user_id == user.id:
+    # Employee self: check via teacher or staff_profile user
+    employee_user_id = None
+    if doc.employee.teacher_id:
+        employee_user_id = doc.employee.teacher.user_id
+    elif doc.employee.staff_profile_id:
+        employee_user_id = doc.employee.staff_profile.user_id
+    if employee_user_id == user.id:
         return True
     if is_manager(user):
         return True
@@ -216,13 +226,12 @@ def _check_profile_access(file_path, user, institution):
     return False
 
 
-def _file_belongs_to_user_school(file_path, user):
+def _file_belongs_to_user_school(file_path, user, institution):
     """Check if the user's active institution matches the file's owner.
 
     For documents: strict DB lookup by exact file path.
     For profiles: heuristic with institution equality.
     """
-    institution = get_institution(user) if hasattr(user, "is_authenticated") else None
 
     if institution is None and not (user and user.is_superuser):
         return False
@@ -278,7 +287,7 @@ class ProtectedMediaView(APIView):
             raise Http404
 
         # Campus-level authorization with ownership verification
-        if not _file_belongs_to_user_school(clean, request.user):
+        if not _file_belongs_to_user_school(clean, request.user, institution):
             raise Http404
 
         return self._serve(full_path)
@@ -311,19 +320,13 @@ class PublicBrandingMediaView(APIView):
         if clean.startswith(".."):
             raise Http404
 
-        # Only allow branding paths
-        if not any(
-            clean.startswith(prefix)
-            for prefix in PUBLIC_PREFIXES
-        ):
-            raise Http404
-
         # Only allow image extensions
         _, ext = os.path.splitext(clean)
         if ext.lower() not in PUBLIC_EXTENSIONS:
             raise Http404
 
-        full_path = os.path.join(settings.MEDIA_ROOT, clean)
+        # Reconstruct the full path under school/branding/
+        full_path = os.path.join(settings.MEDIA_ROOT, "school", "branding", clean)
 
         if not os.path.isfile(full_path):
             raise Http404
