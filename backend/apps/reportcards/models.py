@@ -94,6 +94,12 @@ class ReportCard(models.Model):
                 name="unique_report_card_per_student_exam",
             )
         ]
+        indexes = [
+            models.Index(
+                fields=["student"],
+                name="reportcard_student_idx",
+            ),
+        ]
 
     def clean(self):
         if self.student_id and self.exam_id:

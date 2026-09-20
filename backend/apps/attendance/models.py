@@ -94,6 +94,14 @@ class Attendance(models.Model):
         ]
         indexes = [
             models.Index(
+                fields=["student"],
+                name="att_student_idx",
+            ),
+            models.Index(
+                fields=["student", "date"],
+                name="att_student_date_idx",
+            ),
+            models.Index(
                 fields=["campus", "date", "status"],
                 name="att_campus_date_status_idx",
             ),

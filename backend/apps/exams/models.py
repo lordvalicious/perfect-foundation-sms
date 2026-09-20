@@ -258,6 +258,10 @@ class StudentResult(models.Model):
         ]
         indexes = [
             models.Index(
+                fields=["student"],
+                name="result_student_idx",
+            ),
+            models.Index(
                 fields=["exam", "student"],
                 name="result_exam_student_idx",
             ),
