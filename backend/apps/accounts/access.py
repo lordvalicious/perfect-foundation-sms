@@ -234,7 +234,14 @@ def campus_access(request):
 
     Raises ``PermissionDenied`` (HTTP 403) when a non-global user requests
     a campus outside their scope or when the param is not a valid campus.
+    
+    Results are cached on the request object to avoid repeated computation.
     """
+    # Check cache first
+    cache_key = "_campus_access_cache"
+    if hasattr(request, cache_key):
+        return getattr(request, cache_key)
+
     user = request.user
     institution = get_institution(request)
     allowed = user_allowed_campus_ids(user, institution)
@@ -267,22 +274,26 @@ def campus_access(request):
             if not valid:
                 raise PermissionDenied("Invalid campus.")
 
-        return {
+        result = {
             "global": True,
             "allowed_ids": allowed,
             "requested": requested,
         }
+    else:
+        if requested is not None and requested not in allowed:
+            raise PermissionDenied(
+                "You do not have access to this campus."
+            )
 
-    if requested is not None and requested not in allowed:
-        raise PermissionDenied(
-            "You do not have access to this campus."
-        )
+        result = {
+            "global": False,
+            "allowed_ids": allowed,
+            "requested": requested,
+        }
 
-    return {
-        "global": False,
-        "allowed_ids": allowed,
-        "requested": requested,
-    }
+    # Cache the result on the request object
+    setattr(request, cache_key, result)
+    return result
 
 
 def assert_campus_allowed(user, campus_id, request=None):
@@ -391,6 +402,27 @@ def _model_has_path(model, path):
         return False
 
 
+def _get_institution_campus_count(request, institution):
+    """Get the count of active campuses for an institution, cached on request."""
+    if institution is None:
+        return 0
+    cache_key = f"_campus_count_cache_{institution.pk}"
+    if hasattr(request, cache_key):
+        return getattr(request, cache_key)
+    from apps.schools.models import Campus
+    count = Campus.objects.filter(school=institution, status="active").count()
+    setattr(request, cache_key, count)
+    return count
+
+
+def _user_has_all_campuses(request, institution, allowed_ids):
+    """Check if the user has access to all active campuses of the institution."""
+    if institution is None or not allowed_ids:
+        return False
+    total_campuses = _get_institution_campus_count(request, institution)
+    return total_campuses > 0 and len(allowed_ids) >= total_campuses
+
+
 def apply_campus_scope(queryset, request, campus_field="campus_id", institution_field="institution_id"):
     """Restrict a campus-scoped queryset to the user's allowed campuses.
 
@@ -442,6 +474,15 @@ def apply_campus_scope(queryset, request, campus_field="campus_id", institution_
         return queryset.filter(
             **{campus_field: access["requested"]}
         )
+
+    # Optimization: if user has access to all active campuses of the institution,
+    # campus scoping is redundant because institution filtering already restricts
+    # to that institution's data. The Q(**{f"{campus_field}__in": allowed})
+    # would match all campuses anyway, and the institution filter already
+    # restricts to the institution's data.
+    institution = get_institution(request)
+    if _user_has_all_campuses(request, institution, allowed):
+        return queryset
 
     return queryset.filter(
         Q(**{f"{campus_field}__isnull": True})

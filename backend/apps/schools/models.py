@@ -254,6 +254,12 @@ class Class(models.Model):
 
     class Meta:
         ordering = ["level", "name"]
+        indexes = [
+            models.Index(
+                fields=["unit", "status"],
+                name="class_unit_status_idx",
+            ),
+        ]
 
     def __str__(self):
         return self.name
@@ -288,6 +294,12 @@ class Section(models.Model):
             models.UniqueConstraint(
                 fields=["class_obj", "name"],
                 name="unique_section_name_per_class",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["class_obj", "status"],
+                name="section_class_status_idx",
             ),
         ]
 
