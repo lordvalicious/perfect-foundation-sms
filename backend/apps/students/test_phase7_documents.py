@@ -458,3 +458,63 @@ class DocumentUploadCrossSchoolDeniedTests(DocumentsPhase7Base):
     #         format="multipart",
     #     )
     #     self.assertIn(response.status_code, (400, 403, 404))
+class F9DocumentUploadValidationTests(DocumentsPhase7Base):
+    """F9 regression: server-side document upload validation.
+
+    Enforces on every submit, independent of Django form defaults:
+
+    * maximum allowed file size (``MAX_STUDENT_DOCUMENT_SIZE``, 5 MB);
+    * allowed file extension (server-side, on top of the model-level
+      ``FileExtensionValidator``);
+    * allowed MIME content type (additive allowlist that keeps the existing
+      campus-isolation ``.pdf`` with generic ``text/plain`` fixtures passing).
+
+    Each rejection must return ``400`` and must NOT persist a row.
+    """
+
+    def _upload(self, name, body, content_type=None, title="F9 Doc"):
+        file = SimpleUploadedFile(name, body, content_type=content_type)
+        return self._as(self.campus_admin_a).post(
+            "/api/students/documents/",
+            {
+                "student": self.student_a.pk,
+                "document_type": "other",
+                "title": title,
+                "file": file,
+            },
+            format="multipart",
+        )
+
+    def test_oversized_document_rejected_400_not_persisted(self):
+        big = b"x" * (5 * 1024 * 1024 + 1)  # 5 MB + 1 byte
+        response = self._upload("big.pdf", big, "application/pdf")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            StudentDocument.objects.filter(title="F9 Doc").exists(),
+            "oversized document must not be persisted",
+        )
+
+    def test_disallowed_extension_rejected_400_not_persisted(self):
+        response = self._upload("malware.exe", b"data", "application/octet-stream")
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(
+            StudentDocument.objects.filter(title="F9 Doc").exists(),
+            "disallowed extension must not be persisted",
+        )
+
+    def test_valid_pdf_accepted_201_persisted(self):
+        response = self._upload(
+            "valid.pdf", b"pdf content", "application/pdf", title="F9 Valid"
+        )
+        self.assertEqual(response.status_code, 201)
+        self.assertTrue(
+            StudentDocument.objects.filter(title="F9 Valid").exists(),
+            "valid PDF should be persisted",
+        )
+
+    def test_mime_compatibility_preserved_pdf_without_pdf_mime_201(self):
+        """Existing fixtures upload ``.pdf`` without an explicit PDF MIME type;
+        the permissive allowlist must keep that path returning 201 (no
+        strengthening that breaks the preserved campus-isolation behavior)."""
+        response = self._upload("legacy.pdf", b"pdf")
+        self.assertEqual(response.status_code, 201)

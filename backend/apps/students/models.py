@@ -1,5 +1,6 @@
 
 from django.core.exceptions import ValidationError
+from django.core.validators import FileExtensionValidator
 from django.db import models
 from django.utils import timezone
 
@@ -999,7 +1000,7 @@ class Enrollment(models.Model):
         )
 
 
-class StudentDocument(models.Model):
+class StudentDocument(SoftDeleteMixin):
     institution = models.ForeignKey(
         "schools.School",
         on_delete=models.CASCADE,
@@ -1032,6 +1033,19 @@ class StudentDocument(models.Model):
     title = models.CharField(max_length=200)
     file = models.FileField(
         upload_to="students/documents/",
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=[
+                    "pdf",
+                    "doc",
+                    "docx",
+                    "jpg",
+                    "jpeg",
+                    "png",
+                    "gif",
+                ],
+            ),
+        ],
     )
     notes = models.TextField(blank=True)
 

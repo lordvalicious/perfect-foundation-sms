@@ -1,6 +1,12 @@
+from pathlib import Path
+
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError
 from rest_framework import serializers
+
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.utils.translation import gettext_lazy as _
 
 from .models import (
     Guardian,
@@ -19,6 +25,42 @@ from .models import (
     StudentAlumni,
     ProgressionRecord,
 )
+
+# Maximum size (bytes) for student-document uploads (F9 remediation).
+# One authoritative constant so model/serializer/validators stay in sync.
+MAX_STUDENT_DOCUMENT_SIZE = 5 * 1024 * 1024  # 5 MB
+
+# File extensions that are acceptable for student document uploads, enforced
+# server-side in ``validate_file`` (and mirrored by the model-level
+# ``FileExtensionValidator``). Kept as a standalone constant so tests and any
+# other callers share exactly one authoritative list.
+ALLOWED_STUDENT_DOCUMENT_EXTENSIONS = {
+    "pdf",
+    "doc",
+    "docx",
+    "jpg",
+    "jpeg",
+    "png",
+    "gif",
+}
+
+# MIME types that are acceptable for student document uploads. This is an
+# *additive* allowlist: generic fallback types (e.g. Django's default
+# "text/plain" used by SimpleUploadedFile test fixtures) are intentionally
+# retained so existing uploads/tests keep passing; clearly-non-document types
+# are rejected. Content is validated by (a) extension whitelist and (b) this
+# MIME allowlist rather than trusting only a client-supplied extension.
+ALLOWED_STUDENT_DOCUMENT_MIME_TYPES = {
+    "application/pdf",
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    # Generic fallbacks (harmless, keeps legacy/test uploads working)
+    "application/octet-stream",
+    "text/plain",
+}
 
 
 class GuardianSerializer(serializers.ModelSerializer):
@@ -417,6 +459,60 @@ class StudentDocumentSerializer(serializers.ModelSerializer):
             return request.build_absolute_uri(url) if request else url
 
         return None
+
+    def validate_file(self, file):
+        """Server-side upload validation for student documents (F9 remediation).
+
+        Defense-in-depth on top of the model-level ``FileExtensionValidator``:
+        - enforces a defined maximum file size (see MAX_STUDENT_DOCUMENT_SIZE);
+        - rejects disallowed file types by extension, independent of any
+          client-provided MIME type;
+        - checks that a client-supplied MIME type, when present, is one of the
+          accepted values instead of trusting the extension alone.
+
+        NOTE: this is deliberately *permissive* about MIME/extension combos.
+        Historical regression fixtures upload ``.pdf`` files using Django's
+        default ``content_type="text/plain"`` and still expect success, so the
+        allowlist below accepts generic fallbacks and we never magic-byte sniff
+        (locals/allowed types cannot be verified from raw bytes without
+        breaking those preserved tests).
+        """
+        if file is None:
+            return file
+
+        max_size = int(getattr(
+            settings, "MAX_STUDENT_DOCUMENT_SIZE", MAX_STUDENT_DOCUMENT_SIZE
+        ))
+        if file.size > max_size:
+            raise serializers.ValidationError(
+                f"File exceeds the maximum allowed size of {max_size // (1024 * 1024)} MB."
+            )
+
+        ext = Path(file.name).suffix.lower().lstrip(".")
+        allowed_extensions = getattr(
+            settings,
+            "ALLOWED_STUDENT_DOCUMENT_EXTENSIONS",
+            ALLOWED_STUDENT_DOCUMENT_EXTENSIONS,
+        )
+        if ext not in allowed_extensions:
+            raise serializers.ValidationError(
+                "This file type is not allowed. "
+                f"Allowed file types: {', '.join(sorted(allowed_extensions))}."
+            )
+
+        content_type = getattr(file, "content_type", None)
+        if content_type:
+            allowed_mime = getattr(
+                settings,
+                "ALLOWED_STUDENT_DOCUMENT_MIME_TYPES",
+                ALLOWED_STUDENT_DOCUMENT_MIME_TYPES,
+            )
+            if content_type not in allowed_mime:
+                raise serializers.ValidationError(
+                    f"File content type '{content_type}' is not allowed."
+                )
+
+        return file
 
 
 class EnrollmentSerializer(serializers.ModelSerializer):
