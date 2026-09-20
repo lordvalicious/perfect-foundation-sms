@@ -777,30 +777,31 @@ class StudentSerializer(serializers.ModelSerializer):
         return None
 
     def get_current_enrollment(self, obj):
-        enrollment = (
-            obj.enrollments.filter(status="active")
-            .select_related(
-                "campus",
-                "class_obj",
-                "section",
-                "academic_year",
-            )
-            .first()
-        )
-
-        if enrollment is None:
+        # Use prefetched enrollments to avoid N+1 queries
+        active_enrollments = [
+            e for e in obj.enrollments.all() if e.status == "active"
+        ]
+        if not active_enrollments:
             return None
+
+        enrollment = active_enrollments[0]
+
+        # Access prefetched related objects
+        campus = enrollment.campus
+        class_obj = enrollment.class_obj
+        section = enrollment.section
+        academic_year = enrollment.academic_year
 
         return {
             "enrollment_id": enrollment.id,
             "campus_id": enrollment.campus_id,
-            "campus_name": enrollment.campus.name,
+            "campus_name": campus.name if campus else None,
             "class_id": enrollment.class_obj_id,
-            "class_name": enrollment.class_obj.name,
+            "class_name": class_obj.name if class_obj else None,
             "section_id": enrollment.section_id,
-            "section_name": enrollment.section.name,
+            "section_name": section.name if section else None,
             "academic_year_id": enrollment.academic_year_id,
-            "academic_year_name": enrollment.academic_year.name,
+            "academic_year_name": academic_year.name if academic_year else None,
         }
 
     def validate(self, attrs):

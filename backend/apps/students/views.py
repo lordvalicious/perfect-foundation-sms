@@ -552,13 +552,14 @@ def _flatten_validation_errors(exc):
 
 STUDENT_QUERYSET = (
     Student.objects
-    .select_related("guardian")
+    .select_related("guardian", "user", "primary_campus")
     .prefetch_related(
         "enrollments__academic_year",
         "enrollments__campus",
         "enrollments__class_obj",
         "enrollments__section",
         "documents",
+        "guardian_links__guardian",
     )
 )
 
