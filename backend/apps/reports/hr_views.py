@@ -209,12 +209,12 @@ class PayrollMonthlyReportView(AggregateReportView):
     def get_base_queryset(self, request):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.select_related(
-            "teacher", "teacher__user", "teacher__primary_campus", "structure"
+            "employee", "employee__primary_campus", "salary_structure"
         )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "teacher__primary_campus_id", institution_field=None)
+        queryset = apply_campus_scope(queryset, request, "employee__primary_campus_id", institution_field=None)
 
         year = request.query_params.get("year")
         if year:
@@ -233,7 +233,7 @@ class PayrollMonthlyReportView(AggregateReportView):
 
         by_campus = {}
         for record in queryset:
-            campus = record.teacher.primary_campus.name if record.teacher.primary_campus else "-"
+            campus = record.employee.primary_campus.name if record.employee.primary_campus_id else "-"
             if campus not in by_campus:
                 by_campus[campus] = {"gross": Decimal("0"), "deductions": Decimal("0"), "net": Decimal("0"), "count": 0}
             by_campus[campus]["gross"] += record.gross_salary
@@ -262,9 +262,9 @@ class PayrollMonthlyReportView(AggregateReportView):
         rows = []
         for record in queryset:
             rows.append({
-                "employee_id": record.teacher.employee_number,
-                "employee": record.teacher.full_name,
-                "campus": record.teacher.primary_campus.name if record.teacher.primary_campus else "-",
+                "employee_id": record.employee.employee_number,
+                "employee": record.employee.full_name,
+                "campus": record.employee.primary_campus.name if record.employee.primary_campus_id else "-",
                 "year": record.year,
                 "month": record.month,
                 "gross_salary": quantize(record.gross_salary),
@@ -285,8 +285,8 @@ class EmployeeSalaryReportView(BaseReportView):
     def get_base_queryset(self, request):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.select_related(
-            "teacher", "teacher__user", "teacher__primary_campus", "structure"
-        ).prefetch_related("allowances", "deductions")
+            "employee", "employee__primary_campus", "salary_structure"
+        )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -294,7 +294,7 @@ class EmployeeSalaryReportView(BaseReportView):
         employee = request.query_params.get("employee")
         if not employee:
             return queryset.none()
-        queryset = queryset.filter(teacher_id=employee)
+        queryset = queryset.filter(employee_id=employee)
 
         year = request.query_params.get("year")
         if year:
@@ -313,16 +313,14 @@ class EmployeeSalaryReportView(BaseReportView):
         if not records:
             return Response({"detail": "No payroll records found"}, status=404)
 
-        # If single record requested, return detailed salary slip
         if len(records) == 1:
             return Response(self.build_salary_slip(records[0]))
 
-        # Otherwise return list
         rows = []
         for r in records:
             rows.append({
                 "id": r.id,
-                "teacher": r.teacher.full_name,
+                "employee": r.employee.full_name,
                 "year": r.year,
                 "month": r.month,
                 "gross": quantize(r.gross_salary),
@@ -333,27 +331,44 @@ class EmployeeSalaryReportView(BaseReportView):
         return Response({"records": rows})
 
     def build_salary_slip(self, record):
+        details = record.component_details or {}
+        raw_allowances = details.get("allowances") or {}
+        raw_deductions = details.get("deductions") or {}
+
         allowances = []
-        for a in record.allowances.all():
-            allowances.append({
-                "name": a.allowance.name,
-                "amount": quantize(a.amount),
-                "is_taxable": a.allowance.is_taxable,
-            })
+        for code, entry in raw_allowances.items():
+            if isinstance(entry, dict):
+                allowances.append({
+                    "name": entry.get("name", code),
+                    "amount": quantize(Decimal(str(entry.get("amount", 0)))),
+                    "is_taxable": entry.get("is_taxable", True),
+                })
+            else:
+                allowances.append({
+                    "name": code,
+                    "amount": quantize(Decimal(str(entry))),
+                    "is_taxable": True,
+                })
 
         deductions = []
-        for d in record.deductions.all():
-            deductions.append({
-                "name": d.deduction.name,
-                "amount": quantize(d.amount),
-            })
+        for code, entry in raw_deductions.items():
+            if isinstance(entry, dict):
+                deductions.append({
+                    "name": entry.get("name", code),
+                    "amount": quantize(Decimal(str(entry.get("amount", 0)))),
+                })
+            else:
+                deductions.append({
+                    "name": code,
+                    "amount": quantize(Decimal(str(entry))),
+                })
 
         return {
             "employee": {
-                "employee_number": record.teacher.employee_number,
-                "full_name": record.teacher.full_name,
-                "campus": record.teacher.primary_campus.name if record.teacher.primary_campus else "-",
-                "designation": record.teacher.designation,
+                "employee_number": record.employee.employee_number,
+                "full_name": record.employee.full_name,
+                "campus": record.employee.primary_campus.name if record.employee.primary_campus_id else "-",
+                "designation": str(record.employee.designation) if record.employee.designation_id else "-",
             },
             "period": {
                 "year": record.year,
@@ -362,7 +377,7 @@ class EmployeeSalaryReportView(BaseReportView):
             "earnings": {
                 "basic": quantize(record.basic_salary),
                 "allowances": allowances,
-                "total_allowances": quantize(sum(a.amount for a in record.allowances.all())),
+                "total_allowances": quantize(record.total_allowances),
                 "gross": quantize(record.gross_salary),
             },
             "deductions": {
@@ -385,12 +400,12 @@ class PayrollSummaryReportView(AggregateReportView):
     def get_base_queryset(self, request):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.select_related(
-            "teacher", "teacher__primary_campus", "structure"
+            "employee", "employee__primary_campus", "salary_structure"
         )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "teacher__primary_campus_id", institution_field=None)
+        queryset = apply_campus_scope(queryset, request, "employee__primary_campus_id", institution_field=None)
 
         year = request.query_params.get("year")
         if year:
@@ -444,54 +459,59 @@ class AllowanceReportView(AggregateReportView):
 
     permission_classes = [IsAccountantRole]
     report_definition_key = "payroll_allowance"
-    model = "apps.payroll.models.PayrollAllowance"
+    model = "apps.payroll.models.PayrollRecord"
 
     def get_base_queryset(self, request):
-        from apps.payroll.models import PayrollAllowance
-        return PayrollAllowance.objects.select_related(
-            "payroll_record__teacher", "payroll_record__teacher__primary_campus", "allowance"
+        from apps.payroll.models import PayrollRecord
+        return PayrollRecord.objects.select_related(
+            "employee", "employee__primary_campus", "salary_structure"
         )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "payroll_record__teacher__primary_campus_id", institution_field=None)
+        queryset = apply_campus_scope(queryset, request, "employee__primary_campus_id", institution_field=None)
 
         year = request.query_params.get("year")
         if year:
-            queryset = queryset.filter(payroll_record__year=year)
+            queryset = queryset.filter(year=year)
 
         month = request.query_params.get("month")
         if month:
-            queryset = queryset.filter(payroll_record__month=month)
+            queryset = queryset.filter(month=month)
 
         return queryset
 
+    @staticmethod
+    def _iter_allowances(records):
+        aggregated = {}
+        for record in records:
+            details = record.component_details or {}
+            for code, entry in (details.get("allowances") or {}).items():
+                if isinstance(entry, dict):
+                    name = entry.get("name", code)
+                    amount = Decimal(str(entry.get("amount", 0)))
+                else:
+                    name = str(code)
+                    amount = Decimal(str(entry))
+                item = aggregated.setdefault(name, {"count": 0, "total": Decimal("0")})
+                item["count"] += 1
+                item["total"] += amount
+        return aggregated
+
     def get_summary(self, queryset, request):
-        allowances = queryset.values("allowance__name").annotate(
-            total=Sum("amount"),
-            count=Count("id"),
-        ).order_by("-total")
-
-        total = sum(a["total"] for a in allowances) if allowances else Decimal("0")
-
+        allowances = self._iter_allowances(queryset)
+        total = sum(v["total"] for v in allowances.values())
         return {
             "total_allowances": quantize(total),
             "allowance_types": len(allowances),
         }
 
     def get_detail_rows(self, queryset, request):
-        allowances = queryset.values("allowance__name").annotate(
-            total=Sum("amount"),
-            count=Count("id"),
-        ).order_by("-total")
-
-        rows = []
-        for a in allowances:
-            rows.append({
-                "allowance": a["allowance__name"],
-                "count": a["count"],
-                "total": quantize(a["total"]),
-            })
+        allowances = self._iter_allowances(queryset)
+        rows = [
+            {"allowance": name, "count": v["count"], "total": quantize(v["total"])}
+            for name, v in sorted(allowances.items(), key=lambda kv: kv[1]["total"], reverse=True)
+        ]
         return rows
 
 
@@ -500,54 +520,59 @@ class DeductionReportView(AggregateReportView):
 
     permission_classes = [IsAccountantRole]
     report_definition_key = "payroll_deduction"
-    model = "apps.payroll.models.PayrollDeduction"
+    model = "apps.payroll.models.PayrollRecord"
 
     def get_base_queryset(self, request):
-        from apps.payroll.models import PayrollDeduction
-        return PayrollDeduction.objects.select_related(
-            "payroll_record__teacher", "payroll_record__teacher__primary_campus", "deduction"
+        from apps.payroll.models import PayrollRecord
+        return PayrollRecord.objects.select_related(
+            "employee", "employee__primary_campus", "salary_structure"
         )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "payroll_record__teacher__primary_campus_id", institution_field=None)
+        queryset = apply_campus_scope(queryset, request, "employee__primary_campus_id", institution_field=None)
 
         year = request.query_params.get("year")
         if year:
-            queryset = queryset.filter(payroll_record__year=year)
+            queryset = queryset.filter(year=year)
 
         month = request.query_params.get("month")
         if month:
-            queryset = queryset.filter(payroll_record__month=month)
+            queryset = queryset.filter(month=month)
 
         return queryset
 
+    @staticmethod
+    def _iter_deductions(records):
+        aggregated = {}
+        for record in records:
+            details = record.component_details or {}
+            for code, entry in (details.get("deductions") or {}).items():
+                if isinstance(entry, dict):
+                    name = entry.get("name", code)
+                    amount = Decimal(str(entry.get("amount", 0)))
+                else:
+                    name = str(code)
+                    amount = Decimal(str(entry))
+                item = aggregated.setdefault(name, {"count": 0, "total": Decimal("0")})
+                item["count"] += 1
+                item["total"] += amount
+        return aggregated
+
     def get_summary(self, queryset, request):
-        deductions = queryset.values("deduction__name").annotate(
-            total=Sum("amount"),
-            count=Count("id"),
-        ).order_by("-total")
-
-        total = sum(d["total"] for d in deductions) if deductions else Decimal("0")
-
+        deductions = self._iter_deductions(queryset)
+        total = sum(v["total"] for v in deductions.values())
         return {
             "total_deductions": quantize(total),
             "deduction_types": len(deductions),
         }
 
     def get_detail_rows(self, queryset, request):
-        deductions = queryset.values("deduction__name").annotate(
-            total=Sum("amount"),
-            count=Count("id"),
-        ).order_by("-total")
-
-        rows = []
-        for d in deductions:
-            rows.append({
-                "deduction": d["deduction__name"],
-                "count": d["count"],
-                "total": quantize(d["total"]),
-            })
+        deductions = self._iter_deductions(queryset)
+        rows = [
+            {"deduction": name, "count": v["count"], "total": quantize(v["total"])}
+            for name, v in sorted(deductions.items(), key=lambda kv: kv[1]["total"], reverse=True)
+        ]
         return rows
 
 
@@ -561,12 +586,12 @@ class NetSalaryReportView(AggregateReportView):
     def get_base_queryset(self, request):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.select_related(
-            "teacher", "teacher__primary_campus"
+            "employee", "employee__primary_campus"
         )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "teacher__primary_campus_id", institution_field=None)
+        queryset = apply_campus_scope(queryset, request, "employee__primary_campus_id", institution_field=None)
 
         year = request.query_params.get("year")
         if year:
@@ -583,7 +608,7 @@ class NetSalaryReportView(AggregateReportView):
 
         by_campus = {}
         for record in queryset:
-            campus = record.teacher.primary_campus.name if record.teacher.primary_campus else "-"
+            campus = record.employee.primary_campus.name if record.employee.primary_campus_id else "-"
             if campus not in by_campus:
                 by_campus[campus] = {"net": Decimal("0"), "count": 0}
             by_campus[campus]["net"] += record.net_salary
@@ -602,9 +627,9 @@ class NetSalaryReportView(AggregateReportView):
         rows = []
         for record in queryset:
             rows.append({
-                "employee_id": record.teacher.employee_number,
-                "employee": record.teacher.full_name,
-                "campus": record.teacher.primary_campus.name if record.teacher.primary_campus else "-",
+                "employee_id": record.employee.employee_number,
+                "employee": record.employee.full_name,
+                "campus": record.employee.primary_campus.name if record.employee.primary_campus_id else "-",
                 "year": record.year,
                 "month": record.month,
                 "net_salary": quantize(record.net_salary),
@@ -622,12 +647,12 @@ class PaidSalaryReportView(AggregateReportView):
     def get_base_queryset(self, request):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.filter(status="paid").select_related(
-            "teacher", "teacher__primary_campus"
+            "employee", "employee__primary_campus"
         )
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "teacher__primary_campus_id", institution_field=None)
+        queryset = apply_campus_scope(queryset, request, "employee__primary_campus_id", institution_field=None)
 
         year = request.query_params.get("year")
         if year:
@@ -651,9 +676,9 @@ class PaidSalaryReportView(AggregateReportView):
         rows = []
         for record in queryset:
             rows.append({
-                "employee_id": record.teacher.employee_number,
-                "employee": record.teacher.full_name,
-                "campus": record.teacher.primary_campus.name if record.teacher.primary_campus else "-",
+                "employee_id": record.employee.employee_number,
+                "employee": record.employee.full_name,
+                "campus": record.employee.primary_campus.name if record.employee.primary_campus_id else "-",
                 "year": record.year,
                 "month": record.month,
                 "net_salary": quantize(record.net_salary),
@@ -669,5 +694,5 @@ class PendingSalaryReportView(PaidSalaryReportView):
     def get_base_queryset(self, request):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.filter(status__in=["draft", "approved"]).select_related(
-            "teacher", "teacher__primary_campus"
+            "employee", "employee__primary_campus"
         )

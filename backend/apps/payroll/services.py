@@ -20,13 +20,13 @@ class PayrollService:
     def __init__(self, institution: School):
         self.institution = institution
 
-    def get_active_salary_structure(self, teacher: Teacher, on_date: Optional[date] = None) -> Optional[SalaryStructure]:
-        """Get the active salary structure for a teacher on a given date."""
+    def get_active_salary_structure(self, employee: Employee, on_date: Optional[date] = None) -> Optional[SalaryStructure]:
+        """Get the active salary structure for an employee on a given date."""
         if on_date is None:
             on_date = date.today()
 
         return SalaryStructure.objects.filter(
-            teacher=teacher,
+            employee=employee,
             effective_date__lte=on_date,
             status="active",
         ).order_by("-effective_date").first()
@@ -36,30 +36,30 @@ class PayrollService:
         self,
         month: int,
         year: int,
-        teacher_ids: Optional[List[int]] = None,
+        employee_ids: Optional[List[int]] = None,
         processed_by=None,
     ) -> List[PayrollRecord]:
-        """Generate payroll records for all active teachers for a given month."""
+        """Generate payroll records for all matching employees for a given month."""
         if not 1 <= month <= 12:
             raise ValueError("Month must be between 1 and 12.")
 
-        teachers = Teacher.objects.filter(
+        employees = Employee.objects.filter(
             institution=self.institution,
             status="active",
-        ).select_related("salary_structures")
+        )
 
-        if teacher_ids:
-            teachers = teachers.filter(id__in=teacher_ids)
+        if employee_ids:
+            employees = employees.filter(id__in=employee_ids)
 
         records = []
-        for teacher in teachers:
-            structure = self.get_active_salary_structure(teacher, date(year, month, 1))
+        for employee in employees:
+            structure = self.get_active_salary_structure(employee, date(year, month, 1))
             if not structure:
                 continue
 
             # Check if payroll already exists
             existing = PayrollRecord.objects.filter(
-                teacher=teacher,
+                employee=employee,
                 month=month,
                 year=year,
             ).first()
@@ -72,8 +72,9 @@ class PayrollService:
             paid_days = working_days  # Simplified - should account for leaves
 
             record = PayrollRecord.objects.create(
-                teacher=teacher,
-                structure=structure,
+                employee=employee,
+                campus=employee.primary_campus,
+                salary_structure=structure,
                 month=month,
                 year=year,
                 working_days=working_days,
@@ -171,13 +172,13 @@ class PayrollService:
     ) -> Dict[str, Any]:
         """Get payroll summary for a month."""
         queryset = PayrollRecord.objects.filter(
-            teacher__institution=self.institution,
+            employee__institution=self.institution,
             month=month,
             year=year,
-        ).select_related("teacher")
+        ).select_related("employee")
 
         if campus_id:
-            queryset = queryset.filter(teacher__primary_campus_id=campus_id)
+            queryset = queryset.filter(employee__primary_campus_id=campus_id)
 
         stats = queryset.aggregate(
             total_records=Count("id"),
@@ -196,27 +197,30 @@ class PayrollService:
             "total_net": stats["total_net"] or Decimal("0.00"),
         }
 
-    def get_teacher_payroll_history(self, teacher: Teacher) -> List[PayrollRecord]:
-        """Get payroll history for a teacher."""
+    def get_employee_payroll_history(self, employee: Employee) -> List[PayrollRecord]:
+        """Get payroll history for an employee."""
         return PayrollRecord.objects.filter(
-            teacher=teacher,
+            employee=employee,
         ).order_by("-year", "-month")
 
-    def get_yearly_tax_certificate_data(self, teacher: Teacher, year: int) -> Dict[str, Any]:
+    def get_yearly_tax_certificate_data(self, employee: Employee, year: int) -> Dict[str, Any]:
         """Get data needed for yearly tax certificate."""
         records = PayrollRecord.objects.filter(
-            teacher=teacher,
+            employee=employee,
             year=year,
             status__in=["processed", "paid"],
         ).order_by("month")
 
         total_gross = sum(r.gross_salary for r in records)
         total_tax = sum(
-            r.deductions.get("income_tax", Decimal("0")) for r in records
+            (r.component_details.get("deductions", {}) or {}).get("income_tax", Decimal("0"))
+            if isinstance(r.component_details, dict)
+            else Decimal("0")
+            for r in records
         )
 
         return {
-            "teacher": teacher,
+            "employee": employee,
             "year": year,
             "months_paid": records.count(),
             "total_gross": total_gross,

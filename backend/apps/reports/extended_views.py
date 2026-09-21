@@ -463,16 +463,16 @@ class PayrollSummaryReportView(APIView):
         queryset = (
             PayrollRecord.objects
             .select_related(
-                "teacher",
-                "teacher__primary_campus",
-                "structure",
+                "employee",
+                "employee__primary_campus",
+                "salary_structure",
             )
         )
 
         queryset = apply_campus_scope(
             queryset,
             request,
-            "teacher__primary_campus_id",
+            "employee__primary_campus_id",
             institution_field=None,
         )
 
@@ -494,8 +494,8 @@ class PayrollSummaryReportView(APIView):
         for record in queryset:
             period_key = _month_label(record.year, record.month)
             campus_name = (
-                record.teacher.primary_campus.name
-                if record.teacher.primary_campus_id
+                record.employee.primary_campus.name
+                if record.employee.primary_campus_id
                 else "-"
             )
 
