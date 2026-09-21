@@ -217,15 +217,20 @@ class StudentResultSerializer(serializers.ModelSerializer):
         ]
 
     def get_practical_marks(self, obj):
-        practical = (
-            PracticalResult.objects
-            .filter(
-                exam=obj.exam,
-                student=obj.student,
-                exam_subject=obj.exam_subject,
+        # Use prefetched practical results if available
+        practical_results = getattr(obj, '_prefetched_practical_results', None)
+        if practical_results is not None:
+            practical = next((p for p in practical_results if p.exam_subject_id == obj.exam_subject_id), None)
+        else:
+            practical = (
+                PracticalResult.objects
+                .filter(
+                    exam=obj.exam,
+                    student=obj.student,
+                    exam_subject=obj.exam_subject,
+                )
+                .first()
             )
-            .first()
-        )
 
         if practical is None:
             return None
@@ -241,15 +246,20 @@ class StudentResultSerializer(serializers.ModelSerializer):
         }
 
     def get_combined_marks(self, obj):
-        practical = (
-            PracticalResult.objects
-            .filter(
-                exam=obj.exam,
-                student=obj.student,
-                exam_subject=obj.exam_subject,
+        # Use prefetched practical results if available
+        practical_results = getattr(obj, '_prefetched_practical_results', None)
+        if practical_results is not None:
+            practical = next((p for p in practical_results if p.exam_subject_id == obj.exam_subject_id), None)
+        else:
+            practical = (
+                PracticalResult.objects
+                .filter(
+                    exam=obj.exam,
+                    student=obj.student,
+                    exam_subject=obj.exam_subject,
+                )
+                .first()
             )
-            .first()
-        )
 
         if practical is None:
             return None

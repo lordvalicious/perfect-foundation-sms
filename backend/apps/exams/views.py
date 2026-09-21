@@ -74,7 +74,12 @@ class ExamListView(generics.ListCreateAPIView):
         queryset = (
             Exam.objects
             .select_related("academic_year", "campus", "class_obj")
-            .prefetch_related("exam_subjects", "results")
+            .prefetch_related(
+                "exam_subjects",
+                "results__exam_subject",
+                "results__student",
+                "results__practical_results",
+            )
             .order_by("-start_date")
         )
 
