@@ -275,6 +275,20 @@ class PayrollMonthlyReportView(AggregateReportView):
         return rows
 
 
+class PayrollMonthlyReportView(AggregateReportView):
+    """Monthly payroll report."""
+
+    permission_classes = [IsAccountantRole]
+    report_definition_key = "payroll_monthly"
+    model = "apps.payroll.models.PayrollRecord"
+
+    def get_base_queryset(self, request):
+        from apps.payroll.models import PayrollRecord
+        return PayrollRecord.objects.select_related(
+            "employee", "employee__primary_campus", "salary_structure"
+        ).prefetch_related("employee__staff_profile", "employee__teacher")
+
+
 class EmployeeSalaryReportView(BaseReportView):
     """Individual employee salary report."""
 
@@ -286,7 +300,7 @@ class EmployeeSalaryReportView(BaseReportView):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.select_related(
             "employee", "employee__primary_campus", "salary_structure"
-        )
+        ).prefetch_related("employee__staff_profile", "employee__teacher")
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -587,7 +601,7 @@ class NetSalaryReportView(AggregateReportView):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.select_related(
             "employee", "employee__primary_campus"
-        )
+        ).prefetch_related("employee__staff_profile", "employee__teacher")
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -648,7 +662,7 @@ class PaidSalaryReportView(AggregateReportView):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.filter(status="paid").select_related(
             "employee", "employee__primary_campus"
-        )
+        ).prefetch_related("employee__staff_profile", "employee__teacher")
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
@@ -695,4 +709,4 @@ class PendingSalaryReportView(PaidSalaryReportView):
         from apps.payroll.models import PayrollRecord
         return PayrollRecord.objects.filter(status__in=["draft", "approved"]).select_related(
             "employee", "employee__primary_campus"
-        )
+        ).prefetch_related("employee__staff_profile", "employee__teacher")
