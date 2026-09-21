@@ -31,73 +31,59 @@ from apps.teachers.models import Teacher
 def _institution_overview_counts(request):
     """Institution- and campus-scoped headcounts for manager users."""
     from apps.accounts.managers import get_current_institution
-    from django.db.models import Count, Q
     
     institution = getattr(request, "institution", None)
     if institution is None:
         institution = get_current_institution()
-    
-    if institution is None:
-        return {
-            "students": {"total": 0, "active": 0},
-            "teachers": {"total": 0, "active": 0},
-            "campuses": 0,
-            "classes": 0,
-            "sections": 0,
-            "enrollments": 0,
-        }
-    
-    # Build base querysets with institution filter
-    students = Student.objects.filter(institution=institution)
-    teachers = Teacher.objects.filter(institution=institution)
-    campuses = Campus.objects.filter(school=institution)
-    classes = Class.objects.filter(unit__campus__school=institution)
-    sections = Section.objects.filter(class_obj__unit__campus__school=institution)
-    enrollments = Enrollment.objects.filter(status="active", academic_year__school=institution)
-    
-    # Apply campus scope if needed (skip for users with full institution access)
-    access = campus_access(request)
-    if not access["global"] and access["allowed_ids"]:
-        institution = get_institution(request)
-        if institution is not None:
-            total_campuses = _get_institution_campus_count(request, institution)
-            allowed_ids = access["allowed_ids"]
-            if len(allowed_ids) < total_campuses:
-                # User doesn't have access to all campuses, apply campus scope
-                students = apply_campus_scope(students, request, "primary_campus_id", institution_field=None)
-                teachers = apply_campus_scope(teachers, request, "primary_campus_id", institution_field=None)
-                campuses = apply_campus_scope(campuses, request, "id", institution_field=None)
-                classes = apply_campus_scope(classes, request, "unit__campus_id", institution_field=None)
-                sections = apply_campus_scope(sections, request, "class_obj__unit__campus_id", institution_field=None)
-                enrollments = apply_campus_scope(enrollments, request, "campus_id", institution_field=None)
-    
-    # Use aggregation to reduce query count
-    students_agg = students.aggregate(
-        total=Count("id"),
-        active=Count("id", filter=Q(status="active"))
+
+    students = Student.objects.all()
+    teachers = Teacher.objects.all()
+    campuses = Campus.objects.all()
+    classes = Class.objects.all()
+    sections = Section.objects.all()
+    enrollments = Enrollment.objects.filter(status="active")
+
+    if institution is not None:
+        students = students.filter(institution=institution)
+        teachers = teachers.filter(institution=institution)
+
+        campuses = campuses.filter(school=institution)
+        classes = classes.filter(unit__campus__school=institution)
+        sections = sections.filter(class_obj__unit__campus__school=institution)
+        enrollments = enrollments.filter(academic_year__school=institution)
+
+    students = apply_campus_scope(
+        students, request, "primary_campus_id", institution_field=None
     )
-    teachers_agg = teachers.aggregate(
-        total=Count("id"),
-        active=Count("id", filter=Q(status="active"))
+    teachers = apply_campus_scope(
+        teachers, request, "primary_campus_id", institution_field=None
     )
-    campuses_count = campuses.count()
-    classes_count = classes.count()
-    sections_count = sections.count()
-    enrollments_count = enrollments.count()
-    
+    campuses = apply_campus_scope(
+        campuses, request, "id", institution_field=None
+    )
+    classes = apply_campus_scope(
+        classes, request, "unit__campus_id", institution_field=None
+    )
+    sections = apply_campus_scope(
+        sections, request, "class_obj__unit__campus_id", institution_field=None
+    )
+    enrollments = apply_campus_scope(
+        enrollments, request, "campus_id", institution_field=None
+    )
+
     return {
         "students": {
-            "total": students_agg["total"],
-            "active": students_agg["active"],
+            "total": students.count(),
+            "active": students.filter(status="active").count(),
         },
         "teachers": {
-            "total": teachers_agg["total"],
-            "active": teachers_agg["active"],
+            "total": teachers.count(),
+            "active": teachers.filter(status="active").count(),
         },
-        "campuses": campuses_count,
-        "classes": classes_count,
-        "sections": sections_count,
-        "enrollments": enrollments_count,
+        "campuses": campuses.count(),
+        "classes": classes.count(),
+        "sections": sections.count(),
+        "enrollments": enrollments.count(),
     }
 
 
