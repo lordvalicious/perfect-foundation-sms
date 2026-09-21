@@ -248,6 +248,11 @@ REST_FRAMEWORK = {
         # 2FA backup-code verification is unauthenticated; throttles
         # brute-force of the 8-char codes and keeps failures uniform.
         "twofa_backup_verify": "10/min",
+        # F14: the migration endpoint (core.views.run_migrations_view) is
+        # unauthenticated and mutates the schema; throttles the bearer-brute
+        # force and keeps failed-auth attempts uniform. Rate is asserted in
+        # core/test_migrations.py.
+        "run_migrations": "10/min",
     },
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }

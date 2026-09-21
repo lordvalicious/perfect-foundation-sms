@@ -25,6 +25,7 @@ REST_FRAMEWORK["DEFAULT_THROTTLE_RATES"] = {
     "email_verify": "1000000/hour",
     "transfer_certificate_verify": "1000000/hour",
     "twofa_backup_verify": "1000000/hour",
+    "run_migrations": "1000000/hour",  # F14: same-scope throttle target for the bearer-protected migration endpoint (mirrors transfer_certificate_verify / twofa_backup_verify)
 }
 
 PASSWORD_HASHERS = [
