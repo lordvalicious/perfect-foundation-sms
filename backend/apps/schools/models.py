@@ -205,6 +205,14 @@ class Campus(models.Model):
     def __str__(self):
         return f"{self.school.name} - {self.name}"
 
+    class Meta:
+        indexes = [
+            models.Index(
+                fields=["school", "status"],
+                name="campus_school_status_idx",
+            ),
+        ]
+
 
 class AcademicUnit(models.Model):
     campus = models.ForeignKey(
