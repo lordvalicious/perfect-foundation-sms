@@ -55,13 +55,32 @@ def call(cj, path, method="GET", payload=None):
 # SUPER_ADMIN session
 cj = load_sess("SUPER_ADMIN")
 
-# Step 1: Create a staff profile with user account
-# Using the StaffProfileCRUDSerializer via the API
-# The endpoint is typically /api/staff/ but let's check what's available
-print("=== Step 1: Creating staff profile ===")
+# First get CSRF token
+print("=== Getting CSRF token ===")
+req = urllib.request.Request(BASE + "/api/csrf-token/", headers={"User-Agent": "Mozilla/5.0", "Cookie": "; ".join(f"{c.name}={c.value}" for c in cj if not c.is_expired(now=None))})
+try:
+    with urllib.request.urlopen(req, timeout=60) as r:
+        body = r.read().decode("utf-8", "replace")
+        print(f"CSRF response: HTTP {r.status}, body: {body[:200]}")
+except Exception as e:
+    print(f"CSRF error: {e}")
 
-# First, let me check if there's a way to create a staff profile
-# Let me try the staff list/create endpoint
+# Try with CSRF
+print("\n=== Step 1: Creating staff profile with CSRF ===")
+# Get fresh csrf
+csrf_cj = load_sess("SUPER_ADMIN")
+req = urllib.request.Request(BASE + "/api/csrf-token/", headers={"User-Agent": "Mozilla/5.0", "Cookie": "; ".join(f"{c.name}={c.value}" for c in csrf_cj if not c.is_expired(now=None))})
+try:
+    with urllib.request.urlopen(req, timeout=60) as r:
+        csrf_body = r.read().decode("utf-8", "replace")
+        print(f"Got csrf: {csrf_body[:200]}")
+except Exception as e:
+    print(f"CSRF fetch error: {e}")
+
+# Actually, let me use the session cookie approach - the session should have the CSRF cookie set
+# The SUPER_ADMIN session from sa_frostfire.txt should already have CSRF
+
+# Let me try creating with the payload, maybe it will work with the session
 payload = {
     "employee_number": "FIN-EMP-0001",
     "first_name": "Finance",
@@ -69,11 +88,10 @@ payload = {
     "designation": "Accountant",
     "create_account": True,
     "username": "finance-certification-accountant",
-    "password": "TestPass123!",  # Will be generated if not provided
 }
 code, data = call(cj, "/api/staff/", method="POST", payload=payload)
 print(f"Staff create: HTTP {code}")
-if code == 200 or code == 201:
+if code in [200, 201]:
     print(f"Response: {json.dumps(data)[:300]}")
 else:
     print(f"Response: {json.dumps(data)[:300] if isinstance(data, dict) else str(data)[:300]}")
