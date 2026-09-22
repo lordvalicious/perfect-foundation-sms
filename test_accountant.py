@@ -52,25 +52,33 @@ def call(cj, path, method="GET", payload=None):
         except Exception:
             return e.code, body[:300]
 
-# Check what institution 1 is
-print("=== Checking SUPER_ADMIN institution info ===")
+# SUPER_ADMIN session
 cj = load_sess("SUPER_ADMIN")
+
+# Step 1: Create a staff profile with user account
+# Using the StaffProfileCRUDSerializer via the API
+# The endpoint is typically /api/staff/ but let's check what's available
+print("=== Step 1: Creating staff profile ===")
+
+# First, let me check if there's a way to create a staff profile
+# Let me try the staff list/create endpoint
+payload = {
+    "employee_number": "FIN-EMP-0001",
+    "first_name": "Finance",
+    "last_name": "Certification",
+    "designation": "Accountant",
+    "create_account": True,
+    "username": "finance-certification-accountant",
+    "password": "TestPass123!",  # Will be generated if not provided
+}
+code, data = call(cj, "/api/staff/", method="POST", payload=payload)
+print(f"Staff create: HTTP {code}")
+if code == 200 or code == 201:
+    print(f"Response: {json.dumps(data)[:300]}")
+else:
+    print(f"Response: {json.dumps(data)[:300] if isinstance(data, dict) else str(data)[:300]}")
+
+# Check if the user was created
+print("\n=== Check if user exists ===")
 code, data = call(cj, "/api/auth/me/")
-print(f"SUPER_AUTH_ME: {json.dumps(data)[:200]}")
-
-# Try to find institutions or schools
-print("\n=== Checking available endpoints ===")
-# Look at what the SUPER_ADMIN can do
-test_ends = [
-    "/api/schools/",
-    "/api/schools/1/",
-    "/api/institutions/",
-    "/api/institutions/1/",
-    "/api/dashboard/overview/",
-    "/api/finance/reports/trial-balance/",
-]
-
-for ep in test_ends:
-    code, data = call(cj, ep)
-    result = json.dumps(data)[:150] if isinstance(data, dict) else str(data)[:150]
-    print(f"{ep}: HTTP {code} -> {result}")
+print(f"Auth me after: HTTP {code}, data: {json.dumps(data)[:200] if isinstance(data, dict) else str(data)[:200]}")
