@@ -74,14 +74,8 @@ class ExamSerializer(serializers.ModelSerializer):
         source="get_status_display",
         read_only=True,
     )
-    subject_count = serializers.IntegerField(
-        source="exam_subjects.count",
-        read_only=True,
-    )
-    result_count = serializers.IntegerField(
-        source="results.count",
-        read_only=True,
-    )
+    subject_count = serializers.SerializerMethodField()
+    result_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Exam
@@ -107,6 +101,18 @@ class ExamSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def get_subject_count(self, obj):
+        if hasattr(obj, "_subject_count"):
+            return obj._subject_count
+
+        return obj.exam_subjects.count()
+
+    def get_result_count(self, obj):
+        if hasattr(obj, "_result_count"):
+            return obj._result_count
+
+        return obj.results.count()
 
 
 class ExamSubjectSerializer(serializers.ModelSerializer):

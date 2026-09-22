@@ -52,6 +52,7 @@ class AttendanceListView(generics.ListAPIView):
                 "class_obj",
                 "section",
                 "academic_year",
+                "marked_by",
             )
             .order_by("-date", "student__first_name")
         )

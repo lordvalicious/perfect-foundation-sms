@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import Count, Q
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied
@@ -74,12 +74,7 @@ class ExamListView(generics.ListCreateAPIView):
         queryset = (
             Exam.objects
             .select_related("academic_year", "campus", "class_obj")
-            .prefetch_related(
-                "exam_subjects",
-                "results__exam_subject",
-                "results__student",
-                "results__practical_results",
-            )
+            .prefetch_related("exam_subjects")
             .order_by("-start_date")
         )
 
@@ -133,6 +128,37 @@ class ExamListView(generics.ListCreateAPIView):
             queryset = queryset.filter(status=status)
 
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        exams = page if page is not None else list(queryset)
+
+        if exams:
+            exam_ids = [exam.id for exam in exams]
+            subject_counts = {
+                row["exam_id"]: row["total"]
+                for row in ExamSubject.objects.filter(
+                    exam_id__in=exam_ids
+                ).values("exam_id").annotate(total=Count("id"))
+            }
+            result_counts = {
+                row["exam_id"]: row["total"]
+                for row in StudentResult.objects.filter(
+                    exam_id__in=exam_ids
+                ).values("exam_id").annotate(total=Count("id"))
+            }
+
+            for exam in exams:
+                exam._subject_count = subject_counts.get(exam.id, 0)
+                exam._result_count = result_counts.get(exam.id, 0)
+
+        serializer = self.get_serializer(exams, many=True)
+
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+
+        return Response(serializer.data)
 
     def get_serializer_class(self):
         if self.request.method in ("POST", "PUT", "PATCH"):
@@ -463,6 +489,42 @@ class StudentResultListView(generics.ListCreateAPIView):
             queryset = queryset.filter(grade=grade)
 
         return queryset
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        results = page if page is not None else list(queryset)
+
+        if results:
+            q = None
+            for result in results:
+                condition = Q(
+                    exam_id=result.exam_id,
+                    student_id=result.student_id,
+                )
+                q = condition if q is None else q | condition
+
+            if q is not None:
+                grouped = {}
+
+                for practical in (
+                    PracticalResult.objects.filter(q).order_by("id")
+                ):
+                    grouped.setdefault(
+                        (practical.exam_id, practical.student_id), []
+                    ).append(practical)
+
+                for result in results:
+                    result._prefetched_practical_results = grouped.get(
+                        (result.exam_id, result.student_id), []
+                    )
+
+        serializer = self.get_serializer(results, many=True)
+
+        if page is not None:
+            return self.get_paginated_response(serializer.data)
+
+        return Response(serializer.data)
 
     def perform_create(self, serializer):
         exam_subject = serializer.validated_data["exam_subject"]

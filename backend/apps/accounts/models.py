@@ -124,16 +124,30 @@ class User(AbstractUser):
         )
 
     def get_roles(self, institution=None):
+        cache = self.__dict__.get("_roles_cache")
+
+        if cache is None:
+            cache = {}
+            self.__dict__["_roles_cache"] = cache
+
+        key = institution.pk if hasattr(institution, "pk") else institution
+
+        if key in cache:
+            return cache[key]
+
         memberships = self.get_active_memberships()
 
         if institution is not None:
             memberships = memberships.filter(institution=institution)
 
-        return list(
+        roles = list(
             RoleAssignment.objects.filter(
                 membership__in=memberships
             ).values_list("role", flat=True)
         )
+
+        cache[key] = roles
+        return roles
 
     def has_role(self, role, institution=None):
         return role in self.get_roles(institution)
@@ -142,10 +156,9 @@ class User(AbstractUser):
         if self.is_superuser:
             return True
 
-        return any(
-            self.has_role(role, institution)
-            for role in roles
-        )
+        user_roles = set(self.get_roles(institution))
+
+        return any(role in user_roles for role in roles)
 
     @property
     def primary_role(self):
@@ -461,6 +474,17 @@ class InstitutionMembership(models.Model):
     def save(self, *args, **kwargs):
         self._assert_valid_for_user()
         super().save(*args, **kwargs)
+        self._invalidate_user_role_cache()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        self._invalidate_user_role_cache()
+
+    def _invalidate_user_role_cache(self):
+        user = self.user
+
+        if user is not None:
+            user.__dict__.pop("_roles_cache", None)
 
 
 class RoleAssignment(models.Model):
@@ -542,6 +566,18 @@ class RoleAssignment(models.Model):
                     is_superuser=True,
                     is_staff=True,
                 )
+        self._invalidate_user_role_cache()
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        self._invalidate_user_role_cache()
+
+    def _invalidate_user_role_cache(self):
+        membership = self.membership
+        user = getattr(membership, "user", None)
+
+        if user is not None:
+            user.__dict__.pop("_roles_cache", None)
 
     def __str__(self):
         return f"{self.membership} - {self.get_role_display()}"
@@ -635,6 +671,7 @@ def demote_extra_active_memberships(user):
     for membership in demoted:
         membership.status = "inactive"
     InstitutionMembership.objects.bulk_update(demoted, ["status"])
+    user.__dict__.pop("_roles_cache", None)
     return demoted
 
 
