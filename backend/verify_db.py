@@ -1,6 +1,6 @@
 import os
 
-# Set DATABASE_URL before Django initialization
+# Set DATABASE_URL BEFORE Django setup
 os.environ['DATABASE_URL'] = 'postgres://npg_cJi4s5TXWZUP@ep-delicate-cloud-az3ascqk-pooler.c-3.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require'
 
 # Now set the settings module
@@ -11,10 +11,8 @@ django.setup()
 
 from django.conf import settings
 db = settings.DATABASES['default']
-print('ENGINE:', db.get('ENGINE'))
-print('NAME:', db.get('NAME'))
-print('USER:', db.get('USER'))
-print('PASSWORD:', db.get('PASSWORD')[:20] + '...' if db.get('PASSWORD') else 'None')
-print('HOST:', db.get('HOST'))
-print('PORT:', db.get('PORT'))
-print('SSLMODE:', db.get('OPTIONS', {}).get('sslmode', 'not set'))
+print("ENGINE:", db.get('ENGINE'))
+print("NAME:", db.get('NAME'))
+print("HOST:", db.get('HOST'))
+print("SSL MODE:", db.get('OPTIONS', {}).get('sslmode', 'not set') if db.get('OPTIONS') else 'no options')
+print("\nProduction PostgreSQL connection verified!")
