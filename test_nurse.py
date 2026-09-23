@@ -1,6 +1,6 @@
 import requests
 
-with open('sa_accountant.txt', 'r') as f:
+with open('sa_nurse_inst4.txt', 'r') as f:
     lines = f.read().strip().split('\n')
     sessionid = lines[0].split('=')[1]
     csrftoken = lines[1].split('=')[1]
@@ -11,17 +11,7 @@ headers = {'X-CSRFToken': csrftoken, 'Referer': 'https://perfect-foundation-api.
 base_url = 'https://perfect-foundation-api.vercel.app'
 
 endpoints = [
-    '/api/reports/library/',
-    '/api/reports/library/inventory/',
-    '/api/reports/library/available/',
-    '/api/reports/library/issued/',
-    '/api/reports/library/returned/',
-    '/api/reports/library/overdue/',
-    '/api/reports/library/fines/',
-    '/api/reports/library/activity/',
-    '/api/reports/library/most-borrowed/',
-    '/api/reports/library/student-history/',
-    '/api/reports/library/teacher-history/',
+    '/api/health-records/',
     '/api/auth/me/',
 ]
 
