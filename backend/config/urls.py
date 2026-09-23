@@ -7,6 +7,20 @@ from django.utils import timezone
 from apps.core.views import home_view, run_migrations_view
 from apps.audit.views import CSPViolationReportView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
+from rest_framework.views import APIView
+from rest_framework.response import Response
+
+
+class DeployTestView(APIView):
+    """Test endpoint to verify deployment."""
+    permission_classes = []
+
+    def get(self, request):
+        return Response({
+            "status": "deployed",
+            "commit": "e711c14",
+            "message": "Config URLs deployed successfully"
+        })
 
 
 def health_check(request):
@@ -46,6 +60,7 @@ urlpatterns = [
 
     path("api/health/", health_check, name="health-check"),
     path("api/admin/run-migrations/", run_migrations_view, name="run-migrations"),
+    path("api/deploy-test/", DeployTestView.as_view(), name="deploy-test"),
 
     path(
         "api/auth/",
