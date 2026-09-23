@@ -11,6 +11,7 @@ from .views import (
     ReportGenerateView,
     ReportTemplateDetailView,
     ReportTemplateListView,
+    ReportsRootView,
     ResultsReportView,
     StaffReportView,
     StudentProgressTrendReportView,
@@ -213,6 +214,7 @@ from .campus_views import (
 
 urlpatterns = [
     # Core reports
+    path("", ReportsRootView.as_view(), name="reports-root"),
     path("enrollment/", EnrollmentReportView.as_view(), name="report-enrollment"),
     path("attendance/", AttendanceReportView.as_view(), name="report-attendance"),
     path("results/", ResultsReportView.as_view(), name="report-results"),

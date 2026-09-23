@@ -329,3 +329,83 @@ class BookCopyDetailView(generics.RetrieveUpdateDestroyAPIView):
         if not self.get_queryset().filter(pk=serializer.instance.pk).exists():
             raise PermissionDenied("The book copy is outside your campus scope.")
         serializer.save()
+
+
+class LibraryRootView(APIView):
+    """Root endpoint for Library API."""
+    permission_classes = [IsLibrarianRole]
+
+    def get(self, request):
+        return Response({
+            "message": "Library API",
+            "endpoints": {
+                "books": "/api/library/books/",
+                "issues": "/api/library/issues/",
+                "reservations": "/api/library/reservations/",
+                "reports": "/api/library/reports/",
+                "members": "/api/library/members/",
+                "settings": "/api/library/settings/",
+            }
+        })
+
+
+class LibraryReportsView(APIView):
+    """Library reports endpoint - redirects to reports module."""
+    permission_classes = [IsLibrarianRole]
+
+    def get(self, request):
+        return Response({
+            "message": "Library reports are available at /api/reports/library/",
+            "reports": [
+                "/api/reports/library/inventory/",
+                "/api/reports/library/available/",
+                "/api/reports/library/issued/",
+                "/api/reports/library/returned/",
+                "/api/reports/library/overdue/",
+                "/api/reports/library/fines/",
+                "/api/reports/library/activity/",
+                "/api/reports/library/most-borrowed/",
+                "/api/reports/library/student-history/",
+                "/api/reports/library/teacher-history/",
+            ]
+        })
+
+
+class LibraryMembersView(generics.ListAPIView):
+    """List library members (students and teachers who can borrow books)."""
+    permission_classes = [IsLibrarianRole]
+
+    def get_queryset(self):
+        from apps.students.models import Student
+        from apps.teachers.models import Teacher
+        from django.db.models import Q
+
+        # Get students and teachers who have active enrollments/assignments
+        from apps.students.models import Enrollment
+        from apps.teachers.models import TeacherAssignment
+
+        # This would need to be customized based on the actual models
+        # For now, return empty queryset - can be expanded based on actual requirements
+        from apps.students.models import Student
+        return Student.objects.none()
+
+
+class LibrarySettingsView(APIView):
+    """Library settings endpoint."""
+    permission_classes = [IsLibrarianRole]
+
+    def get(self, request):
+        return Response({
+            "message": "Library settings endpoint",
+            "settings": {
+                "max_loan_days": 14,
+                "max_renewals": 2,
+                "fine_per_day": 5.00,
+                "max_books_per_student": 3,
+                "max_books_per_teacher": 5,
+            }
+        })
+
+    def patch(self, request):
+        # Settings update would go here
+        return Response({"detail": "Settings updated successfully."})

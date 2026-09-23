@@ -12,10 +12,14 @@ from .views import (
     BookReservationFulfillView,
     BookReservationListCreateView,
     BookReturnView,
+    LibraryMembersView,
+    LibraryReportsView,
+    LibraryRootView,
+    LibrarySettingsView,
 )
 
-
 urlpatterns = [
+    path("", LibraryRootView.as_view(), name="library-root"),
     path("books/", BookListView.as_view(), name="book-list"),
     path("books/<int:pk>/", BookDetailView.as_view(), name="book-detail"),
     path("books/<int:book_pk>/copies/", BookCopyListCreateView.as_view(), name="book-copy-list"),
@@ -35,4 +39,7 @@ urlpatterns = [
     path("reservations/<int:pk>/", BookReservationDetailView.as_view(), name="book-reservation-detail"),
     path("reservations/<int:pk>/fulfill/", BookReservationFulfillView.as_view(), name="book-reservation-fulfill"),
     path("reservations/<int:pk>/cancel/", BookReservationCancelView.as_view(), name="book-reservation-cancel"),
+    path("reports/", LibraryReportsView.as_view(), name="library-reports"),
+    path("members/", LibraryMembersView.as_view(), name="library-members"),
+    path("settings/", LibrarySettingsView.as_view(), name="library-settings"),
 ]

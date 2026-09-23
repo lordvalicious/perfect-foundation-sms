@@ -392,7 +392,7 @@ const navigation = [
   { label: "Messages", module: "communication", path: "/messages", icon: Mail, roles: [] },
   { label: "SMS", module: "communication", path: "/sms", icon: MessageSquare, roles: ["super_admin", "admin"] },
   { label: "Templates", module: "communication", path: "/templates", icon: FileText, roles: ["super_admin", "admin"] },
-  { label: "Library", module: "library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
+  { label: "Library", module: "library", path: "/library", icon: LibraryBig, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr", "librarian"] },
   { label: "Transport", module: "transport", path: "/transport", icon: Bus, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Inventory", module: "inventory", path: "/inventory", icon: Boxes, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
   { label: "Documents", path: "/documents", icon: FileText, roles: ["super_admin", "admin", "principal", "academic", "accountant", "hr"] },
@@ -1226,7 +1226,7 @@ function Shell() {
         } />
 
         <Route path="/library" element={
-          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr"]}>
+          <RequireRoles roles={["super_admin", "admin", "principal", "academic", "accountant", "hr", "librarian"]}>
             <LibraryPage />
           </RequireRoles>
         } />
