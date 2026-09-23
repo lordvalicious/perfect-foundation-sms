@@ -12,6 +12,7 @@ from .views import (
     BookReservationFulfillView,
     BookReservationListCreateView,
     BookReturnView,
+    LibraryDeployTestView,
     LibraryMembersView,
     LibraryReportsView,
     LibraryRootView,
@@ -20,6 +21,7 @@ from .views import (
 
 urlpatterns = [
     path("", LibraryRootView.as_view(), name="library-root"),
+    path("deploy-test/", LibraryDeployTestView.as_view(), name="library-deploy-test"),
     path("books/", BookListView.as_view(), name="book-list"),
     path("books/<int:pk>/", BookDetailView.as_view(), name="book-detail"),
     path("books/<int:book_pk>/copies/", BookCopyListCreateView.as_view(), name="book-copy-list"),

@@ -338,6 +338,7 @@ class LibraryRootView(APIView):
     def get(self, request):
         return Response({
             "message": "Library API",
+            "version": "63-deploy-test",
             "endpoints": {
                 "books": "/api/library/books/",
                 "issues": "/api/library/issues/",
@@ -346,6 +347,18 @@ class LibraryRootView(APIView):
                 "members": "/api/library/members/",
                 "settings": "/api/library/settings/",
             }
+        })
+
+
+class LibraryDeployTestView(APIView):
+    """Test endpoint to verify deployment."""
+    permission_classes = []
+
+    def get(self, request):
+        return Response({
+            "status": "deployed",
+            "commit": "bf79cb8",
+            "message": "Library endpoints deployed successfully"
         })
 
 
