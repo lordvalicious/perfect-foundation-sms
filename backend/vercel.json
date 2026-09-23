@@ -1,4 +1,8 @@
 {
-  "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput",
-  "framework": "python"
+  "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput && echo 'BUILD_VERSION=20260923-05'",
+  "framework": "python",
+  "installCommand": "pip install -r requirements.txt",
+  "rootDirectory": ".",
+  "functions": ".",
+  "python": "python3.11"
 }
