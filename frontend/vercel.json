@@ -1,4 +1,5 @@
 {
+  "buildId": "phase64-deploy-$(date +%s)",
   "rewrites": [
     {
       "source": "/api/:path(.*)",
