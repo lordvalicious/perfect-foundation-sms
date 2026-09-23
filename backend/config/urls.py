@@ -11,15 +11,28 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 
 
+import subprocess
+
 class DeployTestView(APIView):
-    """Test endpoint to verify deployment."""
+    """Test endpoint to verify deployment - returns actual deployed commit."""
     permission_classes = []
 
     def get(self, request):
+        try:
+            result = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd="/app/backend",
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            commit = result.stdout.strip() if result.returncode == 0 else "unknown"
+        except Exception:
+            commit = "unknown"
         return Response({
             "status": "deployed",
-            "commit": "e711c14",
-            "message": "Config URLs deployed successfully"
+            "commit": commit,
+            "message": "Deployment verification endpoint"
         })
 
 
