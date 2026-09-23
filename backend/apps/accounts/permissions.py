@@ -201,8 +201,35 @@ class IsStaffRole(BasePermission):
         "hr",
         "receptionist",
         "guard",
+        "nurse",
         "teacher",
         "staff",
+    ]
+
+    def has_permission(self, request, view):
+        if not (request.user and request.user.is_authenticated):
+            return False
+
+        return request.user.has_any_role(
+            self.roles,
+            institution=getattr(request, "institution", None),
+        )
+
+
+class IsNurseRole(BasePermission):
+    """
+    Nurses and staff who can manage health records.
+    """
+    roles = [
+        "super_admin",
+        "admin",
+        "org_admin",
+        "head_office",
+        "principal",
+        "vice_principal",
+        "campus_admin",
+        "academic",
+        "nurse",
     ]
 
     def has_permission(self, request, view):
@@ -232,6 +259,7 @@ class IsAcademicMemberRole(BasePermission):
         "accountant",
         "hr",
         "receptionist",
+        "nurse",
         "teacher",
         "staff",
         "parent",

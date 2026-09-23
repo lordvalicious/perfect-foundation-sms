@@ -22,6 +22,7 @@ class Role(models.TextChoices):
     RECEPTIONIST = "receptionist", "Receptionist"
     LIBRARIAN = "librarian", "Librarian"
     GUARD = "guard", "Security Guard"
+    NURSE = "nurse", "Nurse / Medical Officer"
     TEACHER = "teacher", "Teacher"
     PARENT = "parent", "Parent / Guardian"
     STUDENT = "student", "Student"
@@ -44,6 +45,7 @@ ROLE_RANK = {
     Role.RECEPTIONIST: 40,
     Role.LIBRARIAN: 35,
     Role.GUARD: 30,
+    Role.NURSE: 28,
     Role.TEACHER: 25,
     Role.STAFF: 20,
     Role.STUDENT: 10,
@@ -175,6 +177,7 @@ class User(AbstractUser):
             Role.HR,
             Role.RECEPTIONIST,
             Role.GUARD,
+            Role.NURSE,
             Role.TEACHER,
             Role.PARENT,
             Role.STAFF,
