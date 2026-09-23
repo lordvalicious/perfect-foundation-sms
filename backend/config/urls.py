@@ -45,6 +45,7 @@ def health_check(request):
         "status": "ok" if db_ok else "degraded",
         "database": {"ok": db_ok, "error": db_error},
         "utc_now": timezone.now().isoformat(),
+        "deploy_version": "63-test-3",
     }
     return JsonResponse(payload, status=200 if db_ok else 503)
 
