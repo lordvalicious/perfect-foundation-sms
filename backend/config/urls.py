@@ -12,9 +12,12 @@ from rest_framework.response import Response
 
 
 import subprocess
+import os
+
+PHASE_66_MARKER = "PHASE66_DEPLOYMENT_PROOF_20260923"
 
 class DeployTestView(APIView):
-    """Test endpoint to verify deployment - returns actual deployed commit."""
+    """Test endpoint to verify deployment - returns Phase 66 marker and commit."""
     permission_classes = []
 
     def get(self, request):
@@ -31,8 +34,9 @@ class DeployTestView(APIView):
             commit = "unknown"
         return Response({
             "status": "deployed",
+            "marker": PHASE_66_MARKER,
             "commit": commit,
-            "message": "Deployment verification endpoint"
+            "message": "Phase 66 deployment verification endpoint"
         })
 
 
