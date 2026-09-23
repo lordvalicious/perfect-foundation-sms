@@ -21,6 +21,7 @@ from .views import (
 
 urlpatterns = [
     path("", LibraryRootView.as_view(), name="library-root"),
+    path("root/", LibraryRootView.as_view(), name="library-root-alt"),
     path("deploy-test/", LibraryDeployTestView.as_view(), name="library-deploy-test"),
     path("books/", BookListView.as_view(), name="book-list"),
     path("books/<int:pk>/", BookDetailView.as_view(), name="book-detail"),
