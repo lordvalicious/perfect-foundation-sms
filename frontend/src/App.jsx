@@ -373,7 +373,7 @@ const navigation = [
   { label: "Teachers", path: "/teachers", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Staff", path: "/staff", icon: Users, roles: ["super_admin", "admin", "principal", "academic", "vice_principal", "campus_admin", "hr"] },
   { label: "Staff Leave & Attendance", path: "/staff-operations", icon: CalendarClock, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr"] },
-  { label: "Health Records", module: "health", path: "/health-records", icon: HeartPulse, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"] },
+  { label: "Health Records", module: "health", path: "/health-records", icon: HeartPulse, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher", "nurse", "staff"] },
   { label: "Human Resources", path: "/hr", icon: Briefcase, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "hr", "accountant"] },
   { label: "Assignments", path: "/assignments", icon: Layers, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Homework", module: "homework", path: "/homework", icon: BookOpenCheck, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student", "parent"] },
@@ -405,7 +405,7 @@ const navigation = [
   { label: "Alumni", module: "alumni", path: "/alumni", icon: GraduationCap, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Hostel", module: "hostel", path: "/hostel", icon: BedDouble, roles: ["super_admin", "admin", "principal", "academic"] },
   { label: "Online Courses", module: "lms", path: "/lms", icon: MonitorPlay, roles: ["super_admin", "admin", "principal", "academic", "teacher", "student"] },
-  { label: "Helpdesk", module: "helpdesk", path: "/helpdesk", icon: LifeBuoy, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "teacher", "staff"] },
+  { label: "Helpdesk", module: "helpdesk", path: "/helpdesk", icon: LifeBuoy, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "teacher", "counsellor", "administrative_officer", "staff"] },
   { label: "Visitors", module: "visitors", path: "/visitors", icon: ShieldCheck, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "staff"] },
   { label: "Digital IDs", module: "digital_ids", path: "/digital-ids", icon: IdCard, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "staff"] },
   { label: "Pending Approvals", path: "/workflow/approvals", icon: ClipboardCheck, roles: ["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr"] },
@@ -1300,7 +1300,7 @@ function Shell() {
         } />
 
         <Route path="/health-records" element={
-          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher"]}>
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "teacher", "nurse", "staff"]}>
             <HealthRecordsPage />
           </RequireRoles>
         } />
@@ -1328,7 +1328,7 @@ function Shell() {
         } />
 
         <Route path="/helpdesk" element={
-          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "teacher", "staff"]}>
+          <RequireRoles roles={["super_admin", "admin", "principal", "vice_principal", "campus_admin", "academic", "hr", "receptionist", "guard", "teacher", "counsellor", "administrative_officer", "staff"]}>
             <HelpdeskPage />
           </RequireRoles>
         } />

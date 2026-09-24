@@ -202,6 +202,8 @@ class IsStaffRole(BasePermission):
         "receptionist",
         "guard",
         "nurse",
+        "counsellor",
+        "administrative_officer",
         "teacher",
         "staff",
     ]
@@ -260,6 +262,8 @@ class IsAcademicMemberRole(BasePermission):
         "hr",
         "receptionist",
         "nurse",
+        "counsellor",
+        "administrative_officer",
         "teacher",
         "staff",
         "parent",

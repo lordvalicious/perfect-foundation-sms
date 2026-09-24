@@ -353,3 +353,37 @@ def provision_campus_with_admin(campus_data, admin_data=None, school=None):
         RoleAssignment.objects.create(membership=membership, role=Role.CAMPUS_ADMIN)
 
     return campus, admin_user, admin_username, password
+
+
+# ---------------------------------------------------------------------------
+# Canonical designation -> role resolution
+# ---------------------------------------------------------------------------
+# StaffProfile carries a free-text ``designation``. When an employee's login
+# account is auto-provisioned, the designation is resolved to a canonical
+# application role. Only designations with a recognised role are mapped; every
+# other designation resolves to the generic ``staff`` role so no employee is
+# ever silently granted a specialised role. New roles are added here with a
+# matching entry in ``accounts.models.Role`` / ``ROLE_RANK``.
+
+DESIGNATION_ROLE_MAP = {
+    "counsellor": "counsellor",
+    "security guard": "guard",
+    "nurse": "nurse",
+    "lady health worker": "nurse",
+    "administrative officer": "administrative_officer",
+    "librarian": "librarian",
+}
+
+
+def role_for_designation(designation):
+    """Return the canonical role value for a StaffProfile ``designation``.
+
+    Matching is case-insensitive and collapses whitespace so ``" Security
+    Guard "`` resolves to ``guard``. Unrecognised designations always resolve
+    to the generic ``staff`` role (never elevated, never invented).
+    """
+    from apps.accounts.models import Role
+
+    normalized = " ".join((designation or "").strip().lower().split())
+    role_value = DESIGNATION_ROLE_MAP.get(normalized, Role.STAFF)
+    return Role(role_value)

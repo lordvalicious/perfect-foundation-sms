@@ -389,3 +389,166 @@ class HREmployeeCreationTests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400, response.content)
+
+
+"""Phase 84: Designation -> Role Mapping Regression Tests
+
+Covers the fix for Phase 83 root cause: StaffProfile auto-provisioning
+used to hardcode Role.STAFF for ALL designations. Now:
+- Counsellor -> Role.COUNSELLOR (new canonical role)
+- Security Guard -> Role.GUARD
+- Nurse -> Role.NURSE
+- Administrative Officer -> Role.ADMINISTRATIVE_OFFICER (new canonical role)
+- Librarian -> Role.LIBRARIAN
+- Unknown designations -> Role.STAFF (generic, never silently elevated)
+- Known-good roles (super_admin, principal, teacher, student, staff) unchanged
+"""
+
+
+class DesignationRoleMappingRegressionTests(TestCase):
+    """Verify StaffProfile creation + account provisioning maps designations correctly."""
+
+    def setUp(self):
+        self.school = _school("Phase84 Test School", "P84")
+        self.campus = Campus.objects.create(
+            school=self.school, name="Main Campus", status="active"
+        )
+
+    def _make_user(self, username, role):
+        """Create a user with given role (for permission context)."""
+        from django.contrib.auth import get_user_model
+        User = get_user_model()
+        user = User.objects.create_user(username=username, password=PASSWORD)
+        membership = InstitutionMembership.objects.create(
+            user=user, institution=self.school, status="active"
+        )
+        RoleAssignment.objects.create(membership=membership, role=role)
+        return user
+
+    def _provision_staff_with_designation(self, designation, email=""):
+        """Create StaffProfile with designation and auto-provision account."""
+        from apps.accounts.serializers import StaffProfileSerializer
+        serializer = StaffProfileSerializer(data={
+            "employee_number": "EMP-%s" % designation.upper().replace(" ", "")[:10],
+            "first_name": "Test",
+            "last_name": "User",
+            "designation": designation,
+            "department": "Test",
+            "campus": self.campus.name,
+            "joining_date": "2024-01-01",
+            "status": "active",
+            "create_account": True,
+            "email": email or "test.%s@example.test" % designation.lower().replace(" ", "."),
+            "password": "TempPass123!",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        staff = serializer.save()
+        return staff
+
+    def _get_user_role(self, user):
+        """Return the canonical role value for the user at this school."""
+        roles = user.get_roles(institution=self.school)
+        # Return the highest-ranked role (first in priority order)
+        from apps.accounts.models import ROLE_RANK
+        if not roles:
+            return None
+        return max(roles, key=lambda r: ROLE_RANK.get(r, 0))
+
+    def test_counsellor_maps_to_counsellor_role(self):
+        """Counsellor designation -> canonical counsellor role (NEW)."""
+        staff = self._provision_staff_with_designation("Counsellor")
+        user = staff.user
+        self.assertIsNotNone(user)
+        role = self._get_user_role(user)
+        self.assertEqual(role, "counsellor",
+            "Counsellor designation must resolve to canonical 'counsellor' role, not 'staff'")
+
+    def test_security_guard_maps_to_guard_role(self):
+        """Security Guard designation -> guard role."""
+        staff = self._provision_staff_with_designation("Security Guard")
+        user = staff.user
+        self.assertIsNotNone(user)
+        role = self._get_user_role(user)
+        self.assertEqual(role, "guard",
+            "Security Guard designation must resolve to 'guard' role")
+
+    def test_nurse_maps_to_nurse_role(self):
+        """Nurse designation -> nurse role."""
+        staff = self._provision_staff_with_designation("Nurse")
+        user = staff.user
+        self.assertIsNotNone(user)
+        role = self._get_user_role(user)
+        self.assertEqual(role, "nurse",
+            "Nurse designation must resolve to 'nurse' role")
+
+    def test_lady_health_worker_maps_to_nurse_role(self):
+        """Lady Health Worker (girls' campus nurse synonym) -> nurse role."""
+        staff = self._provision_staff_with_designation("Lady Health Worker")
+        user = staff.user
+        self.assertIsNotNone(user)
+        role = self._get_user_role(user)
+        self.assertEqual(role, "nurse",
+            "Lady Health Worker synonym must resolve to 'nurse' role")
+
+    def test_administrative_officer_maps_to_administrative_officer_role(self):
+        """Administrative Officer designation -> canonical administrative_officer role (NEW)."""
+        staff = self._provision_staff_with_designation("Administrative Officer")
+        user = staff.user
+        self.assertIsNotNone(user)
+        role = self._get_user_role(user)
+        self.assertEqual(role, "administrative_officer",
+            "Administrative Officer designation must resolve to canonical 'administrative_officer' role, not 'staff'")
+
+    def test_librarian_maps_to_librarian_role(self):
+        """Librarian designation -> librarian role."""
+        staff = self._provision_staff_with_designation("Librarian")
+        user = staff.user
+        self.assertIsNotNone(user)
+        role = self._get_user_role(user)
+        self.assertEqual(role, "librarian",
+            "Librarian designation must resolve to 'librarian' role")
+
+    def test_unknown_designation_falls_back_to_staff(self):
+        """Unknown designations -> generic staff (never silent elevation)."""
+        for designation in ["Janitor", "Clerk", "Driver", "Cook", "Cleaner", "Unknown Role"]:
+            with self.subTest(designation=designation):
+                staff = self._provision_staff_with_designation(designation)
+                user = staff.user
+                self.assertIsNotNone(user)
+                role = self._get_user_role(user)
+                self.assertEqual(role, "staff",
+                    "Unknown designation '%s' must fall back to generic 'staff' role" % designation)
+
+    def test_known_good_roles_unaffected(self):
+        """Known-good roles (super_admin, principal, teacher, student, staff) unchanged."""
+        # These roles are NOT created via StaffProfile serializer _build_user_account
+        # so they should be completely unaffected by the designation mapping change.
+        # This test documents the expectation.
+        from apps.accounts.models import Role
+        known_good = [Role.SUPER_ADMIN, Role.PRINCIPAL, Role.TEACHER, Role.STUDENT, Role.STAFF]
+        for role in known_good:
+            with self.subTest(role=role.value):
+                # Create user with explicit role assignment (not via StaffProfile)
+                user = self._make_user("test.%s" % role.value, role)
+                roles = user.get_roles(institution=self.school)
+                self.assertIn(role.value, roles,
+                    "Known-good role %s must remain assignable and functional" % role.value)
+
+    def test_case_insensitive_designation_matching(self):
+        """Designation matching is case/whitespace-insensitive."""
+        variants = [
+            ("counsellor", "counsellor"),
+            ("COUNSELLOR", "counsellor"),
+            (" Security Guard ", "guard"),
+            ("SECURITY GUARD", "guard"),
+            (" nurse ", "nurse"),
+            (" Administrative Officer ", "administrative_officer"),
+            (" LIBRARIAN ", "librarian"),
+        ]
+        for designation, expected_role in variants:
+            with self.subTest(designation=designation):
+                staff = self._provision_staff_with_designation(designation)
+                user = staff.user
+                role = self._get_user_role(user)
+                self.assertEqual(role, expected_role,
+                    "Designation '%s' must resolve to '%s' case-insensitively" % (designation, expected_role))

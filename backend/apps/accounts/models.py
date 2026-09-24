@@ -17,9 +17,11 @@ class Role(models.TextChoices):
     VICE_PRINCIPAL = "vice_principal", "Vice Principal"
     CAMPUS_ADMIN = "campus_admin", "Campus Administrator"
     ACADEMIC = "academic", "Academic Administrator"
+    COUNSELLOR = "counsellor", "Counsellor / Student Counselor"
     ACCOUNTANT = "accountant", "Accountant"
     HR = "hr", "HR / Staff Officer"
     RECEPTIONIST = "receptionist", "Receptionist"
+    ADMINISTRATIVE_OFFICER = "administrative_officer", "Administrative Officer"
     LIBRARIAN = "librarian", "Librarian"
     GUARD = "guard", "Security Guard"
     NURSE = "nurse", "Nurse / Medical Officer"
@@ -42,7 +44,9 @@ ROLE_RANK = {
     Role.ACADEMIC: 55,
     Role.ACCOUNTANT: 50,
     Role.HR: 45,
+    Role.COUNSELLOR: 42,
     Role.RECEPTIONIST: 40,
+    Role.ADMINISTRATIVE_OFFICER: 38,
     Role.LIBRARIAN: 35,
     Role.GUARD: 30,
     Role.NURSE: 28,
@@ -168,6 +172,8 @@ class User(AbstractUser):
 
         priority = [
             Role.SUPER_ADMIN,
+            Role.ORG_ADMIN,
+            Role.HEAD_OFFICE,
             Role.ADMIN,
             Role.PRINCIPAL,
             Role.VICE_PRINCIPAL,
@@ -175,7 +181,10 @@ class User(AbstractUser):
             Role.ACADEMIC,
             Role.ACCOUNTANT,
             Role.HR,
+            Role.COUNSELLOR,
             Role.RECEPTIONIST,
+            Role.ADMINISTRATIVE_OFFICER,
+            Role.LIBRARIAN,
             Role.GUARD,
             Role.NURSE,
             Role.TEACHER,

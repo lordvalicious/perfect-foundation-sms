@@ -315,7 +315,10 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
         return next_entity_code(school, "EMP", StaffProfile, "employee_number")
 
     def _build_user_account(self, staff, username, password):
-        from apps.accounts.services import create_user_with_username
+        from apps.accounts.services import (
+            create_user_with_username,
+            role_for_designation,
+        )
         from apps.schools.models import School
 
         # Prefer the request's active institution (correct school scoping);
@@ -348,7 +351,7 @@ class StaffProfileCRUDSerializer(serializers.ModelSerializer):
             )
             RoleAssignment.objects.get_or_create(
                 membership=membership,
-                role=Role.STAFF,
+                role=role_for_designation(staff.designation),
             )
 
         return user, generated
