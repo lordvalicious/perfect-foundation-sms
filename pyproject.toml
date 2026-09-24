@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "perfect-foundation-sms"
+version = "1.0.0"
+description = "Perfect Foundation School Management System"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.vercel]
+entrypoint = "wsgi.py"

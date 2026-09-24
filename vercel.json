@@ -1,8 +1,5 @@
 {
-  "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput && echo 'BUILD_VERSION=20260923-05'",
+  "buildCommand": "cd backend && python manage.py migrate --noinput && python manage.py collectstatic --noinput && echo 'BUILD_VERSION=20260923-05'",
   "framework": "python",
-  "installCommand": "pip install -r requirements.txt",
-  "rootDirectory": "backend",
-  "functions": "backend",
-  "python": "python3.11"
+  "installCommand": "cd backend && pip install -r requirements.txt"
 }

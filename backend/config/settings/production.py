@@ -32,7 +32,7 @@ for _fallback in (".vercel.app", "localhost", "127.0.0.1"):
 
 # Merge code defaults (base.py) with env-provided origins and the Vercel hosts.
 _VERCEL_DEFAULT_ORIGINS = [
-    "https://perfect-foundation-api.vercel.app",
+    "https://perfect-foundation-backend.vercel.app",
     "https://perfect-foundation-sms.vercel.app",
 ]
 _env_origins = [

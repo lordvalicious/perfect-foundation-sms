@@ -288,18 +288,31 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 # Cache (for django-ratelimit)
-CACHE_DIR = os.environ.get("DJANGO_CACHE_DIR", tempfile.gettempdir())
-
-CACHES = {
-    "default": {
-        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-        "LOCATION": os.path.join(CACHE_DIR, "django_cache"),
-    },
-    "ratelimit": {
-        "BACKEND": "django.core.cache.backends.filebased.FileBasedCache",
-        "LOCATION": os.path.join(CACHE_DIR, "django_ratelimit_cache"),
-    },
-}
+# Use Redis (Upstash/Vercel KV) in production; fall back to local memory cache for development
+redis_url = os.environ.get("REDIS_URL") or os.environ.get("UPSTASH_REDIS_URL")
+if redis_url:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": redis_url,
+        },
+        "ratelimit": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": redis_url,
+        },
+    }
+else:
+    CACHE_DIR = os.environ.get("DJANGO_CACHE_DIR", tempfile.gettempdir())
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "default-cache",
+        },
+        "ratelimit": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "ratelimit-cache",
+        },
+    }
 
 # Email
 DEFAULT_FROM_EMAIL = os.environ.get(
