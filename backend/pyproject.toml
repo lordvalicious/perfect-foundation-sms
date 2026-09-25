@@ -8,6 +8,3 @@ version = "1.0.0"
 description = "Perfect Foundation School Management System"
 requires-python = ">=3.11"
 dependencies = []
-
-[tool.vercel]
-entrypoint = "backend/config/wsgi.py"
