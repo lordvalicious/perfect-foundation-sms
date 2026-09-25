@@ -29,48 +29,31 @@ from apps.teachers.models import Teacher
 
 
 def _institution_overview_counts(request):
-    """Institution- and campus-scoped headcounts for manager users."""
     from apps.accounts.managers import get_current_institution
-    
     institution = getattr(request, "institution", None)
     if institution is None:
         institution = get_current_institution()
-
-    students = Student.objects.all()
-    teachers = Teacher.objects.all()
-    campuses = Campus.objects.all()
-    classes = Class.objects.all()
-    sections = Section.objects.all()
-    enrollments = Enrollment.objects.filter(status="active")
-
-    if institution is not None:
-        students = students.filter(institution=institution)
-        teachers = teachers.filter(institution=institution)
-
-        campuses = campuses.filter(school=institution)
-        classes = classes.filter(unit__campus__school=institution)
-        sections = sections.filter(class_obj__unit__campus__school=institution)
-        enrollments = enrollments.filter(academic_year__school=institution)
-
-    students = apply_campus_scope(
-        students, request, "primary_campus_id", institution_field=None
-    )
-    teachers = apply_campus_scope(
-        teachers, request, "primary_campus_id", institution_field=None
-    )
-    campuses = apply_campus_scope(
-        campuses, request, "id", institution_field=None
-    )
-    classes = apply_campus_scope(
-        classes, request, "unit__campus_id", institution_field=None
-    )
-    sections = apply_campus_scope(
-        sections, request, "class_obj__unit__campus_id", institution_field=None
-    )
-    enrollments = apply_campus_scope(
-        enrollments, request, "campus_id", institution_field=None
-    )
-
+    if institution is None:
+        return {
+            "students": {"total": 0, "active": 0},
+            "teachers": {"total": 0, "active": 0},
+            "campuses": 0,
+            "classes": 0,
+            "sections": 0,
+            "enrollments": 0,
+        }
+    students = Student.objects.filter(institution=institution)
+    teachers = Teacher.objects.filter(institution=institution)
+    campuses = Campus.objects.filter(school=institution)
+    classes = Class.objects.filter(unit__campus__school=institution)
+    sections = Section.objects.filter(class_obj__unit__campus__school=institution)
+    enrollments = Enrollment.objects.filter(academic_year__school=institution)
+    students = apply_campus_scope(students, request, "primary_campus_id", institution_field=None)
+    teachers = apply_campus_scope(teachers, request, "primary_campus_id", institution_field=None)
+    campuses = apply_campus_scope(campuses, request, "id", institution_field=None)
+    classes = apply_campus_scope(classes, request, "unit__campus_id", institution_field=None)
+    sections = apply_campus_scope(sections, request, "class_obj__unit__campus_id", institution_field=None)
+    enrollments = apply_campus_scope(enrollments, request, "campus_id", institution_field=None)
     return {
         "students": {
             "total": students.count(),
