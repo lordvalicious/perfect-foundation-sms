@@ -48,6 +48,7 @@ class AcademicDashboardTests(TestCase):
             gender="male",
             guardian=guardian,
             status="active",
+            institution=school,
         )
         Enrollment.objects.create(
             student=student,
@@ -60,6 +61,17 @@ class AcademicDashboardTests(TestCase):
             username="dashboard-admin",
             email="dashboard-admin@example.com",
             password="test-password",
+        )
+        # Create InstitutionMembership so the superuser has an institution context
+        membership = InstitutionMembership.objects.create(
+            user=user,
+            institution=school,
+            status="active",
+        )
+        from apps.accounts.models import Role, RoleAssignment
+        RoleAssignment.objects.create(
+            membership=membership,
+            role=Role.ADMIN,
         )
         self.client.force_login(user)
 
@@ -118,7 +130,7 @@ class ExecutiveDashboardTests(TestCase):
             password="test-password",
         )
 
-    def _make_role_user(self, username, role, primary_campus=None):
+    def _make_role_user(self, username, role, campus=None, primary_campus=None):
         user = User.objects.create_user(
             username=username,
             email=f"{username}@example.com",
@@ -128,10 +140,18 @@ class ExecutiveDashboardTests(TestCase):
             user=user,
             institution=self.school,
         )
-        RoleAssignment.objects.create(
-            membership=membership,
-            role=role,
-        )
+        # Create campus-level role assignment if campus is specified
+        if campus is not None:
+            RoleAssignment.objects.create(
+                membership=membership,
+                role=role,
+                campus=campus,
+            )
+        else:
+            RoleAssignment.objects.create(
+                membership=membership,
+                role=role,
+            )
         if primary_campus is not None:
             StaffProfile.objects.create(
                 user=user,
@@ -209,7 +229,7 @@ class ExecutiveDashboardTests(TestCase):
         manager = self._make_role_user(
             "exec-campus-admin",
             Role.CAMPUS_ADMIN,
-            primary_campus=north_campus,
+            campus=north_campus,
         )
         self.client.force_login(manager)
 

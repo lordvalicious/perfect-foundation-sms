@@ -39,6 +39,8 @@ GLOBAL_ROLES = [
     "head_office",
     "academic",
 ]
+# Note: PRINCIPAL, VICE_PRINCIPAL, CAMPUS_ADMIN are NOT global roles.
+# They are campus-level roles with scope determined by explicit RoleAssignment.campus.
 
 
 # ---------------------------------------------------------------------------
@@ -105,21 +107,17 @@ def is_global(user):
 def user_allowed_campus_ids(user, institution=None):
     """Set of campus ids the user may access.
 
-    Global users get every active campus of the active institution (the
-    resolved request school, falling back to the user's primary institution).
-    There is deliberately NO cross-school fallback: an institution with no
-    campuses yields an empty scope (fail closed), so a campus id from another
-    school can never be injected.
+    Campus-level roles (PRINCIPAL, VICE_PRINCIPAL, CAMPUS_ADMIN):
+    - Scope is determined by explicit campus assignment on RoleAssignment.campus
+    - If NO valid campus assignment exists: FAIL CLOSED (return empty set)
+    - No fallback to school-wide or all campuses
 
-    School leadership (``principal`` / ``vice_principal``) with no campus
-    assignment falls back to every active campus of their active institution:
-    they head the whole school, so a missing ``StaffProfile.primary_campus``
-    must not reduce them to an empty scope. Leaders assigned to a specific
-    campus keep that narrower scope, and the fallback never crosses schools.
+    Global users (SUPER_ADMIN, ADMIN, ORG_ADMIN, HEAD_OFFICE, ACADEMIC):
+    - Get every active campus of the active institution
 
-    Everyone else gets the campuses recorded on their own profile plus the
-    campuses linked to their teacher assignments / student enrollments so
-    existing records without a ``primary_campus`` keep working.
+    Other roles (teachers, accountants, staff, students, parents):
+    - Scope from profile primary_campus, teacher assignments, student enrollments
+    - Existing behavior preserved
     """
     if not (user and user.is_authenticated):
         return set()
@@ -142,6 +140,36 @@ def user_allowed_campus_ids(user, institution=None):
 
     ids = set()
 
+    # --- Campus-level roles: scope from explicit RoleAssignment.campus ---
+    campus_level_roles = [Role.PRINCIPAL, Role.VICE_PRINCIPAL, Role.CAMPUS_ADMIN]
+    if user.has_any_role(campus_level_roles, institution=institution):
+        from apps.accounts.models import RoleAssignment
+        from apps.schools.models import Campus
+
+        # Determine institution for querying
+        query_institution = institution or getattr(user, "primary_institution", None)
+        if query_institution is None:
+            return set()
+
+        # Get campus assignments from RoleAssignment for campus-level roles
+        campus_assignments = RoleAssignment.objects.filter(
+            membership__user=user,
+            membership__institution=query_institution,
+            membership__status="active",
+            role__in=campus_level_roles,
+            campus__isnull=False,
+            campus__status="active",
+        ).select_related("campus")
+
+        for assignment in campus_assignments:
+            if assignment.campus and assignment.campus.school_id == query_institution.id:
+                ids.add(assignment.campus_id)
+
+        # FAIL CLOSED: If no valid campus assignment for campus-level role,
+        # return empty set (do NOT fall back to school-wide)
+        return ids
+
+    # --- Other roles: existing behavior (profile primary_campus, etc.) ---
     staff = getattr(user, "staff_profile", None)
     if staff is not None and staff.primary_campus_id:
         ids.add(staff.primary_campus_id)
@@ -193,34 +221,8 @@ def user_allowed_campus_ids(user, institution=None):
                 .values_list("campus_id", flat=True)
             )
 
-    # School leadership (principal / vice principal) that has NO campus
-    # assignment still heads the whole active school: fall back to every
-    # active campus of the resolved institution instead of an empty scope
-    # (which made every campus-scoped list — e.g. /api/students/?campus=…
-    # — 403 for such a user). Leaders explicitly assigned to a campus keep
-    # their narrower scope. This stays institution-scoped: campuses are
-    # only ever added from the resolved active institution (or the user's
-    # own primary institution), so no other school can leak through here.
-    leadership_institution = institution or getattr(
-        user, "primary_institution", None
-    )
-
-    if (
-        not ids
-        and leadership_institution is not None
-        and user.has_any_role(
-            [Role.PRINCIPAL, Role.VICE_PRINCIPAL],
-            institution=leadership_institution,
-        )
-    ):
-        from apps.schools.models import Campus
-
-        ids.update(
-            Campus.objects.filter(
-                status="active",
-                school=leadership_institution,
-            ).values_list("id", flat=True)
-        )
+    # REMOVED: School leadership fallback to all campuses
+    # Principal/VP without campus assignment now FAIL CLOSED (handled above)
 
     return ids
 

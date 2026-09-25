@@ -511,6 +511,15 @@ class RoleAssignment(models.Model):
         choices=Role.choices,
     )
 
+    campus = models.ForeignKey(
+        "schools.Campus",
+        on_delete=models.CASCADE,
+        related_name="role_assignments",
+        null=True,
+        blank=True,
+        help_text="Campus-level scope for campus-level roles (principal, vice_principal, campus_admin). Null for school-level roles.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -519,6 +528,12 @@ class RoleAssignment(models.Model):
             models.UniqueConstraint(
                 fields=["membership", "role"],
                 name="unique_role_per_membership",
+                condition=models.Q(campus__isnull=True),
+            ),
+            models.UniqueConstraint(
+                fields=["membership", "role", "campus"],
+                name="unique_role_per_membership_campus",
+                condition=models.Q(campus__isnull=False),
             ),
             # At most ONE super_admin exists platform-wide. A partial unique
             # index on a constant makes the whole table reject a second row.
@@ -527,11 +542,52 @@ class RoleAssignment(models.Model):
                 name="unique_super_admin_role",
                 condition=models.Q(role="super_admin"),
             ),
+            # One Principal per campus
+            models.UniqueConstraint(
+                fields=["campus", "role"],
+                name="unique_principal_per_campus",
+                condition=models.Q(role="principal", campus__isnull=False),
+            ),
+            # One Vice Principal per campus
+            models.UniqueConstraint(
+                fields=["campus", "role"],
+                name="unique_vice_principal_per_campus",
+                condition=models.Q(role="vice_principal", campus__isnull=False),
+            ),
         ]
 
     def clean(self):
         super().clean()
         if self.role != Role.SUPER_ADMIN:
+            if self.role in [Role.PRINCIPAL, Role.VICE_PRINCIPAL, Role.CAMPUS_ADMIN]:
+                if self.campus_id is None:
+                    raise ValidationError(
+                        {
+                            "campus": (
+                                f"{self.get_role_display()} requires an explicit campus assignment."
+                            )
+                        }
+                    )
+                # Validate campus belongs to the same school as the membership
+                if self.membership_id and self.campus_id:
+                    from apps.schools.models import Campus
+                    campus = Campus.objects.filter(pk=self.campus_id).first()
+                    if campus and campus.school_id != self.membership.institution_id:
+                        raise ValidationError(
+                            {
+                                "campus": "Campus must belong to the same school as the user's membership."
+                            }
+                        )
+            else:
+                # School-level roles must not have a campus assignment
+                if self.campus_id is not None:
+                    raise ValidationError(
+                        {
+                            "campus": (
+                                f"{self.get_role_display()} is a school-level role and cannot have a campus assignment."
+                            )
+                        }
+                    )
             return
         existing = (
             RoleAssignment.objects.filter(
@@ -595,7 +651,7 @@ class RoleAssignment(models.Model):
         return f"{self.membership} - {self.get_role_display()}"
 
 
-def assign_role_safely(membership, role):
+def assign_role_safely(membership, role, campus=None):
     """Create a ``RoleAssignment`` without ever violating the single-Super-Admin
     invariant.
 
@@ -635,6 +691,7 @@ def assign_role_safely(membership, role):
     assignment, created = RoleAssignment.objects.get_or_create(
         membership=membership,
         role=role,
+        campus=campus,
     )
     return assignment, created, None
 

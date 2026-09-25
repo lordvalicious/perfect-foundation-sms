@@ -39,6 +39,7 @@ const emptyForm = {
   admin_email: "",
   admin_password: "",
   admin_confirm_password: "",
+  admin_phone: "",
   admin_position: "",
 };
 
@@ -139,25 +140,34 @@ export default function CampusesPage() {
     const isEdit = Boolean(editing);
 
     // Validate admin fields if provided
-    const hasAdminData = form.admin_username || form.admin_email || form.admin_password || form.admin_position;
+    const hasAdminData = form.admin_email || form.admin_position || form.admin_first_name || form.admin_last_name;
     if (hasAdminData) {
-      if (!form.admin_username || !form.admin_email || !form.admin_password || !form.admin_position) {
-        setFormError("All admin fields (username, email, password, position) are required when creating an admin.");
+      if (!form.admin_email || !form.admin_position) {
+        setFormError("Admin email and position are required when creating an admin.");
         setSaving(false);
         return;
       }
-      if (form.admin_password !== form.admin_confirm_password) {
-        setFormError("Passwords do not match.");
+      if (!["principal", "vice_principal", "campus_admin"].includes(form.admin_position)) {
+        setFormError("Position must be Principal, Vice Principal, or Campus Admin.");
         setSaving(false);
         return;
       }
-      if (form.admin_password.length < 8) {
-        setFormError("Password must be at least 8 characters.");
-        setSaving(false);
-        return;
+      // If password is provided, validate it
+      if (form.admin_password) {
+        if (form.admin_password !== form.admin_confirm_password) {
+          setFormError("Passwords do not match.");
+          setSaving(false);
+          return;
+        }
+        if (form.admin_password.length < 8) {
+          setFormError("Password must be at least 8 characters.");
+          setSaving(false);
+          return;
+        }
       }
-      if (!["principal", "vice_principal"].includes(form.admin_position)) {
-        setFormError("Position must be Principal or Vice Principal.");
+      // If username is provided, validate it's not empty
+      if (form.admin_username && !form.admin_username.trim()) {
+        setFormError("Username cannot be empty if provided.");
         setSaving(false);
         return;
       }
@@ -172,11 +182,11 @@ export default function CampusesPage() {
 
     if (hasAdminData) {
       payload.admin = {
-        username: form.admin_username,
+        username: form.admin_username || "",
         email: form.admin_email,
-        password: form.admin_password,
-        first_name: form.admin_first_name,
-        last_name: form.admin_last_name,
+        password: form.admin_password || "",
+        first_name: form.admin_first_name || "",
+        last_name: form.admin_last_name || "",
         position: form.admin_position,
       };
     }
@@ -288,7 +298,7 @@ export default function CampusesPage() {
               <fieldset style={{ border: 0, padding: 0, marginTop: 16, borderTop: "1px solid var(--border)" }}>
                 <legend style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 12 }}>Campus Administrator (optional)</legend>
                 <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12 }}>
-                  Create the first admin user for this campus. They will have full admin access.
+                  Create the first admin user for this campus. Choose their role: Campus Admin (campus operations), Principal (campus leadership), or Vice Principal (deputy leadership). Username and password will be auto-generated if left blank.
                 </p>
                 <label>
                   Position *
@@ -299,26 +309,20 @@ export default function CampusesPage() {
                     <option value="">Select position</option>
                     <option value="principal">Principal</option>
                     <option value="vice_principal">Vice Principal</option>
+                    <option value="campus_admin">Campus Admin</option>
                   </select>
                 </label>
                 <label>
-                  First name *
+                  Email *
                   <input
-                    placeholder="e.g. John"
-                    value={form.admin_first_name}
-                    onChange={(e) => setForm({ ...form, admin_first_name: e.target.value })}
+                    type="email"
+                    placeholder="e.g. admin@campus.edu"
+                    value={form.admin_email}
+                    onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
                   />
                 </label>
                 <label>
-                  Last name *
-                  <input
-                    placeholder="e.g. Doe"
-                    value={form.admin_last_name}
-                    onChange={(e) => setForm({ ...form, admin_last_name: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Username *
+                  Username (optional - auto-generated if blank)
                   <input
                     placeholder="e.g. principal_campus1"
                     value={form.admin_username}
@@ -326,20 +330,11 @@ export default function CampusesPage() {
                   />
                 </label>
                 <label>
-                  Email *
-                  <input
-                    type="email"
-                    placeholder="e.g. principal@campus.edu"
-                    value={form.admin_email}
-                    onChange={(e) => setForm({ ...form, admin_email: e.target.value })}
-                  />
-                </label>
-                <label>
-                  Password *
+                  Password (optional - auto-generated if blank)
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
                       type={showPassword ? "text" : "password"}
-                      placeholder="Minimum 8 characters"
+                      placeholder="Minimum 8 characters (auto-generated if blank)"
                       value={form.admin_password}
                       onChange={(e) => setForm({ ...form, admin_password: e.target.value })}
                       style={{ flex: 1 }}
@@ -350,12 +345,36 @@ export default function CampusesPage() {
                   </div>
                 </label>
                 <label>
-                  Confirm Password *
+                  Confirm Password (required only if password provided)
                   <input
                     type={showPassword ? "text" : "password"}
                     placeholder="Confirm password"
                     value={form.admin_confirm_password}
                     onChange={(e) => setForm({ ...form, admin_confirm_password: e.target.value })}
+                  />
+                </label>
+                <label>
+                  First name (optional)
+                  <input
+                    placeholder="e.g. John"
+                    value={form.admin_first_name}
+                    onChange={(e) => setForm({ ...form, admin_first_name: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Last name (optional)
+                  <input
+                    placeholder="e.g. Doe"
+                    value={form.admin_last_name}
+                    onChange={(e) => setForm({ ...form, admin_last_name: e.target.value })}
+                  />
+                </label>
+                <label>
+                  Phone (optional)
+                  <input
+                    placeholder="e.g. +1234567890"
+                    value={form.admin_phone || ""}
+                    onChange={(e) => setForm({ ...form, admin_phone: e.target.value })}
                   />
                 </label>
               </fieldset>
