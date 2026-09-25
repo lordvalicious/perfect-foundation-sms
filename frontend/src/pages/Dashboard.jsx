@@ -118,6 +118,21 @@ function Dashboard() {
   // for every role: Super Admin gets the selected school, normal users their own.
   const activeSchoolName = currentSchool?.name || schoolName;
 
+  // Determine if the current user has permission to access report endpoints.
+  // These endpoints require IsAccountantRole permission.
+  const canAccessReports = scopedHasRole([
+    "super_admin",
+    "admin",
+    "org_admin",
+    "head_office",
+    "principal",
+    "vice_principal",
+    "campus_admin",
+    "academic",
+    "accountant",
+    "hr",
+  ]);
+
   useEffect(() => {
     // Fallback label for contexts where the active institution is unavailable.
     fetch("/api/schools/branding/", { credentials: "include" })
@@ -165,56 +180,59 @@ function Dashboard() {
       });
 
     // Charts — reports are optional; failures just hide the chart.
-    fetch(ENROLLMENT_REPORT_URL, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!data || !Array.isArray(data.classes)) return;
+    // Only fetch report data for roles with IsAccountantRole permission.
+    if (canAccessReports) {
+      fetch(ENROLLMENT_REPORT_URL, { credentials: "include" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (!data || !Array.isArray(data.classes)) return;
 
-        const byCampus = {};
+          const byCampus = {};
 
-        for (const row of data.classes) {
-          byCampus[row.campus] =
-            (byCampus[row.campus] || 0) + (row.total || 0);
-        }
+          for (const row of data.classes) {
+            byCampus[row.campus] =
+              (byCampus[row.campus] || 0) + (row.total || 0);
+          }
 
-        setEnrollmentByCampus(
-          Object.entries(byCampus).map(([campus, students]) => ({
-            campus,
-            students,
-          }))
-        );
-      })
-      .catch(() => {});
+          setEnrollmentByCampus(
+            Object.entries(byCampus).map(([campus, students]) => ({
+              campus,
+              students,
+            }))
+          );
+        })
+        .catch(() => {});
 
-    fetch(ATTENDANCE_REPORT_URL, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!Array.isArray(data?.classes)) return;
+      fetch(ATTENDANCE_REPORT_URL, { credentials: "include" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (!Array.isArray(data?.classes)) return;
 
-        setAttendanceRows(
-          data.classes.map((row) => ({
-            name: `${row.class}`.slice(0, 14),
-            rate: row.attendance_rate ?? 0,
-          }))
-        );
-      })
-      .catch(() => {});
+          setAttendanceRows(
+            data.classes.map((row) => ({
+              name: `${row.class}`.slice(0, 14),
+              rate: row.attendance_rate ?? 0,
+            }))
+          );
+        })
+        .catch(() => {});
 
-    fetch(COLLECTION_TREND_URL, { credentials: "include" })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (!Array.isArray(data?.months_data)) return;
+      fetch(COLLECTION_TREND_URL, { credentials: "include" })
+        .then((response) => (response.ok ? response.json() : null))
+        .then((data) => {
+          if (!Array.isArray(data?.months_data)) return;
 
-        setCollectionTrend(
-          data.months_data.map((row) => ({
-            month: String(row.month).slice(2),
-            invoiced: Number(row.invoiced),
-            collected: Number(row.collected),
-          }))
-        );
-      })
-      .catch(() => {});
-  }, []);
+          setCollectionTrend(
+            data.months_data.map((row) => ({
+              month: String(row.month).slice(2),
+              invoiced: Number(row.invoiced),
+              collected: Number(row.collected),
+            }))
+          );
+        })
+        .catch(() => {});
+    }
+  }, [canAccessReports]);
 
   const stats = dashboard
     ? [
@@ -483,7 +501,7 @@ function Dashboard() {
           {/* ---- Bento content ---- */}
           <div className="bento">
             {/* Fee collection (wide) */}
-            {collectionTrend.length > 0 && (
+            {canAccessReports && collectionTrend.length > 0 && (
               <div className="dash-card bento-wide">
                 <div className="dash-card-header">
                   <div>
@@ -538,7 +556,7 @@ function Dashboard() {
             )}
 
             {/* Enrollment by Campus (left) */}
-            {enrollmentByCampus.length > 0 && (
+            {canAccessReports && enrollmentByCampus.length > 0 && (
               <div className="dash-card">
                 <div className="dash-card-header">
                   <div>
@@ -592,7 +610,7 @@ function Dashboard() {
             )}
 
             {/* Attendance (right) */}
-            {attendanceRows.length > 0 && (
+            {canAccessReports && attendanceRows.length > 0 && (
               <div className="dash-card">
                 <div className="dash-card-header">
                   <div>
