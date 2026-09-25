@@ -7,6 +7,11 @@ const ROLE_FILES = {
   TEACHER: "sa_SA-EMP-0001.txt",
   STUDENT: "sa_SA-ST-0001.txt",
   STAFF: "sa_DI-staff.txt",
+  COUNSELLOR: "sa_counsellor.txt",
+  GUARD: "sa_guard.txt",
+  NURSE: "sa_nurse.txt",
+  ADMINISTRATIVE_OFFICER: "sa_administrative_officer.txt",
+  LIBRARIAN: "sa_librarian.txt",
 };
 
 export const ROLES = Object.keys(ROLE_FILES);
