@@ -26,7 +26,7 @@ class StaffMasterReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id", "institution")
 
         status = request.query_params.get("status")
         if status:
@@ -99,7 +99,7 @@ class TeacherMasterReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id", "institution")
 
         department = request.query_params.get("department")
         if department:
@@ -169,7 +169,7 @@ class StaffAttendanceReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "staff__primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "staff__primary_campus_id", "institution")
 
         date_from = request.query_params.get("date_from")
         date_to = request.query_params.get("date_to")
@@ -249,7 +249,7 @@ class StaffLeaveReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "staff__primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "staff__primary_campus_id", "institution")
 
         status = request.query_params.get("status")
         if status:
@@ -401,7 +401,7 @@ class DepartmentReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id", "institution")
         return queryset
 
     def get_summary(self, queryset, request):
@@ -453,7 +453,7 @@ class DesignationReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id", "institution")
         return queryset
 
     def get_summary(self, queryset, request):
@@ -497,7 +497,7 @@ class StaffJoiningReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id", "institution")
 
         date_from = request.query_params.get("date_from")
         if date_from:
@@ -545,7 +545,7 @@ class StaffResignationReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "primary_campus_id")
+        queryset = apply_campus_scope(queryset, request, "primary_campus_id", "institution")
         return queryset
 
     def get_summary(self, queryset, request):

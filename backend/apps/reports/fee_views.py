@@ -579,7 +579,7 @@ class FeeDefaultersReportView(AggregateReportView):
 
     def get_queryset(self, request):
         queryset = super().get_queryset(request)
-        queryset = apply_campus_scope(queryset, request, "enrollment__campus_id")
+        queryset = apply_campus_scope(queryset, request, "enrollment__campus_id", "institution")
 
         academic_year = request.query_params.get("academic_year")
         if academic_year:

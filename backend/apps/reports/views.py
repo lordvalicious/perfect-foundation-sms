@@ -107,7 +107,7 @@ class EnrollmentReportView(APIView):
                 academic_year_id=academic_year,
             )
 
-        queryset = apply_campus_scope(queryset, request, "campus_id")
+        queryset = apply_campus_scope(queryset, request, "campus_id", "academic_year__school")
 
         records = []
 
@@ -218,7 +218,7 @@ class AttendanceReportView(APIView):
             .select_related("campus", "class_obj")
         )
 
-        queryset = apply_campus_scope(queryset, request, "campus_id")
+        queryset = apply_campus_scope(queryset, request, "campus_id", "academic_year__school")
 
         class_obj = request.query_params.get("class_obj")
 
@@ -523,6 +523,7 @@ class FeesReportView(APIView):
             invoices,
             request,
             "enrollment__campus_id",
+            "institution",
         )
 
         start_date = request.query_params.get("start_date")
@@ -865,7 +866,7 @@ class StudentStatusReportView(APIView):
             .select_related("campus", "student")
         )
 
-        queryset = apply_campus_scope(queryset, request, "campus_id")
+        queryset = apply_campus_scope(queryset, request, "campus_id", "academic_year__school")
 
         rows = {}
         status_counts = {}
@@ -972,6 +973,7 @@ class FeeCategoryReportView(APIView):
             queryset,
             request,
             "invoice__enrollment__campus_id",
+            "invoice__enrollment__academic_year__school",
         )
 
         category_totals = {}
