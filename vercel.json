@@ -1,5 +1,5 @@
 {
-  "buildCommand": "python manage.py migrate --noinput && python manage.py collectstatic --noinput && echo 'BUILD_VERSION=20260923-05'",
+  "buildCommand": "python backend/build_with_bootstrap.py",
   "framework": "python",
   "installCommand": "pip install -r requirements.txt"
 }
