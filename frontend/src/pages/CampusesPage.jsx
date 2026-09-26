@@ -177,8 +177,11 @@ export default function CampusesPage() {
       name: form.name,
       city: form.city,
       address: form.address,
-      school: form.school,
     };
+
+    if (form.school) {
+      payload.school = form.school;
+    }
 
     if (hasAdminData) {
       payload.admin = {
