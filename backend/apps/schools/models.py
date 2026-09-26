@@ -639,7 +639,7 @@ class AcademicCalendar(models.Model):
 
     campus = models.ForeignKey(
         Campus,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
         related_name="calendar_events",
         null=True,
         blank=True,
