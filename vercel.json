@@ -1,5 +1,5 @@
 {
-  "buildCommand": "python backend/build_with_bootstrap.py",
+  "buildCommand": "python build_with_bootstrap.py",
   "framework": "python",
   "installCommand": "pip install -r requirements.txt"
 }
