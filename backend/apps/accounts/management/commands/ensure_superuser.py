@@ -36,20 +36,13 @@ class Command(BaseCommand):
         first_name = os.environ.get("DJANGO_SUPERUSER_FIRST_NAME", "Platform")
         last_name = os.environ.get("DJANGO_SUPERUSER_LAST_NAME", "Administrator")
 
-        user, created = User.objects.get_or_create(
-            username=username,
-            defaults={
-                "email": email,
-                "first_name": first_name,
-                "last_name": last_name,
-                "is_staff": True,
-                "is_superuser": True,
-                "is_active": True,
-                "password": make_password(password),
-            },
-        )
-        if not created:
-            user.email = email
+        # First, check if a user with the configured email already exists.
+        # This prevents unique constraint violation when the email belongs to a different user.
+        existing_user_by_email = User.objects.filter(email=email).first()
+        if existing_user_by_email:
+            user = existing_user_by_email
+            created = False
+            user.username = username
             user.first_name = first_name
             user.last_name = last_name
             user.is_staff = True
@@ -57,7 +50,7 @@ class Command(BaseCommand):
             user.is_active = True
             user.password = make_password(password)
             user.save(update_fields=[
-                "email",
+                "username",
                 "first_name",
                 "last_name",
                 "is_staff",
@@ -65,6 +58,36 @@ class Command(BaseCommand):
                 "is_active",
                 "password",
             ])
+        else:
+            user, created = User.objects.get_or_create(
+                username=username,
+                defaults={
+                    "email": email,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "is_staff": True,
+                    "is_superuser": True,
+                    "is_active": True,
+                    "password": make_password(password),
+                },
+            )
+            if not created:
+                user.email = email
+                user.first_name = first_name
+                user.last_name = last_name
+                user.is_staff = True
+                user.is_superuser = True
+                user.is_active = True
+                user.password = make_password(password)
+                user.save(update_fields=[
+                    "email",
+                    "first_name",
+                    "last_name",
+                    "is_staff",
+                    "is_superuser",
+                    "is_active",
+                    "password",
+                ])
 
         if options["no_membership"]:
             self.stdout.write(
