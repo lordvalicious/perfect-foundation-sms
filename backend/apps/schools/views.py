@@ -339,14 +339,18 @@ class CampusViewSet(
         return Response(self.get_serializer(row).data)
 
     def destroy(self, request, pk=None):
-        """Delete campus - Super Admin only."""
+        """Delete campus - allowed for School Admin in their own school, or Super Admin."""
         if not self._is_platform_admin():
-            return Response(
-                {"detail": "Permission denied."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            # Non-platform admins can only delete campuses in their own institution
+            campus = self.get_object()
+            if campus.school_id != request.institution_id:
+                return Response(
+                    {"detail": "Permission denied."},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+        else:
+            campus = self.get_object()
 
-        campus = self.get_object()
         campus.delete()
         return Response(
             {"detail": "Campus deleted successfully."},
